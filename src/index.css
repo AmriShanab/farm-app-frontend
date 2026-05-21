@@ -1,0 +1,39 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Nunito:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-text font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  /* Global UI Components based on your specs */
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary to-[#43a047] text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all;
+  }
+  .card {
+    @apply bg-white rounded-card shadow-soft p-6;
+  }
+  /* Status Chips */
+  .chip-healthy {
+    @apply bg-green-100 text-primary px-3 py-1 rounded-full text-xs font-bold tracking-wide;
+  }
+  .chip-warning {
+    @apply bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide;
+  }
+  .chip-critical {
+    @apply bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide;
+  }
+}
