@@ -5,6 +5,11 @@ import Dashboard from './pages/Dashboard';
 import CoconutSales from './pages/CoconutSales'; // <-- We rename Sales.jsx to CoconutSales.jsx
 import CashewSales from './pages/CashewSales';
 import OtherIncomes from './pages/OtherIncomes';
+import Payroll from './pages/EmployeeProfiles';
+import EmployeeProfiles from './pages/EmployeeProfiles';
+import DailyAttendance from './pages/DailyAttendance';
+import CashAdvances from './pages/CashAdvances';
+import RunPayroll from './pages/RunPayroll';
 
 const Placeholder = ({ title }) => (
   <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm text-center mt-10">
@@ -21,17 +26,23 @@ function App() {
 
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
-          
+
           {/* Sub-Routes for Sales & Income */}
           <Route path="sales">
-             {/* Automatically redirect /sales to the coconuts page */}
-             <Route index element={<Navigate to="coconuts" replace />} />
-             <Route path="coconuts" element={<CoconutSales />} />
-             <Route path="cashews" element={<CashewSales />} />
-             <Route path="other" element={<OtherIncomes />} />
+            {/* Automatically redirect /sales to the coconuts page */}
+            <Route index element={<Navigate to="coconuts" replace />} />
+            <Route path="coconuts" element={<CoconutSales />} />
+            <Route path="cashews" element={<CashewSales />} />
+            <Route path="other" element={<OtherIncomes />} />
           </Route>
 
-          <Route path="payroll" element={<Placeholder title="HR & Payroll" />} />
+          <Route path="payroll">
+            <Route index element={<Navigate to="profiles" replace />} />
+            <Route path="profiles" element={<EmployeeProfiles />} />
+            <Route path="attendance" element={<DailyAttendance />} />
+            <Route path="advances" element={<CashAdvances />} />
+            <Route path="calculator" element={<RunPayroll />} />
+          </Route>
           <Route path="operations" element={<Placeholder title="Operations & Expenses" />} />
           <Route path="fertilizer" element={<Placeholder title="Fertilizer Management" />} />
           <Route path="poultry" element={<Placeholder title="Poultry Farm (Joint Venture)" />} />
