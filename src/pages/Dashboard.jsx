@@ -120,7 +120,7 @@ export default function Dashboard() {
             </div>
 
             {/* Expenses/Payroll Card */}
-            <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#9f1239] to-[#881337] text-white shadow-lg shadow-rose-900/20 group border border-rose-800/50 hover:-translate-y-1 transition-transform">
+            <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 hover:-translate-y-1 transition-transform">
                <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white group-hover:opacity-40 transition-opacity"></div>
                <div className="flex justify-between items-start mb-4 relative z-10">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
@@ -133,7 +133,7 @@ export default function Dashboard() {
             </div>
 
             {/* Net Profit Card */}
-            <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white shadow-lg shadow-blue-900/20 group border border-blue-800/50 hover:-translate-y-1 transition-transform">
+            <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 hover:-translate-y-1 transition-transform">
                <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white group-hover:opacity-40 transition-opacity"></div>
                <div className="flex justify-between items-start mb-4 relative z-10">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
@@ -146,7 +146,7 @@ export default function Dashboard() {
             </div>
 
             {/* Workforce Card */}
-            <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#ea580c] to-[#c2410c] text-white shadow-lg shadow-orange-900/20 group border border-orange-800/50 hover:-translate-y-1 transition-transform">
+            <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 hover:-translate-y-1 transition-transform">
                <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white group-hover:opacity-40 transition-opacity"></div>
                <div className="flex justify-between items-start mb-4 relative z-10">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
@@ -208,24 +208,24 @@ export default function Dashboard() {
 
             {/* ── ACTION CENTER / ALERTS ── */}
             <div className="flex flex-col gap-6">
-               <div className="bg-amber-50/50 rounded-2xl border border-amber-100 p-5 shadow-sm">
-                  <h2 className="text-sm font-black text-amber-900 flex items-center gap-2 mb-4">
-                     <AlertCircle size={16} className="text-amber-600" /> Pending Actions
+               <div className="bg-green-50/50 rounded-2xl border border-green-100 p-5 shadow-sm">
+                  <h2 className="text-sm font-black text-green-900 flex items-center gap-2 mb-4">
+                     <AlertCircle size={16} className="text-green-600" /> Pending Actions
                   </h2>
                   <div className="space-y-3">
-                     <div className="bg-white p-3 rounded-xl border border-amber-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                     <div className="bg-white p-3 rounded-xl border border-green-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow cursor-pointer">
                         <div>
                            <p className="text-xs font-bold text-gray-900">Mark Today's Attendance</p>
                            <p className="text-[10px] text-gray-500 font-medium">Pending verification</p>
                         </div>
-                        <ChevronRight size={16} className="text-amber-500" />
+                        <ChevronRight size={16} className="text-green-500" />
                      </div>
-                     <div className="bg-white p-3 rounded-xl border border-amber-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                     <div className="bg-white p-3 rounded-xl border border-green-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow cursor-pointer">
                         <div>
                            <p className="text-xs font-bold text-gray-900">Run Weekly Payroll</p>
                            <p className="text-[10px] text-gray-500 font-medium">Draft ready for review</p>
                         </div>
-                        <ChevronRight size={16} className="text-amber-500" />
+                        <ChevronRight size={16} className="text-green-500" />
                      </div>
                   </div>
                </div>

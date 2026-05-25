@@ -552,46 +552,142 @@ export const updateManagerSalary = async (id, payload) => {
 
 // --- POULTRY MANAGEMENT ENDPOINTS ---
 
+// --- POULTRY: INVESTOR ENDPOINTS ---
+
+export const getInvestors = async () => {
+  const response = await fetch(`${BASE_URL}/poultry/investors`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const getInvestorById = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/investors/${id}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const createInvestor = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/investors`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  return unwrapApiData(await response.json()) || {};
+};
+
+// --- POULTRY: BATCH ENDPOINTS ---
+
 export const getPoultryBatches = async (status = 'active') => {
-  try {
-    const response = await fetch(`${BASE_URL}/poultry/batches?status=${status}`, { headers: getHeaders() });
-    if (!response.ok) throw new Error('Failed to fetch batches');
-    return unwrapApiData(await response.json()) || [];
-  } catch (error) { throw error; }
+  const response = await fetch(`${BASE_URL}/poultry/batches?status=${status}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
 };
 
 export const createPoultryBatch = async (data) => {
-  try {
-    const response = await fetch(`${BASE_URL}/poultry/batches`, {
-      method: 'POST', headers: getHeaders(), body: JSON.stringify(data)
-    });
-    if (!response.ok) throw new Error('Failed to create batch');
-    return unwrapApiData(await response.json()) || {};
-  } catch (error) { throw error; }
+  const response = await fetch(`${BASE_URL}/poultry/batches`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to create batch');
+  return unwrapApiData(await response.json()) || {};
 };
+
+export const updatePoultryBatch = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/batches/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to update batch');
+  return unwrapApiData(await response.json()) || {};
+};
+
+
+// --- POULTRY: FEED ENDPOINTS ---
 
 export const getPoultryFeed = async (batchId) => {
-  try {
-    const url = batchId ? `${BASE_URL}/poultry/feed?batchId=${batchId}` : `${BASE_URL}/poultry/feed`;
-    const response = await fetch(url, { headers: getHeaders() });
-    if (!response.ok) throw new Error('Failed to fetch feed records');
-    return unwrapApiData(await response.json()) || [];
-  } catch (error) { throw error; }
+  const url = batchId ? `${BASE_URL}/poultry/feed?batchId=${batchId}` : `${BASE_URL}/poultry/feed`;
+  const response = await fetch(url, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
 };
+
+export const createPoultryFeed = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to record feed');
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const updatePoultryFeed = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to update feed');
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultryFeed = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to delete feed record');
+  return true;
+};
+
+// --- POULTRY: SALES ENDPOINTS ---
 
 export const getPoultrySales = async (batchId) => {
-  try {
-    const url = batchId ? `${BASE_URL}/poultry/sales?batchId=${batchId}` : `${BASE_URL}/poultry/sales`;
-    const response = await fetch(url, { headers: getHeaders() });
-    if (!response.ok) throw new Error('Failed to fetch poultry sales');
-    return unwrapApiData(await response.json()) || [];
-  } catch (error) { throw error; }
+  const url = batchId ? `${BASE_URL}/poultry/sales?batchId=${batchId}` : `${BASE_URL}/poultry/sales`;
+  const response = await fetch(url, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
 };
 
-export const getPoultryInvestors = async () => {
-  try {
-    const response = await fetch(`${BASE_URL}/poultry/investors`, { headers: getHeaders() });
-    if (!response.ok) throw new Error('Failed to fetch investors');
-    return unwrapApiData(await response.json()) || [];
-  } catch (error) { throw error; }
+export const createPoultrySale = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/sales`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to record sale');
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const updatePoultrySale = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/sales/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to update sale');
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultrySale = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/sales/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to delete sale record');
+  return true;
+};
+
+// --- POULTRY: PROFIT DISTRIBUTION ENDPOINTS ---
+
+export const getPoultryProfit = async (batchId, period) => {
+  const response = await fetch(`${BASE_URL}/poultry/profit?batchId=${batchId}&period=${period}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json());
+};
+
+export const distributePoultryProfit = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/profit/distribute`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to finalize profit distribution');
+  return unwrapApiData(await response.json());
 };
