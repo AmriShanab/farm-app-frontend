@@ -8,6 +8,7 @@ import {
 
 // Import our new API service
 import { getCoconutSales, createCoconutSale, updateCoconutSale, deleteCoconutSale } from '../services/api';
+import { useToast } from '../components/ToastProvider';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -60,6 +61,7 @@ export default function CoconutSales() {
   const [newRow, setNewRow] = useState(emptySaleForm());
   const [editSale, setEditSale] = useState(null);
   const [editRow, setEditRow] = useState(emptySaleForm());
+  const toast = useToast();
 
   // Helper to calculate total
   const calcNet = (row) => {
@@ -144,7 +146,7 @@ export default function CoconutSales() {
   // --- Handle API POST ---
   const handleSaveRow = async () => {
     if (!newRow.qty1 || !newRow.rate1) {
-      alert("Please enter at least 1st Quality Quantity and Rate.");
+      toast.warn("Please enter at least 1st Quality Quantity and Rate.");
       return;
     }
 
@@ -175,7 +177,7 @@ export default function CoconutSales() {
         qty2: '', rate2: '', disc2: ''
       });
     } catch {
-      alert("Failed to save record to database.");
+      toast.error("Failed to save record to database.");
     } finally {
       setIsSaving(false);
     }
@@ -187,7 +189,7 @@ export default function CoconutSales() {
     }
 
     if (!editRow.qty1 || !editRow.rate1) {
-      alert("Please enter at least 1st Quality Quantity and Rate.");
+      toast.warn("Please enter at least 1st Quality Quantity and Rate.");
       return;
     }
 
@@ -213,7 +215,7 @@ export default function CoconutSales() {
       setSales((prev) => prev.map((sale) => (sale.id === editSale.id ? updatedRecord : sale)));
       closeEditSale();
     } catch {
-      alert("Failed to update record.");
+      toast.error("Failed to update record.");
       setIsSaving(false);
     }
   };
@@ -224,7 +226,8 @@ export default function CoconutSales() {
         await deleteCoconutSale(id);
         setSales(prev => prev.filter(s => s.id !== id));
       } catch {
-        alert("Failed to delete record.");
+        const toast = useToast();
+        toast.error("Failed to delete record.");
       }
     }
   };

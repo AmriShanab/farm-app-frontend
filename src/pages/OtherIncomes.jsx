@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import { getOtherIncomes, createOtherIncome, deleteOtherIncome } from '../services/api';
+import { useToast } from '../components/ToastProvider';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -27,6 +28,7 @@ export default function OtherIncomes() {
     description: '',
     amount: ''
   });
+  const toast = useToast();
 
   // --- Fetch Data ---
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function OtherIncomes() {
 
   const handleSaveRow = async () => {
     if (!newRow.description || !newRow.amount) {
-      alert("Please enter a description and an amount.");
+      toast.warn("Please enter a description and an amount.");
       return;
     }
 
@@ -92,7 +94,7 @@ export default function OtherIncomes() {
       setIsAdding(false);
       setNewRow({ date: new Date().toISOString().split('T')[0], description: '', amount: '' });
     } catch (err) {
-      alert("Failed to save record to database.");
+      toast.error("Failed to save record to database.");
     } finally {
       setIsSaving(false);
     }
@@ -104,7 +106,7 @@ export default function OtherIncomes() {
         await deleteOtherIncome(id);
         setSales(prev => prev.filter(s => s.id !== id));
       } catch (err) {
-        alert("Failed to delete record.");
+        toast.error("Failed to delete record.");
       }
     }
   };

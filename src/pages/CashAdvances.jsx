@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus, Search, Download, MoreHorizontal,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Wallet, Banknote, AlertCircle, Check, X,
   User, CheckCircle2
 } from 'lucide-react';
+
+import { useToast } from '../components/ToastProvider';
+import { getAdvances, createAdvance, getEmployees, updateAdvance } from '../services/api';
 
 // --- MOCK DATA ---
 const mockEmployees = [
@@ -16,18 +19,12 @@ const mockEmployees = [
   { id: '6', name: 'Askan', role: 'Laborer' },
 ];
 
-const mockAdvances = [
-  { id: '101', date: '2026-05-20', empId: '4', name: 'Jarsan', role: 'Tractor Driver', amount: 5000, status: 'Unpaid' },
-  { id: '102', date: '2026-05-18', empId: '5', name: 'Rifaideen', role: 'Laborer', amount: 3000, status: 'Unpaid' },
-  { id: '103', date: '2026-05-15', empId: '2', name: 'Jabir', role: 'Laborer', amount: 2000, status: 'Unpaid' },
-  { id: '104', date: '2026-05-10', empId: '1', name: 'Faizaar', role: 'Manager', amount: 10000, status: 'Unpaid' },
-  { id: '105', date: '2026-05-05', empId: '6', name: 'Askan', role: 'Laborer', amount: 1500, status: 'Deducted' }, // Example of a past cleared advance
-];
+// Keep employee list local; advances are loaded from API
 
 const fmt = (n) => n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function CashAdvances() {
-  const [advances, setAdvances] = useState(mockAdvances);
+  const [advances, setAdvances] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Unpaid');
   const [selected, setSelected] = useState([]);
@@ -39,10 +36,46 @@ export default function CashAdvances() {
     empId: '',
     amount: ''
   });
+  const toast = useToast();
+  const [employees, setEmployees] = useState(mockEmployees);
+  const [editAdvance, setEditAdvance] = useState(null);
+  const [editRow, setEditRow] = useState({ date: '', amount: '', status: 'Unpaid', notes: '' });
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const params = {};
+        if (statusFilter && statusFilter !== 'All') params.status = statusFilter.toLowerCase();
+        const data = await getAdvances(params);
+        if (!active) return;
+        setAdvances(Array.isArray(data) ? data : (data?.data || []));
+      } catch {
+        toast.error('Failed to load advances. Showing local sample data.');
+        setAdvances([]);
+      }
+    };
+    load();
+    // load employees once
+    const loadEmployees = async () => {
+      try {
+        const emps = await getEmployees('All');
+        if (!active) return;
+        if (Array.isArray(emps) && emps.length) {
+          setEmployees(emps.map(e => ({ id: String(e.id ?? e.employeeId ?? e.empId ?? ''), name: e.name ?? e.employee_name ?? e.employeeName ?? '', role: e.role ?? '' })));
+        }
+      } catch {
+        // keep mock employees on error
+      }
+    };
+    loadEmployees();
+    return () => { active = false; };
+  }, [statusFilter, toast]);
 
   const filtered = advances.filter(adv =>
     (statusFilter === 'All' || adv.status === statusFilter) &&
-    (!search || adv.name.toLowerCase().includes(search.toLowerCase()) || adv.role.toLowerCase().includes(search.toLowerCase()))
+    (!search || adv.name.toLowerCase().includes(search.toLowerCase()))
   );
 
   // KPIs
@@ -59,29 +92,41 @@ export default function CashAdvances() {
 
   const handleSaveRow = () => {
     if (!newRow.empId || !newRow.amount) {
-      alert("Please select an employee and enter an amount.");
+      toast.warn("Please select an employee and enter an amount.");
       return;
     }
 
-    const selectedEmp = mockEmployees.find(e => e.id === newRow.empId);
-
-    const newAdvance = {
-      id: String(Date.now()),
+    const payload = {
       date: newRow.date,
-      empId: selectedEmp.id,
-      name: selectedEmp.name,
-      role: selectedEmp.role,
+      empId: parseInt(newRow.empId, 10),
       amount: parseFloat(newRow.amount) || 0,
-      status: 'Unpaid', // Defaults to unpaid until payroll clears it
+      chequeNo: newRow.chequeNo || '',
+      chequeDate: newRow.chequeDate || null,
+      notes: newRow.notes || ''
     };
-    
-    setAdvances(prev => [newAdvance, ...prev]);
-    setIsAdding(false);
-    
-    // Switch filter to 'Unpaid' so the user sees their new entry
-    if (statusFilter === 'Deducted') setStatusFilter('Unpaid');
 
-    setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '' });
+    (async () => {
+      try {
+        const saved = await createAdvance(payload);
+        const emp = employees.find(e => String(e.id) === String(payload.empId));
+        const record = {
+          id: saved.id || saved.advance_id || String(Date.now()),
+          date: saved.date || payload.date,
+          empId: String(saved.empId ?? saved.employeeId ?? payload.empId),
+          name: saved.name || (emp && emp.name) || '',
+          amount: saved.amount ?? payload.amount,
+          status: (saved.status || 'unpaid').charAt(0).toUpperCase() + (saved.status || 'unpaid').slice(1),
+          notes: saved.notes || ''
+        };
+        setAdvances(prev => [record, ...prev]);
+        setIsAdding(false);
+        if (statusFilter === 'Deducted') setStatusFilter('Unpaid');
+        setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '' });
+        toast.success('Advance issued');
+      } catch {
+        toast.error('Failed to issue advance.');
+      }
+    })();
   };
 
   const cancelAdd = () => {
@@ -107,6 +152,42 @@ export default function CashAdvances() {
             Record employee advances to be deducted from payroll
           </p>
         </div>
+        {/* Edit Modal */}
+        {editAdvance && (
+          <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={() => setEditAdvance(null)} />
+            <div style={{ background: '#fff', borderRadius: 12, width: '420px', padding: 20, boxShadow: '0 12px 40px rgba(2,6,23,0.2)', position: 'relative', zIndex: 70 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Edit Advance</h3>
+              <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Date</label>
+                <input type="date" name="date" value={editRow.date} onChange={e => setEditRow(prev => ({ ...prev, date: e.target.value }))} style={inputStyle} />
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Amount</label>
+                <input type="number" name="amount" value={editRow.amount} onChange={e => setEditRow(prev => ({ ...prev, amount: e.target.value }))} style={inputStyle} />
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Status</label>
+                <select value={editRow.status} onChange={e => setEditRow(prev => ({ ...prev, status: e.target.value }))} style={inputStyle}>
+                  <option>Unpaid</option>
+                  <option>Deducted</option>
+                </select>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Notes</label>
+                <textarea value={editRow.notes} onChange={e => setEditRow(prev => ({ ...prev, notes: e.target.value }))} style={{ ...inputStyle, height: 80 }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+                <button onClick={() => setEditAdvance(null)} style={{ padding: '8px 12px', borderRadius: 8, background: '#f3f4f6', border: 'none', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={async () => {
+                  try {
+                    const payload = { date: editRow.date, amount: parseFloat(editRow.amount) || 0, status: editRow.status.toLowerCase(), notes: editRow.notes };
+                    await updateAdvance(editAdvance.id, payload);
+                    setAdvances(prev => prev.map(a => a.id === editAdvance.id ? ({ ...a, date: payload.date, amount: payload.amount, status: payload.status === 'deducted' ? 'Deducted' : 'Unpaid', notes: payload.notes }) : a));
+                    toast.success('Advance updated');
+                    setEditAdvance(null);
+                  } catch {
+                    toast.error('Failed to update advance');
+                  }
+                }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(90deg,#16a34a,#15803d)', color: '#fff', border: 'none', cursor: 'pointer' }}>Save</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button style={{
@@ -280,16 +361,16 @@ export default function CashAdvances() {
                   <td colSpan={2} style={tdStyle()}>
                     <select name="empId" value={newRow.empId} onChange={handleRowChange} style={{...inputStyle, cursor: 'pointer', appearance: 'auto'}}>
                        <option value="" disabled>Select Employee...</option>
-                       {mockEmployees.map(emp => (
-                         <option key={emp.id} value={emp.id}>{emp.name} - {emp.role}</option>
-                       ))}
+                        {employees.map(emp => (
+                         <option key={emp.id} value={emp.id}>{emp.name}</option>
+                        ))}
                     </select>
                   </td>
-                  <td style={tdStyle()}>
-                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    <td style={tdStyle()}>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                         <AlertCircle size={10} /> Unpaid
-                     </span>
-                  </td>
+                      </span>
+                    </td>
                   <td style={{ ...tdStyle('150px'), textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Rs.</span>
@@ -309,7 +390,7 @@ export default function CashAdvances() {
                 </tr>
               )}
 
-              {filtered.map((adv, idx) => {
+                {filtered.map((adv, idx) => {
                 const isSel = selected.includes(adv.id);
                 return (
                   <tr key={adv.id} style={{
@@ -339,11 +420,6 @@ export default function CashAdvances() {
                       </div>
                     </td>
 
-                    {/* Role */}
-                    <td style={tdStyle()}>
-                      <span style={{ color: '#475569', fontWeight: 600 }}>{adv.role}</span>
-                    </td>
-
                     {/* Status Pill */}
                     <td style={tdStyle()}>
                       {adv.status === 'Unpaid' ? (
@@ -364,28 +440,41 @@ export default function CashAdvances() {
 
                     {/* Actions */}
                     <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
-                      <button style={{
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <button style={{
                         background: 'none', border: 'none', cursor: 'pointer',
                         padding: '4px', borderRadius: '6px', color: '#9ca3af',
                         transition: 'all 0.15s',
                       }}
                         onMouseOver={e => { e.currentTarget.style.background = '#dcfce7'; e.currentTarget.style.color = '#16a34a'; }}
                         onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
+                        onClick={() => setOpenMenuId(openMenuId === adv.id ? null : adv.id)}
                       >
                         <MoreHorizontal size={16} />
                       </button>
+
+                      {openMenuId === adv.id && (
+                        <div style={{ position: 'absolute', right: 0, top: '28px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.08)', zIndex: 50, minWidth: 160 }}>
+                          <button onClick={() => { setOpenMenuId(null); setEditAdvance(adv); setEditRow({ date: adv.date || '', amount: String(adv.amount || ''), status: adv.status || 'Unpaid', notes: adv.notes || '' }); }} style={{ display: 'block', width: '100%', padding: '10px 12px', border: 'none', textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>Edit</button>
+                          {adv.status === 'Unpaid' && (
+                            <button onClick={async () => { setOpenMenuId(null); try { await updateAdvance(adv.id, { status: 'deducted' }); setAdvances(prev => prev.map(a => a.id === adv.id ? ({ ...a, status: 'Deducted' }) : a)); toast.success('Advance marked as Deducted'); } catch { toast.error('Failed to update advance status'); } }} style={{ display: 'block', width: '100%', padding: '10px 12px', border: 'none', textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>Mark Deducted</button>
+                          )}
+                          <button onClick={() => setOpenMenuId(null)} style={{ display: 'block', width: '100%', padding: '10px 12px', border: 'none', textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>Close</button>
+                        </div>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
 
-              {filtered.length === 0 && !isAdding && (
-                 <tr>
-                    <td colSpan={7} className="p-10 text-center text-gray-400 text-sm font-semibold">
-                      No advances found matching your filters.
+                {filtered.length === 0 && !isAdding && (
+                  <tr>
+                    <td colSpan={6} className="p-10 text-center text-gray-400 text-sm font-semibold">
+                     No advances found matching your filters.
                     </td>
-                 </tr>
-              )}
+                  </tr>
+                )}
             </tbody>
           </table>
         </div>

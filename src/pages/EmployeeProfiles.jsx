@@ -1,42 +1,66 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Plus, Search, Download, MoreHorizontal,
-  ChevronLeft, ChevronRight, SlidersHorizontal,
-  Users, UserPlus, MapPin, Briefcase, Check, X
+  Search, Download,
+  ChevronLeft, ChevronRight,
+  Users, UserPlus, MapPin, Briefcase, Check, X, Edit2, ArrowUpRight,
+  Loader2, AlertCircle, Trash2
 } from 'lucide-react';
 
-const mockEmployees = [
-  { id: '1', name: 'Faizaar', role: 'Manager', farm: 'All', type: 'Monthly', wage: 155000 },
-  { id: '2', name: 'Jabir', role: 'Laborer', farm: 'MR1', type: 'Daily', wage: 1800 },
-  { id: '3', name: 'Ajmeer', role: 'Laborer', farm: 'MR1', type: 'Daily', wage: 2000 },
-  { id: '4', name: 'Jarsan', role: 'Tractor Driver', farm: 'MR2', type: 'Daily', wage: 2500 },
-  { id: '5', name: 'Rifaideen', role: 'Laborer', farm: 'MR2', type: 'Daily', wage: 2000 },
-  { id: '6', name: 'Askan', role: 'Laborer', farm: 'MR1', type: 'Daily', wage: 1800 },
-];
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../services/api';
+import { useToast } from '../components/ToastProvider';
 
-const fmt = (n) => n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function EmployeeProfiles() {
-  const [employees, setEmployees] = useState(mockEmployees);
+  const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
   const [farmFilter, setFarmFilter] = useState('All');
   const [selected, setSelected] = useState([]);
 
+  // API States
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // --- Inline Row State ---
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newRow, setNewRow] = useState({
-    name: '', role: '', farm: 'MR1', type: 'Daily', wage: ''
+    name: '', role: '', farm: 'MR1', type: 'daily', wage: ''
   });
+  const [editEmployee, setEditEmployee] = useState(null);
+  const [editRow, setEditRow] = useState({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+  const toast = useToast();
+
+  // --- Fetch Data ---
+  useEffect(() => {
+    let isActive = true;
+
+    const load = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await getEmployees(farmFilter);
+        if (!isActive) return;
+        setEmployees(data);
+      } catch {
+        if (isActive) setError("Failed to load employee directory. Please check your connection.");
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
+    };
+
+    load();
+    return () => { isActive = false; };
+  }, [farmFilter]);
 
   const filtered = employees.filter(emp =>
-    (farmFilter === 'All' || emp.farm === farmFilter || emp.farm === 'All') &&
     (!search || emp.name.toLowerCase().includes(search.toLowerCase()) || emp.role.toLowerCase().includes(search.toLowerCase()))
   );
 
   // KPIs
   const totalHeadcount = employees.length;
-  const mr1Count = employees.filter(e => e.farm === 'MR1' || e.farm === 'All').length;
-  const mr2Count = employees.filter(e => e.farm === 'MR2' || e.farm === 'All').length;
+  const mr1Count = employees.filter(e => e.farm === 'MR1').length;
+  const mr2Count = employees.filter(e => e.farm === 'MR2').length;
 
   const toggleSelect = (id) => setSelected(sel => sel.includes(id) ? sel.filter(i => i !== id) : [...sel, id]);
   const toggleAll = () => setSelected(sel => sel.length === filtered.length ? [] : filtered.map(s => s.id));
@@ -45,29 +69,98 @@ export default function EmployeeProfiles() {
     setNewRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSaveRow = () => {
-    if (!newRow.name || !newRow.role || !newRow.wage) {
-      alert("Please fill out Name, Role, and Base Wage.");
+  const handleEditRowChange = (e) => {
+    setEditRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const openEditEmployee = (emp) => {
+    setEditEmployee(emp);
+    setEditRow({
+      name: emp.name || '',
+      role: emp.role || '',
+      farm: emp.farm || 'MR1',
+      type: emp.type || 'daily',
+      wage: emp.wage_per_day || emp.wagePerDay || ''
+    });
+  };
+
+  const closeEditEmployee = () => {
+    setEditEmployee(null);
+    setEditRow({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+    setIsSaving(false);
+  };
+
+  const handleUpdateEmployee = async () => {
+    if (!editEmployee?.id) return;
+    if (!editRow.name || !editRow.role || !editRow.wage) {
+      toast.warn('Please provide Name, Role and Base Wage.');
       return;
     }
 
-    const newEmp = {
-      id: String(Date.now()),
-      name: newRow.name,
-      role: newRow.role,
-      farm: newRow.farm,
-      type: newRow.type,
-      wage: parseFloat(newRow.wage) || 0,
-    };
-    
-    setEmployees(prev => [newEmp, ...prev]);
-    setIsAdding(false);
-    setNewRow({ name: '', role: '', farm: 'MR1', type: 'Daily', wage: '' });
+    setIsSaving(true);
+    try {
+      const payload = {
+        name: editRow.name,
+        role: editRow.role,
+        farm: editRow.farm,
+        type: editRow.type,
+        wagePerDay: parseFloat(editRow.wage) || 0,
+      };
+
+      const updated = await updateEmployee(editEmployee.id, payload);
+      const record = { ...(updated || {}), ...payload };
+      setEmployees(prev => prev.map(e => (e.id === editEmployee.id ? record : e)));
+      closeEditEmployee();
+    } catch {
+      toast.error('Failed to update employee.');
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveRow = async () => {
+    if (!newRow.name || !newRow.role || !newRow.wage) {
+      toast.warn("Please fill out Name, Role, and Base Wage.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Map frontend state to backend API expectations
+      const payload = {
+        name: newRow.name,
+        role: newRow.role,
+        farm: newRow.farm,
+        type: newRow.type, // 'daily' or 'fixed'
+        wagePerDay: parseFloat(newRow.wage) || 0,
+        status: 'active'
+      };
+
+      const savedRecord = await createEmployee(payload);
+      
+      setEmployees(prev => [savedRecord, ...prev]);
+      setIsAdding(false);
+      setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+    } catch {
+      toast.error("Failed to save employee to database.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if(window.confirm("Are you sure you want to deactivate/delete this employee?")) {
+      try {
+        await deleteEmployee(id);
+        setEmployees(prev => prev.filter(e => e.id !== id));
+      } catch {
+        toast.error("Failed to delete employee.");
+      }
+    }
   };
 
   const cancelAdd = () => {
     setIsAdding(false);
-    setNewRow({ name: '', role: '', farm: 'MR1', type: 'Daily', wage: '' });
+    setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
   };
 
   return (
@@ -102,24 +195,29 @@ export default function EmployeeProfiles() {
           </button>
           <button
             onClick={() => setIsAdding(true)}
-            disabled={isAdding}
+            disabled={isAdding || isLoading}
             style={{
               display: 'flex', alignItems: 'center', gap: '7px',
               padding: '9px 18px',
-              background: isAdding ? '#9ca3af' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+              background: isAdding || isLoading ? '#9ca3af' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
               border: 'none', borderRadius: '10px',
               fontSize: '12px', fontWeight: 800, color: '#fff',
-              cursor: isAdding ? 'not-allowed' : 'pointer', fontFamily: "'Nunito', sans-serif",
+              cursor: isAdding || isLoading ? 'not-allowed' : 'pointer', fontFamily: "'Nunito', sans-serif",
               boxShadow: isAdding ? 'none' : '0 4px 14px rgba(22,163,74,0.35)',
               transition: 'all 0.2s',
             }}
-            onMouseOver={e => { if(!isAdding) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(22,163,74,0.45)'; } }}
-            onMouseOut={e => { if(!isAdding) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(22,163,74,0.35)'; } }}
           >
             <UserPlus size={16} /> Add Employee
           </button>
         </div>
       </div>
+
+      {/* ── API ERROR STATE ── */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-sm font-bold">
+          <AlertCircle size={18} /> {error}
+        </div>
+      )}
 
       {/* ── PREMIUM KPI STAT CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -194,7 +292,7 @@ export default function EmployeeProfiles() {
 
           <div style={{ display: 'flex', background: '#f3f4f6', padding: '3px', borderRadius: '10px', gap: '2px' }}>
             {['All', 'MR1', 'MR2'].map(f => (
-              <button key={f} onClick={() => setFarmFilter(f)} style={{
+              <button key={f} onClick={() => { setFarmFilter(f); setIsAdding(false); }} style={{
                 padding: '6px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 800,
                 border: 'none', cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
                 background: farmFilter === f ? '#fff' : 'transparent',
@@ -224,14 +322,6 @@ export default function EmployeeProfiles() {
                 onBlur={e => e.target.style.borderColor = '#e5e7eb'}
               />
             </div>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: '5px',
-              padding: '7px 13px', border: '1.5px solid #e5e7eb',
-              borderRadius: '9px', fontSize: '12px', fontWeight: 600, color: '#374151',
-              background: '#fff', cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
-            }}>
-              <SlidersHorizontal size={13} color="#9ca3af" /> Filters
-            </button>
           </div>
         </div>
 
@@ -256,45 +346,60 @@ export default function EmployeeProfiles() {
                 <tr style={{ background: '#f0fdf4', borderBottom: '1.5px solid #bbf7d0', boxShadow: 'inset 0 2px 4px rgba(22,163,74,0.05)' }}>
                   <td style={tdStyle('52px')}></td>
                   <td style={tdStyle()}>
-                    <input type="text" name="name" placeholder="Full Name" value={newRow.name} onChange={handleRowChange} style={inputStyle} />
+                    <input type="text" name="name" placeholder="Full Name" value={newRow.name} onChange={handleRowChange} style={inputStyle} disabled={isSaving} />
                   </td>
                   <td style={tdStyle()}>
-                    <input type="text" name="role" placeholder="E.g. Laborer" value={newRow.role} onChange={handleRowChange} style={inputStyle} />
+                    <input type="text" name="role" placeholder="E.g. Laborer" value={newRow.role} onChange={handleRowChange} style={inputStyle} disabled={isSaving} />
                   </td>
                   <td style={tdStyle()}>
-                    <select name="farm" value={newRow.farm} onChange={handleRowChange} style={{...inputStyle, cursor: 'pointer', appearance: 'auto'}}>
+                    <select name="farm" value={newRow.farm} onChange={handleRowChange} style={{...inputStyle, cursor: 'pointer', appearance: 'auto'}} disabled={isSaving}>
                        <option value="MR1">MR1</option>
                        <option value="MR2">MR2</option>
                        <option value="All">All Farms</option>
                     </select>
                   </td>
                   <td style={tdStyle()}>
-                    <select name="type" value={newRow.type} onChange={handleRowChange} style={{...inputStyle, cursor: 'pointer', appearance: 'auto'}}>
-                       <option value="Daily">Daily Wage</option>
-                       <option value="Monthly">Monthly Fixed</option>
+                    <select name="type" value={newRow.type} onChange={handleRowChange} style={{...inputStyle, cursor: 'pointer', appearance: 'auto'}} disabled={isSaving}>
+                       <option value="daily">Daily Wage</option>
+                       <option value="fixed">Monthly Fixed</option>
                     </select>
                   </td>
                   <td style={{ ...tdStyle('150px'), textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Rs.</span>
-                      <input type="number" name="wage" placeholder="0.00" value={newRow.wage} onChange={handleRowChange} style={{...inputStyle, width: '100px', textAlign: 'right'}} />
+                      <input type="number" name="wage" placeholder="0.00" value={newRow.wage} onChange={handleRowChange} style={{...inputStyle, width: '100px', textAlign: 'right'}} disabled={isSaving} />
                     </div>
                   </td>
                   <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                      <button onClick={cancelAdd} style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#6b7280' }}>
+                      <button onClick={cancelAdd} disabled={isSaving} style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#6b7280' }}>
                         <X size={14} strokeWidth={3} />
                       </button>
-                      <button onClick={handleSaveRow} style={{ background: '#16a34a', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#fff', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' }}>
-                        <Check size={14} strokeWidth={3} />
+                      <button onClick={handleSaveRow} disabled={isSaving} style={{ background: '#16a34a', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#fff', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' }}>
+                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
                       </button>
                     </div>
                   </td>
                 </tr>
               )}
 
-              {filtered.map((emp, idx) => {
+              {/* ── LOADING SPINNER IN TABLE ── */}
+              {isLoading && !isAdding && (
+                 <tr>
+                    <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#16a34a' }}>
+                       <Loader2 size={24} className="animate-spin mx-auto mb-2" />
+                       <span className="text-xs font-bold">Loading Employees...</span>
+                    </td>
+                 </tr>
+              )}
+
+              {!isLoading && filtered.map((emp, idx) => {
                 const isSel = selected.includes(emp.id);
+                // Map backend string values to nice UI labels
+                const payTypeLabel = emp.type === 'fixed' ? 'Monthly' : 'Daily';
+                // Backend sends wage_per_day
+                const wageValue = emp.wage_per_day || emp.wagePerDay || 0;
+
                 return (
                   <tr key={emp.id} style={{
                     borderBottom: '1px solid #f3f4f6',
@@ -332,35 +437,56 @@ export default function EmployeeProfiles() {
 
                     {/* Type */}
                     <td style={tdStyle()}>
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold ${emp.type === 'Monthly' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'} border`}>
-                         <Briefcase size={10} /> {emp.type}
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold ${payTypeLabel === 'Monthly' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'} border`}>
+                         <Briefcase size={10} /> {payTypeLabel}
                       </span>
                     </td>
 
                     {/* Base Salary */}
                     <td style={{ ...tdStyle(), textAlign: 'right', paddingRight: '20px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ color: '#0d3320', fontWeight: 800, fontSize: '13px' }}>Rs. {fmt(emp.wage)}</span>
-                        <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>/ {emp.type === 'Daily' ? 'Day' : 'Month'}</span>
+                        <span style={{ color: '#0d3320', fontWeight: 800, fontSize: '13px' }}>Rs. {fmt(parseFloat(wageValue))}</span>
+                        <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>/ {payTypeLabel === 'Daily' ? 'Day' : 'Month'}</span>
                       </div>
                     </td>
 
                     {/* Actions */}
                     <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
-                      <button style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '4px', borderRadius: '6px', color: '#9ca3af',
-                        transition: 'all 0.15s',
-                      }}
-                        onMouseOver={e => { e.currentTarget.style.background = '#dcfce7'; e.currentTarget.style.color = '#16a34a'; }}
-                        onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                        <button onClick={() => openEditEmployee(emp)} style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '6px', borderRadius: '6px', color: '#9ca3af',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseOver={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.color = '#2563eb'; }}
+                          onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
+                        >
+                          <Edit2 size={14} />
+                        </button>
+
+                        <button onClick={() => handleDelete(emp.id)} style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '6px', borderRadius: '6px', color: '#9ca3af',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseOver={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                          onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
+
+              {!isLoading && filtered.length === 0 && !isAdding && (
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    No employees found for your filter.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -377,6 +503,93 @@ export default function EmployeeProfiles() {
           </div>
         </div>
       </div>
+      {editEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-[1.5rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600">
+                  <Edit2 size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-text font-heading">Update Employee</h2>
+                  <p className="text-xs text-earth">Edit profile #{editEmployee.id}</p>
+                </div>
+              </div>
+              <button onClick={closeEditEmployee} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-bold text-text mb-1.5">Full Name</label>
+                    <input type="text" name="name" value={editRow.name} onChange={handleEditRowChange} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-text focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-text mb-1.5">Job Role</label>
+                    <input type="text" name="role" value={editRow.role} onChange={handleEditRowChange} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-text focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-bold text-text mb-1.5">Assigned Farm</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setEditRow((prev) => ({ ...prev, farm: 'MR1' }))}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${editRow.farm === 'MR1' ? 'bg-blue-50 border-blue-500 text-blue-600' : 'border-gray-200 text-earth hover:bg-gray-50'}`}>
+                        MR1
+                      </button>
+                      <button type="button" onClick={() => setEditRow((prev) => ({ ...prev, farm: 'MR2' }))}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${editRow.farm === 'MR2' ? 'bg-blue-50 border-blue-500 text-blue-600' : 'border-gray-200 text-earth hover:bg-gray-50'}`}>
+                        MR2
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-text mb-1.5">Pay Type</label>
+                    <select name="type" value={editRow.type} onChange={handleEditRowChange} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
+                      <option value="daily">Daily Wage</option>
+                      <option value="fixed">Monthly Fixed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-text mb-1.5">Base Wage</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-600">Rs.</span>
+                    <input type="number" name="wage" value={editRow.wage} onChange={handleEditRowChange} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-text focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm text-blue-600">
+                  <ArrowUpRight size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-earth uppercase tracking-wider mb-0.5">Updated Base Wage</p>
+                  <p className="text-2xl font-bold text-text font-heading">Rs. {fmt(parseFloat(editRow.wage) || 0)}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" onClick={closeEditEmployee} className="px-5 py-2.5 text-sm font-bold text-earth hover:text-text transition-colors">
+                  Cancel
+                </button>
+                <button type="button" onClick={handleUpdateEmployee} disabled={isSaving} className="bg-blue-600 px-6 py-2.5 text-sm shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5 rounded-xl text-white font-bold disabled:opacity-60 disabled:cursor-not-allowed">
+                  {isSaving ? 'Saving...' : 'Update Profile'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

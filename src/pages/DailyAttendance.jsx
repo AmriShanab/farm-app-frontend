@@ -1,17 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   CalendarCheck, Calendar, CheckCircle2, AlertCircle,
-  Users, Save, Check, X, MapPin, Search, UserCheck, Minus
+  Users, Save, Check, X, Search, UserCheck, Minus
 } from 'lucide-react';
+import { getAttendance, saveAttendanceBulk, updateAttendance } from '../services/api';
+import { useToast } from '../components/ToastProvider';
 
-// --- MOCK DATA ---
-const mockEmployees = [
-  { id: '2', name: 'Jabir', role: 'Laborer', farm: 'MR1', type: 'Daily' },
-  { id: '3', name: 'Ajmeer', role: 'Laborer', farm: 'MR1', type: 'Daily' },
-  { id: '4', name: 'Jarsan', role: 'Tractor Driver', farm: 'MR2', type: 'Daily' },
-  { id: '5', name: 'Rifaideen', role: 'Laborer', farm: 'MR2', type: 'Daily' },
-  { id: '6', name: 'Askan', role: 'Laborer', farm: 'MR1', type: 'Daily' },
-];
+// Employees will be fetched from API
 
 // --- REUSABLE STAT CARD COMPONENT ---
 const StatCard = ({ title, amount, badge, sub, icon, path, index }) => {
@@ -58,37 +53,111 @@ export default function DailyAttendance() {
   
   // State to hold attendance (id -> status: 1, 0.5, 0)
   const [attendance, setAttendance] = useState({});
+  const [employees, setEmployees] = useState([]);
+  const [farm, setFarm] = useState('MR1');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const toast = useToast();
 
-  const filteredEmployees = mockEmployees.filter(emp =>
-    !search || emp.name.toLowerCase().includes(search.toLowerCase()) || emp.role.toLowerCase().includes(search.toLowerCase())
+  const filteredEmployees = employees.filter(emp =>
+    !search || emp.name.toLowerCase().includes(search.toLowerCase()) || (emp.role || '').toLowerCase().includes(search.toLowerCase())
   );
 
   // Derived KPIs
   const presentCount = Object.values(attendance).filter(val => val === 1 || val === 0.5).length;
   const absentCount = Object.values(attendance).filter(val => val === 0).length;
-  const unmarkedCount = mockEmployees.length - Object.keys(attendance).length;
+  const unmarkedCount = employees.length - Object.keys(attendance).length;
 
   // Handlers
-  const handleStatusChange = (id, status) => {
+  const handleStatusChange = async (id, status) => {
     setAttendance(prev => ({ ...prev, [id]: status }));
+
+    // If this row already has an attendance record, update immediately
+    const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
+    const attendanceId = emp?.attendanceId;
+    const statusStr = status === 1 ? 'full' : status === 0.5 ? 'half' : 'absent';
+    if (attendanceId) {
+      try {
+        await updateAttendance(attendanceId, { status: statusStr });
+      } catch {
+        toast.error('Failed to update attendance.');
+      }
+    }
   };
 
   const handleMarkAllPresent = () => {
     const allPresent = {};
     filteredEmployees.forEach(emp => {
-      allPresent[emp.id] = 1;
+      const id = String(emp.employeeId || emp.id);
+      allPresent[id] = 1;
     });
     setAttendance(prev => ({ ...prev, ...allPresent }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (unmarkedCount > 0) {
-      alert(`You still have ${unmarkedCount} unmarked employees! Please mark everyone before saving.`);
+      toast.warn(`You still have ${unmarkedCount} unmarked employees! Please mark everyone before saving.`);
       return;
     }
-    console.log(`Saving attendance for ${selectedDate}:`, attendance);
-    alert("Attendance saved successfully!");
+
+    // Build records payload
+    const records = employees.map(emp => {
+      const id = String(emp.employeeId || emp.id);
+      const status = attendance[id];
+      const statusStr = status === 1 ? 'full' : status === 0.5 ? 'half' : 'absent';
+      return { empId: emp.employeeId || parseInt(emp.id, 10), status: statusStr };
+    });
+
+    try {
+      setIsLoading(true);
+      await saveAttendanceBulk(selectedDate, records);
+      toast.success('Attendance saved successfully!');
+    } catch {
+      toast.error('Failed to save attendance.');
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Fetch attendance sheet when date or farm changes
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await getAttendance(selectedDate, farm);
+        if (!active) return;
+        const emps = data.map(d => ({
+          id: String(d.employeeId),
+          employeeId: d.employeeId,
+          name: d.name,
+          role: d.role || '',
+          farm: d.farm,
+          wagePerDay: d.wagePerDay,
+          attendanceId: d.attendanceId,
+          status: d.status,
+        }));
+        setEmployees(emps);
+
+        // build attendance map
+        const att = {};
+        data.forEach(d => {
+          const key = String(d.employeeId);
+          if (d.status === 'full') att[key] = 1;
+          else if (d.status === 'half') att[key] = 0.5;
+          else if (d.status === 'absent') att[key] = 0;
+        });
+        setAttendance(att);
+      } catch {
+        if (active) setError('Failed to load attendance.');
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, [selectedDate, farm]);
 
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
@@ -107,8 +176,9 @@ export default function DailyAttendance() {
           </p>
         </div>
 
-        {/* Date Selector */}
-        <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm">
+        {/* Date Selector + Farm */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm">
           <div className="pl-3 pr-2 text-gray-400">
              <Calendar size={16} />
           </div>
@@ -121,10 +191,21 @@ export default function DailyAttendance() {
             }}
             className="bg-transparent border-none outline-none text-sm font-bold text-gray-800 pr-3 cursor-pointer"
           />
+          </div>
+
+          <select value={farm} onChange={(e) => { setFarm(e.target.value); setAttendance({}); }} className="text-sm font-bold border border-gray-200 rounded-xl px-3 py-1">
+            <option value="MR1">MR1</option>
+            <option value="MR2">MR2</option>
+          </select>
         </div>
       </div>
 
-      {/* ── KPI STAT CARDS ── */}
+        {/* ── KPI STAT CARDS ── */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-bold">
+            <AlertCircle size={16} /> <span style={{ marginLeft: 8 }}>{error}</span>
+          </div>
+        )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard 
           title="Present Today" amount={presentCount.toString()} badge="Active" sub="Full & Half Days" 
@@ -156,12 +237,13 @@ export default function DailyAttendance() {
             />
           </div>
 
-          <button 
+           <button 
              onClick={handleMarkAllPresent}
-             className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:border-green-500 hover:text-green-600 transition-colors shadow-sm w-full sm:w-auto"
-          >
+             disabled={isLoading}
+             className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:border-green-500 hover:text-green-600 transition-colors shadow-sm w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed"
+           >
              Mark All Present
-          </button>
+           </button>
         </div>
 
         {/* List Body */}
@@ -269,9 +351,10 @@ export default function DailyAttendance() {
            </div>
            <button 
              onClick={handleSave}
-             className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl text-sm font-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center gap-2"
+             disabled={isLoading}
+             className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl text-sm font-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
            >
-             <Save size={16} /> Save Register
+             <Save size={16} /> {isLoading ? 'Saving...' : 'Save Register'}
            </button>
         </div>
         

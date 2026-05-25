@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import { getCashewSales, createCashewSale, updateCashewSale, deleteCashewSale } from '../services/api';
+import { useToast } from '../components/ToastProvider';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -32,6 +33,7 @@ export default function CashewSales() {
     date: new Date().toISOString().split('T')[0],
     kg: '', rate: '', laborCost: ''
   });
+  const toast = useToast();
 
   const calcNet = (row) => {
     const kg = parseFloat(row.kg) || 0;
@@ -116,7 +118,7 @@ export default function CashewSales() {
 
   const handleSaveRow = async () => {
     if (!newRow.kg || !newRow.rate) {
-      alert("Please enter both Quantity (Kg) and Rate.");
+      toast.warn("Please enter both Quantity (Kg) and Rate.");
       return;
     }
 
@@ -145,7 +147,7 @@ export default function CashewSales() {
 
       setNewRow({ date: new Date().toISOString().split('T')[0], kg: '', rate: '', laborCost: '' });
     } catch {
-      alert("Failed to save record to database.");
+      toast.error("Failed to save record to database.");
     } finally {
       setIsSaving(false);
     }
@@ -157,7 +159,7 @@ export default function CashewSales() {
     }
 
     if (!editRow.kg || !editRow.rate) {
-      alert("Please enter both Quantity (Kg) and Rate.");
+      toast.warn("Please enter both Quantity (Kg) and Rate.");
       return;
     }
 
@@ -179,7 +181,7 @@ export default function CashewSales() {
       setSales(prev => prev.map(s => (s.id === editSale.id ? completeRecord : s)));
       closeEditSale();
     } catch {
-      alert("Failed to update record.");
+      toast.error("Failed to update record.");
       setIsSaving(false);
     }
   };
@@ -190,7 +192,7 @@ export default function CashewSales() {
         await deleteCashewSale(id);
         setSales(prev => prev.filter(s => s.id !== id));
       } catch {
-        alert("Failed to delete record.");
+        toast.error("Failed to delete record.");
       }
     }
   };
@@ -527,7 +529,7 @@ export default function CashewSales() {
       </div>
 
       {editSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-2xl rounded-[1.5rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-3">
@@ -577,10 +579,14 @@ export default function CashewSales() {
             </div>
 
             <div className="px-6 py-5 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-earth uppercase tracking-wider mb-0.5">Updated subtotal</p>
-                <p className="text-2xl font-bold text-text font-heading">Rs. {fmt(calcNet(editRow))}</p>
-                <p className="text-xs text-gray-500 mt-1">Labor cost is shown separately in the table.</p>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm text-orange-600">
+                  <ArrowUpRight size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-earth uppercase tracking-wider mb-0.5">Updated Net Total</p>
+                  <p className="text-2xl font-bold text-text font-heading">Rs. {fmt(calcNet(editRow))}</p>
+                </div>
               </div>
 
               <div className="flex gap-3">

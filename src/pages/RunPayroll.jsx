@@ -1,32 +1,182 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Calculator, Download, Search, SlidersHorizontal,
-  Wallet, Banknote, FileCheck, CheckCircle2, ChevronLeft, ChevronRight
+  Wallet, Banknote, FileCheck, CheckCircle2, ChevronLeft, ChevronRight,
+  Plus, Edit2, X
 } from 'lucide-react';
-
-// --- MOCK DATA (Simulating the Database Join) ---
-// In a real app, your backend does this math: 
-// (Base Wage * Days Worked) - Pending Advances = Net Pay
-const initialPayrollData = [
-  { id: '2', name: 'Jabir', role: 'Laborer', type: 'Daily', wage: 1800, daysWorked: 5.5, gross: 9900, advanceDeduction: 2000, status: 'Draft' },
-  { id: '3', name: 'Ajmeer', role: 'Laborer', type: 'Daily', wage: 2000, daysWorked: 6, gross: 12000, advanceDeduction: 0, status: 'Draft' },
-  { id: '4', name: 'Jarsan', role: 'Tractor Driver', type: 'Daily', wage: 2500, daysWorked: 6, gross: 15000, advanceDeduction: 5000, status: 'Draft' },
-  { id: '5', name: 'Rifaideen', role: 'Laborer', type: 'Daily', wage: 2000, daysWorked: 5.5, gross: 11000, advanceDeduction: 3000, status: 'Draft' },
-  { id: '6', name: 'Askan', role: 'Laborer', type: 'Daily', wage: 1800, daysWorked: 7, gross: 12600, advanceDeduction: 0, status: 'Draft' },
-  // Manager is fixed monthly, usually processed separately at month-end, but included here for completeness
-  { id: '1', name: 'Faizaar', role: 'Manager', type: 'Monthly', wage: 155000, daysWorked: 'N/A', gross: 155000, advanceDeduction: 10000, status: 'Draft' },
-];
+import { useToast } from '../components/ToastProvider';
+import { createManagerSalary, finalizePayroll, getEmployees, getManagerSalaries, getPayrollHistory, getPayrollPreview, updateManagerSalary } from '../services/api';
 
 const fmt = (n) => n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const toNumber = (value) => Number(value ?? 0) || 0;
+
+const payrollPeriodLabel = (startDate, endDate) => `${startDate} to ${endDate}`;
+
+const normalizePreviewRow = (row) => ({
+  id: String(row.empId ?? row.employeeId ?? row.id ?? row.name ?? crypto.randomUUID()),
+  name: row.name ?? '',
+  role: row.role ?? '',
+  type: row.type ?? 'Daily',
+  wage: toNumber(row.wage),
+  fullDays: toNumber(row.fullDays),
+  halfDays: toNumber(row.halfDays),
+  absentDays: toNumber(row.absentDays),
+  daysWorked: row.daysWorked ?? (toNumber(row.fullDays) + (toNumber(row.halfDays) * 0.5)),
+  gross: toNumber(row.gross),
+  advanceDeduction: toNumber(row.advanceDeduction),
+  status: row.status ?? 'Draft',
+  netPay: row.netPay ?? Math.max(0, toNumber(row.gross) - toNumber(row.advanceDeduction)),
+});
+
+const normalizeHistoryRow = (row) => ({
+  id: String(row.id ?? crypto.randomUUID()),
+  period: row.period ?? '',
+  farm: row.farm ?? '',
+  employeeCount: toNumber(row.employeeCount),
+  totalGross: toNumber(row.totalGross),
+  totalDeductions: toNumber(row.totalDeductions),
+  totalNet: toNumber(row.totalNet),
+  finalizedAt: row.finalizedAt ?? '',
+});
+
+const monthLabel = (month) => new Date(2000, month - 1, 1).toLocaleString('en-US', { month: 'long' });
+
+const managerSalaryToForm = (row, fallbackYear) => ({
+  empId: row?.empId ?? '',
+  month: row?.month ?? Number(new Date().getMonth() + 1),
+  year: row?.year ?? Number(fallbackYear),
+  amount: row?.amount ?? '',
+  chequeNo: row?.chequeNo ?? '',
+  chequeDate: row?.chequeDate ?? '',
+});
+
+const normalizeManagerSalaryRow = (row) => ({
+  id: String(row.id ?? crypto.randomUUID()),
+  empId: String(row.empId ?? ''),
+  employeeName: row.employeeName ?? '',
+  month: toNumber(row.month),
+  year: toNumber(row.year),
+  amount: toNumber(row.amount),
+  chequeNo: row.chequeNo ?? '',
+  chequeDate: row.chequeDate ?? '',
+  createdAt: row.createdAt ?? '',
+});
+
 export default function RunPayroll() {
-  const [payrollData, setPayrollData] = useState(initialPayrollData);
+  const [payrollData, setPayrollData] = useState([]);
+  const [historyRows, setHistoryRows] = useState([]);
   const [search, setSearch] = useState('');
   const [isFinalized, setIsFinalized] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [startDate, setStartDate] = useState('2026-05-18');
+  const [endDate, setEndDate] = useState('2026-05-24');
+  const [farm, setFarm] = useState('MR1');
+  const [managerYear, setManagerYear] = useState('2026');
+  const [managerSalaries, setManagerSalaries] = useState([]);
+  const [managerEmployees, setManagerEmployees] = useState([]);
+  const [managerLoading, setManagerLoading] = useState(false);
+  const [managerError, setManagerError] = useState(null);
+  const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
+  const [managerEdit, setManagerEdit] = useState(null);
+  const [managerRow, setManagerRow] = useState(managerSalaryToForm(null, '2026'));
+  const [isManagerSaving, setIsManagerSaving] = useState(false);
+  const toast = useToast();
 
-  const filtered = payrollData.filter(emp =>
+  useEffect(() => {
+    let active = true;
+
+    const loadPayroll = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const preview = await getPayrollPreview({ startDate, endDate, farm });
+        if (!active) return;
+        setPayrollData(Array.isArray(preview) ? preview.map(normalizePreviewRow) : []);
+      } catch {
+        if (active) {
+          setError('Failed to load payroll preview.');
+          setPayrollData([]);
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+
+    loadPayroll();
+    return () => { active = false; };
+  }, [startDate, endDate, farm]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadEmployees = async () => {
+      try {
+        const employees = await getEmployees('All');
+        if (!active) return;
+        const managers = (Array.isArray(employees) ? employees : [])
+          .filter(emp => (emp.role || '').toLowerCase().includes('manager'))
+          .map(emp => ({
+            id: String(emp.id ?? emp.employeeId ?? emp.empId ?? ''),
+            name: emp.name ?? emp.employee_name ?? emp.employeeName ?? '',
+            role: emp.role ?? '',
+          }));
+        setManagerEmployees(managers);
+      } catch {
+        if (active) setManagerEmployees([]);
+      }
+    };
+
+    loadEmployees();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadManagerSalaries = async () => {
+      setManagerLoading(true);
+      setManagerError(null);
+      try {
+        const rows = await getManagerSalaries(managerYear);
+        if (!active) return;
+        setManagerSalaries(Array.isArray(rows) ? rows.map(normalizeManagerSalaryRow) : []);
+      } catch {
+        if (active) {
+          setManagerError('Failed to load manager salaries.');
+          setManagerSalaries([]);
+        }
+      } finally {
+        if (active) setManagerLoading(false);
+      }
+    };
+
+    loadManagerSalaries();
+    return () => { active = false; };
+  }, [managerYear]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHistory = async () => {
+      try {
+        const rows = await getPayrollHistory({ year: startDate.slice(0, 4), farm });
+        if (!active) return;
+        setHistoryRows(Array.isArray(rows) ? rows.map(normalizeHistoryRow) : []);
+      } catch {
+        if (active) setHistoryRows([]);
+      }
+    };
+
+    loadHistory();
+    return () => { active = false; };
+  }, [startDate, farm]);
+
+  const filtered = useMemo(() => payrollData.filter(emp =>
     !search || emp.name.toLowerCase().includes(search.toLowerCase()) || emp.role.toLowerCase().includes(search.toLowerCase())
-  );
+  ), [payrollData, search]);
 
   // --- KPI Math ---
   // Net Pay = Gross - Advances
@@ -35,12 +185,97 @@ export default function RunPayroll() {
   const totalNetPayout = totalGross - totalDeductions;
 
   // --- Action Handler ---
-  const handleFinalizePayroll = () => {
-    if (confirm("Are you sure you want to finalize this payroll? This will permanently deduct the advances and mark the payroll as Paid.")) {
-      const finalizedData = payrollData.map(emp => ({ ...emp, status: 'Paid' }));
-      setPayrollData(finalizedData);
+  const handleFinalizePayroll = async () => {
+    if (!payrollData.length) {
+      toast.warn('No payroll data available to finalize.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to finalize this payroll? This will permanently deduct the advances and mark the payroll as Paid.')) {
+      return;
+    }
+
+    const payload = {
+      period: payrollPeriodLabel(startDate, endDate),
+      startDate,
+      endDate,
+      farm,
+      employeePayouts: payrollData.map(emp => ({
+        empId: Number(emp.id),
+        grossPay: toNumber(emp.gross),
+        advanceDeducted: toNumber(emp.advanceDeduction),
+        netPay: toNumber(emp.netPay ?? emp.gross - emp.advanceDeduction),
+      })),
+    };
+
+    setIsSaving(true);
+    try {
+      await finalizePayroll(payload);
       setIsFinalized(true);
-      alert("Payroll Finalized! Advances have been marked as Deducted in the database.");
+      toast.success('Payroll finalized successfully.');
+    } catch {
+      toast.error('Failed to finalize payroll.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openManagerModal = (row = null) => {
+    setManagerEdit(row);
+    setManagerRow(managerSalaryToForm(row, managerYear));
+    setIsManagerModalOpen(true);
+  };
+
+  const closeManagerModal = () => {
+    setIsManagerModalOpen(false);
+    setManagerEdit(null);
+    setManagerRow(managerSalaryToForm(null, managerYear));
+    setIsManagerSaving(false);
+  };
+
+  const handleSaveManagerSalary = async () => {
+    if (!managerRow.empId || !managerRow.month || !managerRow.year || !managerRow.amount) {
+      toast.warn('Please select a manager, month, year and amount.');
+      return;
+    }
+
+    const payload = {
+      empId: Number(managerRow.empId),
+      month: Number(managerRow.month),
+      year: Number(managerRow.year),
+      amount: Number(managerRow.amount),
+      chequeNo: managerRow.chequeNo || '',
+      chequeDate: managerRow.chequeDate || null,
+    };
+
+    setIsManagerSaving(true);
+    try {
+      const saved = managerEdit
+        ? await updateManagerSalary(managerEdit.id, payload)
+        : await createManagerSalary(payload);
+
+      const selectedManager = managerEmployees.find(emp => String(emp.id) === String(payload.empId));
+      const record = normalizeManagerSalaryRow({
+        ...(saved || {}),
+        id: saved?.id ?? managerEdit?.id ?? String(Date.now()),
+        empId: saved?.empId ?? payload.empId,
+        employeeName: saved?.employeeName ?? selectedManager?.name ?? '',
+        month: saved?.month ?? payload.month,
+        year: saved?.year ?? payload.year,
+        amount: saved?.amount ?? payload.amount,
+        chequeNo: saved?.chequeNo ?? payload.chequeNo,
+        chequeDate: saved?.chequeDate ?? payload.chequeDate,
+      });
+
+      setManagerSalaries(prev => managerEdit
+        ? prev.map(item => (item.id === record.id ? record : item))
+        : [record, ...prev]
+      );
+      toast.success(managerEdit ? 'Manager salary updated.' : 'Manager salary added.');
+      closeManagerModal();
+    } catch {
+      toast.error('Failed to save manager salary.');
+      setIsManagerSaving(false);
     }
   };
 
@@ -61,20 +296,45 @@ export default function RunPayroll() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Start</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-sm font-semibold text-gray-800 bg-transparent outline-none" />
+          </div>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">End</label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm font-semibold text-gray-800 bg-transparent outline-none" />
+          </div>
+          <select value={farm} onChange={e => setFarm(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 shadow-sm">
+            <option value="MR1">MR1</option>
+            <option value="MR2">MR2</option>
+          </select>
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:text-green-700 transition-colors">
             <Download size={14} /> Export Payslips
           </button>
           {!isFinalized && (
             <button 
               onClick={handleFinalizePayroll}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+              disabled={isSaving || isLoading}
+              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <FileCheck size={16} /> Finalize & Pay
+              <FileCheck size={16} /> {isSaving ? 'Finalizing...' : 'Finalize & Pay'}
             </button>
           )}
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-bold">
+          {error}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="mb-6 p-4 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-semibold shadow-sm">
+          Loading payroll preview...
+        </div>
+      )}
 
       {/* ── PREMIUM KPI STAT CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -200,7 +460,7 @@ export default function RunPayroll() {
             </thead>
             <tbody>
               {filtered.map((emp, idx) => {
-                const netPay = emp.gross - emp.advanceDeduction;
+                const netPay = emp.netPay ?? (emp.gross - emp.advanceDeduction);
                 
                 return (
                   <tr key={emp.id} style={{
@@ -233,7 +493,7 @@ export default function RunPayroll() {
                     {/* Days Worked */}
                     <td style={tdStyle()}>
                       <span className={`inline-flex items-center justify-center min-w-[32px] px-2 py-1 rounded-md text-xs font-bold ${emp.daysWorked === 'N/A' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                         {emp.daysWorked}
+                         {typeof emp.daysWorked === 'number' ? emp.daysWorked.toFixed(1).replace(/\.0$/, '') : emp.daysWorked}
                       </span>
                     </td>
 
@@ -258,7 +518,7 @@ export default function RunPayroll() {
                        <span style={{ color: '#0d3320', fontWeight: 900, fontSize: '14px' }}>Rs. {fmt(netPay)}</span>
                     </td>
 
-                    {/* Status */}
+                      {/* Status */}
                     <td style={tdStyle()}>
                       {emp.status === 'Draft' ? (
                          <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">Review</span>
@@ -285,6 +545,178 @@ export default function RunPayroll() {
           </div>
         </div>
       </div>
+
+      <div className="mt-6 bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-black text-gray-900">Payroll History</h2>
+            <p className="text-xs text-gray-500">Recent finalized payroll runs for {farm}</p>
+          </div>
+          <div className="text-xs font-bold text-gray-500">{historyRows.length} record(s)</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse whitespace-nowrap">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Period</th>
+                <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Employees</th>
+                <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Net</th>
+                <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Finalized</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {historyRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 px-4 text-sm text-gray-400 text-center">No payroll history found.</td>
+                </tr>
+              ) : (
+                historyRows.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50">
+                    <td className="py-3 px-4 text-sm font-semibold text-gray-800">{row.period}</td>
+                    <td className="py-3 px-4 text-sm text-gray-700">{row.employeeCount || '-'}</td>
+                    <td className="py-3 px-4 text-sm font-bold text-gray-900">Rs. {fmt(row.totalNet)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{row.finalizedAt}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="mt-6 bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black text-gray-900">Manager Salary</h2>
+            <p className="text-xs text-gray-500">Add and update manager monthly salary records</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={managerYear} onChange={e => setManagerYear(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 shadow-sm">
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+            </select>
+            <button onClick={() => openManagerModal()} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg transition-all">
+              <Plus size={16} /> Add Manager Salary
+            </button>
+          </div>
+        </div>
+
+        {managerError && (
+          <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-bold">{managerError}</div>
+        )}
+
+        {managerLoading ? (
+          <div className="px-4 py-6 text-sm text-gray-500 font-semibold">Loading manager salaries...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Manager</th>
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Month</th>
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Year</th>
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Amount</th>
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Cheque</th>
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Cheque Date</th>
+                  <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-gray-500">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {managerSalaries.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 px-4 text-sm text-gray-400 text-center">No manager salary records found.</td>
+                  </tr>
+                ) : (
+                  managerSalaries.map((row) => (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-800">{row.employeeName || row.empId}</td>
+                      <td className="py-3 px-4 text-sm text-gray-700">{monthLabel(row.month)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-700">{row.year}</td>
+                      <td className="py-3 px-4 text-sm font-bold text-gray-900">Rs. {fmt(row.amount)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-700">{row.chequeNo || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-700">{row.chequeDate || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-700">
+                        <button onClick={() => openManagerModal(row)} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:border-green-300 hover:text-green-700 transition-colors text-xs font-bold">
+                          <Edit2 size={14} /> Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {isManagerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={closeManagerModal} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-gray-900">{managerEdit ? 'Edit Manager Salary' : 'Add Manager Salary'}</h3>
+                <p className="text-xs text-gray-500">Record salary payments for the manager</p>
+              </div>
+              <button onClick={closeManagerModal} className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 grid gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Manager
+                  <select value={managerRow.empId} onChange={e => setManagerRow(prev => ({ ...prev, empId: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800">
+                    <option value="">Select manager</option>
+                    {managerEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Amount
+                  <input type="number" value={managerRow.amount} onChange={e => setManagerRow(prev => ({ ...prev, amount: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Month
+                  <select value={managerRow.month} onChange={e => setManagerRow(prev => ({ ...prev, month: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800">
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                      <option key={month} value={month}>{monthLabel(month)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Year
+                  <input type="number" value={managerRow.year} onChange={e => setManagerRow(prev => ({ ...prev, year: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Cheque No
+                  <input type="text" value={managerRow.chequeNo} onChange={e => setManagerRow(prev => ({ ...prev, chequeNo: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
+                </label>
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Cheque Date
+                  <input type="date" value={managerRow.chequeDate} onChange={e => setManagerRow(prev => ({ ...prev, chequeDate: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
+                </label>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/60">
+              <button onClick={closeManagerModal} className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleSaveManagerSalary} disabled={isManagerSaving} className="px-5 py-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-black shadow-md disabled:opacity-60">
+                {isManagerSaving ? 'Saving...' : (managerEdit ? 'Update Salary' : 'Add Salary')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
