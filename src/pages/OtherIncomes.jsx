@@ -1,46 +1,65 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus, Search, Download, MoreHorizontal,
   ChevronLeft, ChevronRight, SlidersHorizontal,
-  TrendingUp, Wallet, Coins, Check, X, Award
+  TrendingUp, Wallet, Coins, Check, X, Award,
+  Loader2, AlertCircle, Trash2
 } from 'lucide-react';
 
-// Mock Data for Miscellaneous Incomes (Categories removed)
-const mockOtherIncomes = [
-  { id: '1', date: '2026-05-18', desc: 'Banana Harvest (Kathali) Sales', amount: 45000 },
-  { id: '2', date: '2026-05-12', desc: 'Fallen Coconut Tree Trunks (Timber)', amount: 18000 },
-  { id: '3', date: '2026-04-25', desc: 'Empty Fertilizer Bags (150 pcs)', amount: 4500 },
-  { id: '4', date: '2026-04-10', desc: 'Tractor Rental (Neighbor Farm)', amount: 12000 },
-  { id: '5', date: '2026-03-22', desc: 'Pepper Harvest Sales', amount: 85000 },
-  { id: '6', date: '2026-02-15', desc: 'Old Tractor Parts Metal Scrap', amount: 6500 },
-];
+import { getOtherIncomes, createOtherIncome, deleteOtherIncome } from '../services/api';
 
-const fmt = (n) => n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function OtherIncomes() {
-  const [sales, setSales] = useState(mockOtherIncomes);
+  const [sales, setSales] = useState([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState([]);
 
+  // API States
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // --- Inline Row State ---
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split('T')[0],
-    desc: '',
+    description: '',
     amount: ''
   });
+
+  // --- Fetch Data ---
+  useEffect(() => {
+    fetchIncomeData();
+  }, []);
+
+  const fetchIncomeData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getOtherIncomes(); // Fetching all by default
+      setSales(data);
+    } catch (err) {
+      setError("Failed to load income data. Please check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter based only on search text (Description or Date)
   const filtered = sales.filter(s =>
     !search ||
-    s.date.includes(search) ||
-    s.desc.toLowerCase().includes(search.toLowerCase())
+    (s.date && s.date.includes(search)) ||
+    (s.description && s.description.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const totalRevenue = filtered.reduce((a, s) => a + s.amount, 0);
+  const totalRevenue = filtered.reduce((a, s) => a + (parseFloat(s.amount) || 0), 0);
 
   // Find the highest value entry for the KPI card
-  const topEntry = filtered.reduce((max, sale) => sale.amount > max.amount ? sale : max, { amount: 0, desc: 'N/A' });
+  const topEntry = filtered.reduce((max, sale) => {
+    const amt = parseFloat(sale.amount) || 0;
+    return amt > max.amount ? { amount: amt, description: sale.description } : max;
+  }, { amount: 0, description: 'N/A' });
 
   const toggleSelect = (id) =>
     setSelected(sel => sel.includes(id) ? sel.filter(i => i !== id) : [...sel, id]);
@@ -51,27 +70,48 @@ export default function OtherIncomes() {
     setNewRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSaveRow = () => {
-    if (!newRow.desc || !newRow.amount) {
+  const handleSaveRow = async () => {
+    if (!newRow.description || !newRow.amount) {
       alert("Please enter a description and an amount.");
       return;
     }
 
-    const newSale = {
-      id: String(Date.now()),
-      date: newRow.date,
-      desc: newRow.desc,
-      amount: parseFloat(newRow.amount) || 0,
-    };
+    setIsSaving(true);
+    try {
+      const payload = {
+        date: newRow.date,
+        farm: "MR1",          // Defaulted to satisfy backend
+        category: "Misc",     // Defaulted to keep UI clean as requested
+        description: newRow.description,
+        amount: parseFloat(newRow.amount) || 0,
+      };
 
-    setSales(prev => [newSale, ...prev]);
-    setIsAdding(false);
-    setNewRow({ date: new Date().toISOString().split('T')[0], desc: '', amount: '' });
+      const savedRecord = await createOtherIncome(payload);
+      
+      setSales(prev => [savedRecord, ...prev]);
+      setIsAdding(false);
+      setNewRow({ date: new Date().toISOString().split('T')[0], description: '', amount: '' });
+    } catch (err) {
+      alert("Failed to save record to database.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if(window.confirm("Are you sure you want to delete this record?")) {
+      try {
+        await deleteOtherIncome(id);
+        setSales(prev => prev.filter(s => s.id !== id));
+      } catch (err) {
+        alert("Failed to delete record.");
+      }
+    }
   };
 
   const cancelAdd = () => {
     setIsAdding(false);
-    setNewRow({ date: new Date().toISOString().split('T')[0], desc: '', amount: '' });
+    setNewRow({ date: new Date().toISOString().split('T')[0], description: '', amount: '' });
   };
 
   return (
@@ -106,26 +146,30 @@ export default function OtherIncomes() {
           </button>
           <button
             onClick={() => setIsAdding(true)}
-            disabled={isAdding}
+            disabled={isAdding || isLoading}
             style={{
               display: 'flex', alignItems: 'center', gap: '7px',
               padding: '9px 18px',
-              background: isAdding ? '#9ca3af' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+              background: isAdding || isLoading ? '#9ca3af' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
               border: 'none', borderRadius: '10px',
               fontSize: '12px', fontWeight: 800, color: '#fff',
-              cursor: isAdding ? 'not-allowed' : 'pointer', fontFamily: "'Nunito', sans-serif",
+              cursor: isAdding || isLoading ? 'not-allowed' : 'pointer', fontFamily: "'Nunito', sans-serif",
               boxShadow: isAdding ? 'none' : '0 4px 14px rgba(22,163,74,0.35)',
               transition: 'all 0.2s',
             }}
-            onMouseOver={e => { if (!isAdding) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(22,163,74,0.45)'; } }}
-            onMouseOut={e => { if (!isAdding) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(22,163,74,0.35)'; } }}
           >
             <Plus size={16} /> Add Record
           </button>
         </div>
       </div>
 
-      {/* ── KPI STAT CARDS ── */}
+      {/* ── API ERROR STATE ── */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-sm font-bold">
+          <AlertCircle size={18} /> {error}
+        </div>
+      )}
+
       {/* ── PREMIUM KPI STAT CARDS (OTHER INCOMES - REDUCED HEIGHT) ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {[
@@ -141,7 +185,7 @@ export default function OtherIncomes() {
             title: 'Largest Single Income',
             amount: `Rs. ${fmt(topEntry.amount)}`,
             badge: 'Top Entry',
-            sub: topEntry.desc,
+            sub: topEntry.description,
             icon: <Award size={14} />,
             path: "M0,40 L0,20 C 30,35 50,15 70,25 C 85,30 95,10 100,10 L100,40 Z"
           },
@@ -155,35 +199,26 @@ export default function OtherIncomes() {
           }
         ].map((card, i) => {
           const gradId = `grad-other-${i}`;
-          const chartColor = "#A5D6A7"; // Light green
+          const chartColor = "#A5D6A7"; 
 
           return (
             <div key={i} className="relative overflow-hidden rounded-[1.25rem] p-4 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 transition-all hover:shadow-green-900/40 hover:-translate-y-1">
-
               <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white transition-opacity duration-500 group-hover:opacity-40"></div>
-
               <div className="flex justify-between items-center relative z-10 mb-1">
                 <span className="text-sm font-medium text-white/80">{card.title}</span>
-                <button className="text-white/70 hover:text-white transition-colors bg-black/10 p-1.5 rounded-lg backdrop-blur-sm">
-                  <MoreHorizontal size={18} />
-                </button>
               </div>
-
               <h3 className="text-2xl font-bold font-heading relative z-10 mb-3 tracking-tight truncate">
                 {card.amount}
               </h3>
-
               <div className="flex items-center gap-2 relative z-10">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 text-white backdrop-blur-md">
                   {card.icon}
                   <span>{card.badge}</span>
                 </div>
-                {/* Max-width applied here to prevent long descriptions from breaking the layout */}
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 truncate max-w-[100px] sm:max-w-[140px]">
                   {card.sub}
                 </span>
               </div>
-
               <div className="absolute bottom-0 left-0 w-full h-[45%] opacity-60 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
                 <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
                   <defs>
@@ -227,14 +262,6 @@ export default function OtherIncomes() {
                 onBlur={e => e.target.style.borderColor = '#e5e7eb'}
               />
             </div>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: '5px',
-              padding: '7px 13px', border: '1.5px solid #e5e7eb',
-              borderRadius: '9px', fontSize: '12px', fontWeight: 600, color: '#374151',
-              background: '#fff', cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
-            }}>
-              <SlidersHorizontal size={13} color="#9ca3af" /> Filters
-            </button>
           </div>
         </div>
 
@@ -263,31 +290,41 @@ export default function OtherIncomes() {
                 <tr style={{ background: '#f0fdf4', borderBottom: '1.5px solid #bbf7d0', boxShadow: 'inset 0 2px 4px rgba(22,163,74,0.05)' }}>
                   <td style={tdStyle('52px')}></td>
                   <td style={tdStyle('150px')}>
-                    <input type="date" name="date" value={newRow.date} onChange={handleRowChange} style={inputStyle} />
+                    <input type="date" name="date" value={newRow.date} onChange={handleRowChange} style={inputStyle} disabled={isSaving} />
                   </td>
                   <td style={tdStyle()}>
-                    <input type="text" name="desc" placeholder="Enter income details (e.g., Banana Harvest sales)" value={newRow.desc} onChange={handleRowChange} style={{ ...inputStyle, width: '100%' }} />
+                    <input type="text" name="description" placeholder="Enter income details (e.g., Banana Harvest sales)" value={newRow.description} onChange={handleRowChange} style={{ ...inputStyle, width: '100%' }} disabled={isSaving} />
                   </td>
                   <td style={{ ...tdStyle('200px'), textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Rs.</span>
-                      <input type="number" name="amount" placeholder="0.00" value={newRow.amount} onChange={handleRowChange} style={{ ...inputStyle, width: '120px', textAlign: 'right' }} />
+                      <input type="number" name="amount" placeholder="0.00" value={newRow.amount} onChange={handleRowChange} style={{ ...inputStyle, width: '120px', textAlign: 'right' }} disabled={isSaving} />
                     </div>
                   </td>
                   <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                      <button onClick={cancelAdd} style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#6b7280' }}>
+                      <button onClick={cancelAdd} disabled={isSaving} style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#6b7280' }}>
                         <X size={14} strokeWidth={3} />
                       </button>
-                      <button onClick={handleSaveRow} style={{ background: '#16a34a', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#fff', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' }}>
-                        <Check size={14} strokeWidth={3} />
+                      <button onClick={handleSaveRow} disabled={isSaving} style={{ background: '#16a34a', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#fff', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' }}>
+                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
                       </button>
                     </div>
                   </td>
                 </tr>
               )}
 
-              {filtered.map((sale, idx) => {
+              {/* ── LOADING SPINNER IN TABLE ── */}
+              {isLoading && !isAdding && (
+                 <tr>
+                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#16a34a' }}>
+                       <Loader2 size={24} className="animate-spin mx-auto mb-2" />
+                       <span className="text-xs font-bold">Loading Ledger...</span>
+                    </td>
+                 </tr>
+              )}
+
+              {!isLoading && filtered.map((sale, idx) => {
                 const isSel = selected.includes(sale.id);
                 return (
                   <tr key={sale.id} style={{
@@ -310,34 +347,34 @@ export default function OtherIncomes() {
 
                     {/* Description */}
                     <td style={tdStyle()}>
-                      <span style={{ color: '#1f2937', fontWeight: 600 }}>{sale.desc}</span>
+                      <span style={{ color: '#1f2937', fontWeight: 600 }}>{sale.description}</span>
                     </td>
 
                     {/* Total */}
                     <td style={{ ...tdStyle(), textAlign: 'right', paddingRight: '20px' }}>
                       <span style={{ fontWeight: 900, color: '#14532d', fontSize: '13px' }}>
-                        Rs. {fmt(sale.amount)}
+                        Rs. {fmt(parseFloat(sale.amount))}
                       </span>
                     </td>
 
                     {/* Actions */}
                     <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
-                      <button style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '4px', borderRadius: '6px', color: '#9ca3af',
-                        transition: 'all 0.15s',
-                      }}
-                        onMouseOver={e => { e.currentTarget.style.background = '#dcfce7'; e.currentTarget.style.color = '#16a34a'; }}
-                        onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
+                       <button onClick={() => handleDelete(sale.id)} style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: '6px', borderRadius: '6px', color: '#9ca3af',
+                          transition: 'all 0.15s',
+                        }}
+                          onMouseOver={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                          onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                     </td>
                   </tr>
                 );
               })}
 
-              {filtered.length === 0 && !isAdding && (
+              {!isLoading && filtered.length === 0 && !isAdding && (
                 <tr>
                   <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
                     No records found for your search.

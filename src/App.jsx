@@ -10,6 +10,7 @@ import EmployeeProfiles from './pages/EmployeeProfiles';
 import DailyAttendance from './pages/DailyAttendance';
 import CashAdvances from './pages/CashAdvances';
 import RunPayroll from './pages/RunPayroll';
+import Operations from './pages/Operations';
 
 const Placeholder = ({ title }) => (
   <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm text-center mt-10">
@@ -43,7 +44,7 @@ function App() {
             <Route path="advances" element={<CashAdvances />} />
             <Route path="calculator" element={<RunPayroll />} />
           </Route>
-          <Route path="operations" element={<Placeholder title="Operations & Expenses" />} />
+          <Route path="operations" element={<Operations />} />
           <Route path="fertilizer" element={<Placeholder title="Fertilizer Management" />} />
           <Route path="poultry" element={<Placeholder title="Poultry Farm (Joint Venture)" />} />
           <Route path="finances" element={<Placeholder title="Finances & Banking" />} />
