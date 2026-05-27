@@ -12,6 +12,10 @@ import CashAdvances from './pages/CashAdvances';
 import RunPayroll from './pages/RunPayroll';
 import Operations from './pages/Operations';
 import PoultryManagement from './pages/Poultry';
+import FertilizerManagement from './pages/Fertilizer';
+import FinanceManagement from './pages/Finance';
+import AssetManagement from './pages/Assets';
+import GeneralExpenses from './pages/GeneralExpenses';
 
 const Placeholder = ({ title }) => (
   <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm text-center mt-10">
@@ -45,11 +49,11 @@ function App() {
             <Route path="advances" element={<CashAdvances />} />
             <Route path="calculator" element={<RunPayroll />} />
           </Route>
-          <Route path="operations" element={<Operations />} />
-          <Route path="fertilizer" element={<Placeholder title="Fertilizer Management" />} />
+          <Route path="expenses" element={<GeneralExpenses />} />
+          <Route path="fertilizer" element={<FertilizerManagement />} />
           <Route path="poultry" element={<PoultryManagement />} />
-          <Route path="finances" element={<Placeholder title="Finances & Banking" />} />
-          <Route path="assets" element={<Placeholder title="Assets & Warranty" />} />
+          <Route path="finances" element={<FinanceManagement />} />
+          <Route path="assets" element={<AssetManagement />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -18,7 +18,10 @@ import {
   Wallet,
   UserPlus,
   CalendarCheck,
-  Calculator
+  Calculator,
+  Search,
+  Sun,
+  User
 } from 'lucide-react';
 
 export default function Layout() {
@@ -42,6 +45,74 @@ export default function Layout() {
   const closeSidebar = () => setIsSidebarOpen(false);
 
   const handleLogout = () => navigate('/login');
+
+  const getHeaderContent = () => {
+    const path = location.pathname;
+
+    if (path === '/') {
+      return {
+        title: 'Dashboard',
+        subtitle: 'Farm overview and quick status',
+        section: 'Overview',
+      };
+    }
+
+    if (path.includes('/sales/coconuts')) {
+      return { title: 'Coconut Estate', subtitle: 'Track estate sales and yield', section: 'Sales & Income' };
+    }
+
+    if (path.includes('/sales/cashews')) {
+      return { title: 'Cashew Nuts', subtitle: 'Monitor cashew income records', section: 'Sales & Income' };
+    }
+
+    if (path.includes('/sales/other')) {
+      return { title: 'Other Incomes', subtitle: 'Record miscellaneous income streams', section: 'Sales & Income' };
+    }
+
+    if (path.includes('/payroll/profiles')) {
+      return { title: 'Employees', subtitle: 'Manage staff profiles and records', section: 'HR & Payroll' };
+    }
+
+    if (path.includes('/payroll/attendance')) {
+      return { title: 'Daily Attendance', subtitle: 'Review workforce attendance logs', section: 'HR & Payroll' };
+    }
+
+    if (path.includes('/payroll/advances')) {
+      return { title: 'Cash Advances', subtitle: 'Track advance requests and balances', section: 'HR & Payroll' };
+    }
+
+    if (path.includes('/payroll/calculator')) {
+      return { title: 'Run Payroll', subtitle: 'Calculate payroll for the current cycle', section: 'HR & Payroll' };
+    }
+
+    if (path.includes('/expenses')) {
+      return { title: 'Expenses', subtitle: 'Manage operational spending', section: 'Operations' };
+    }
+
+    if (path.includes('/fertilizer')) {
+      return { title: 'Fertilizer', subtitle: 'Track fertilizer stock and usage', section: 'Operations' };
+    }
+
+    if (path.includes('/poultry')) {
+      return { title: 'Poultry Farm', subtitle: 'Monitor poultry operations', section: 'Operations' };
+    }
+
+    if (path.includes('/finances')) {
+      return { title: 'Finances', subtitle: 'View cash flow and balances', section: 'Accounts' };
+    }
+
+    if (path.includes('/assets')) {
+      return { title: 'Assets & Warranty', subtitle: 'Manage equipment and warranty status', section: 'Asset Control' };
+    }
+
+    return {
+      title: 'Farm Manager',
+      subtitle: 'Estate & poultry operations',
+      section: 'Home',
+    };
+  };
+
+  const headerContent = getHeaderContent();
 
   // Updated Navigation Array with Sub-Items
   const navItems = [
@@ -67,7 +138,7 @@ export default function Layout() {
         { name: 'Run Payroll', path: '/payroll/calculator', icon: Calculator },
       ]
     },
-    { name: 'Operations', path: '/operations', icon: Tractor },
+    { name: 'Expenses', path: '/expenses', icon: Tractor },
     { name: 'Fertilizer', path: '/fertilizer', icon: Sprout },
     { name: 'Poultry Farm', path: '/poultry', icon: Bird },
     { name: 'Finances', path: '/finances', icon: Landmark },
@@ -192,26 +263,65 @@ export default function Layout() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white lg:ml-0">
 
         {/* Top Header */}
-        <header className="h-16 border-b border-gray-100 flex items-center justify-between px-4 md:px-8 z-20 sticky top-0 bg-white">
-          <div className="flex items-center gap-4">
+        <header className="h-16 border-b border-gray-100 flex items-center justify-between px-4 md:px-8 z-20 sticky top-0 bg-white/90 backdrop-blur-md">
+          {/* ── LEFT SIDE: Hamburger, Greeting, & Search ── */}
+          <div className="flex items-center gap-4 flex-1">
             <button
               type="button"
               onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 text-earth hover:text-primary transition-colors rounded-lg hover:bg-gray-50"
+              className="lg:hidden p-2 text-gray-400 hover:text-green-600 transition-colors rounded-lg hover:bg-green-50"
               aria-label="Open sidebar"
             >
               <Menu size={24} />
             </button>
+
+            <div className="hidden md:flex items-center gap-6 flex-1 max-w-2xl">
+              {/* 1. Quick Greeting */}
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Welcome Back</span>
+                <span className="text-sm font-bold text-gray-800">Admin User</span>
+              </div>
+
+              {/* Vertical Divider */}
+              <div className="h-8 w-px bg-gray-200"></div>
+
+              {/* 2. Global Search Bar */}
+              <div className="relative flex-1 group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={16} className="text-gray-400 group-focus-within:text-green-600 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search assets, expenses, or staff..."
+                  className="block w-full pl-10 pr-12 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-500 transition-all shadow-sm"
+                />
+                <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+                  <kbd className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black text-gray-400 bg-white border border-gray-200 shadow-sm">
+                    ⌘K
+                  </kbd>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-5">
-            <button className="relative p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-primary/5">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
-            <div className="hidden md:block px-3 py-1.5 bg-gray-50 rounded-lg text-xs font-bold text-earth">
+          {/* ── RIGHT SIDE: Date, Notifications, Profile ── */}
+          <div className="flex items-center gap-4">
+            {/* Dynamic Date & Weather/Status */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 shadow-sm">
+              <Sun size={14} className="text-orange-400" />
               {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </div>
+
+            {/* Notification Bell */}
+            <button className="relative p-2 text-gray-400 hover:text-green-600 transition-colors rounded-full hover:bg-green-50">
+              <Bell size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+
+            {/* User Avatar */}
+            <button className="h-8 w-8 rounded-full bg-gradient-to-br from-green-600 to-emerald-800 border-2 border-white shadow-md flex items-center justify-center hover:scale-105 transition-transform">
+              <User size={16} className="text-white" />
+            </button>
           </div>
         </header>
 
