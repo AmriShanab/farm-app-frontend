@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Users, Sprout, Calendar, TrendingUp, Droplets, Wheat, BarChart3, Lock, Mail } from 'lucide-react';
+import { Leaf, Users, Sprout, Calendar, TrendingUp, Wheat, BarChart3, Lock, Mail } from 'lucide-react';
+import { loginWithCredentials } from '../services/api';
 
 const AgricultureHRGraphic = () => (
   <div className="relative w-full h-full flex items-center justify-center p-8 overflow-hidden">
@@ -88,10 +90,25 @@ const AgricultureHRGraphic = () => (
 
 export default function Login() {
   const navigate = useNavigate();
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    navigate('/');
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await loginWithCredentials({ username, password, remember: rememberMe });
+      navigate('/');
+    } catch (loginError) {
+      setError(loginError?.message || 'Unable to sign in. Check your credentials and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -180,24 +197,32 @@ export default function Login() {
           <div className="mb-8 text-center lg:text-left">
             <h1 className="text-3xl font-bold text-[#1B1B1B] mb-2">Welcome back</h1>
             <p className="text-[#6D4C41]">
-              Sign in to manage your farm operations,<br className="hidden sm:block" />
-              track crops, and oversee your workforce.
+              Sign in using the API credentials from your backend,<br className="hidden sm:block" />
+              then continue to manage farm operations and workforce data.
             </p>
           </div>
+
+          {error && (
+            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          )}
 
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-[#1B1B1B] mb-2">
-                Email Address
+                Username
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6D4C41] w-4 h-4" />
                 <input 
-                  type="email" 
+                  type="text" 
                   required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="w-full border border-[#D4C5B0] rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#1B5E20] focus:border-transparent bg-white"
-                  placeholder="farmer@agri-care.com"
+                  placeholder="admin"
                 />
               </div>
             </div>
@@ -211,6 +236,8 @@ export default function Login() {
                 <input 
                   type="password" 
                   required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full border border-[#D4C5B0] rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#1B5E20] focus:border-transparent bg-white"
                   placeholder="••••••••"
                 />
@@ -219,7 +246,12 @@ export default function Login() {
 
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2">
-                <input type="checkbox" className="rounded border-[#D4C5B0] text-[#1B5E20] focus:ring-[#1B5E20]" />
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-[#D4C5B0] text-[#1B5E20] focus:ring-[#1B5E20]"
+                />
                 <span className="text-sm text-[#6D4C41]">Remember me</span>
               </label>
               <button type="button" className="text-sm text-[#1B5E20] hover:underline font-medium">
@@ -229,9 +261,10 @@ export default function Login() {
 
             <button 
               type="submit" 
-              className="w-full bg-[#1B5E20] hover:bg-[#0D3B12] text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
+              disabled={isSubmitting}
+              className="w-full bg-[#1B5E20] hover:bg-[#0D3B12] disabled:opacity-70 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
             >
-              Sign In
+              {isSubmitting ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
         </div>

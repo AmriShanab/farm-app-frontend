@@ -2,12 +2,79 @@
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
+const AUTH_STORAGE_KEY = 'mrfarm_auth';
+
+const readStoredAuth = (storage) => {
+  if (typeof window === 'undefined' || !storage) {
+    return null;
+  }
+
+  try {
+    const raw = storage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getStoredAuth = () => {
+  return readStoredAuth(window.sessionStorage) || readStoredAuth(window.localStorage);
+};
+
+export const saveStoredAuth = ({ username, password, remember = false }) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload = JSON.stringify({ username, password });
+  const targetStorage = remember ? window.localStorage : window.sessionStorage;
+  const otherStorage = remember ? window.sessionStorage : window.localStorage;
+
+  targetStorage.setItem(AUTH_STORAGE_KEY, payload);
+  otherStorage.removeItem(AUTH_STORAGE_KEY);
+};
+
+export const clearStoredAuth = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
+};
+
+export const getAuthCredentials = () => {
+  const stored = getStoredAuth();
+  const username = stored?.username || import.meta.env.VITE_API_USER || 'admin';
+  const password = stored?.password || import.meta.env.VITE_API_PASS || 'admin123';
+
+  return { username, password };
+};
+
 // Helper function to generate headers with Basic Auth
-const getHeaders = () => {
+export const getHeaders = () => {
+  const { username, password } = getAuthCredentials();
   const headers = new Headers();
-  headers.set('Authorization', 'Basic ' + btoa('admin:admin123'));
+  headers.set('Authorization', 'Basic ' + btoa(`${username}:${password}`));
   headers.set('Content-Type', 'application/json');
   return headers;
+};
+
+export const loginWithCredentials = async ({ username, password, remember = false }) => {
+  const headers = new Headers();
+  headers.set('Authorization', 'Basic ' + btoa(`${username}:${password}`));
+
+  const response = await fetch(`${BASE_URL}/ping`, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Invalid username or password');
+  }
+
+  saveStoredAuth({ username, password, remember });
+  return true;
 };
 
 const unwrapApiData = (payload) => {

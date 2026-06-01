@@ -3,6 +3,7 @@ import {
   TrendingUp, Wallet, Users, Sprout, ArrowRight, 
   AlertCircle, CheckCircle2, Banknote, Calendar, Loader2, ChevronRight
 } from 'lucide-react';
+import { getHeaders } from '../services/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
@@ -27,10 +28,7 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       
-      // Setup Basic Auth Headers
-      const headers = new Headers();
-      headers.set('Authorization', 'Basic ' + btoa('admin:admin123'));
-      headers.set('Content-Type', 'application/json');
+      const headers = getHeaders();
 
       try {
         // Fetch Summary KPIs and Recent Activity concurrently
