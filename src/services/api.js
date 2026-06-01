@@ -34,6 +34,26 @@ const normalizeCashewSale = (record) => {
   return normalized;
 };
 
+const normalizeGeneralExpenseRecord = (record) => {
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
+  const normalized = { ...record };
+
+  if ('main_labor' in normalized && !('mainLabor' in normalized)) normalized.mainLabor = normalized.main_labor;
+  if ('food_expenses' in normalized && !('foodExpenses' in normalized)) normalized.foodExpenses = normalized.food_expenses;
+  if ('tractor_driver' in normalized && !('tractorDriver' in normalized)) normalized.tractorDriver = normalized.tractor_driver;
+  if ('bill_amount' in normalized && !('billAmount' in normalized)) normalized.billAmount = normalized.bill_amount;
+  if ('units_used' in normalized && !('unitsUsed' in normalized)) normalized.unitsUsed = normalized.units_used;
+  if ('rate_per_liter' in normalized && !('ratePerLiter' in normalized)) normalized.ratePerLiter = normalized.rate_per_liter;
+  if ('total_cost' in normalized && !('totalCost' in normalized)) normalized.totalCost = normalized.total_cost;
+  if ('cheque_no' in normalized && !('chequeNo' in normalized)) normalized.chequeNo = normalized.cheque_no;
+  if ('cheque_date' in normalized && !('chequeDate' in normalized)) normalized.chequeDate = normalized.cheque_date;
+
+  return normalized;
+};
+
 // --- COCONUT SALES ENDPOINTS ---
 
 export const getCoconutSales = async (farm) => {
@@ -854,13 +874,14 @@ export const deleteAsset = async (id) => {
 export const getHarvestExpenses = async (farm, year) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res([]), 300));
   const response = await fetch(`${BASE_URL}/expenses/harvest?farm=${farm}&year=${year}`, { headers: getHeaders() });
-  return unwrapApiData(await response.json()) || [];
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload.map(normalizeGeneralExpenseRecord) : [];
 };
 export const createHarvestExpense = async (data) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res({ id: Date.now(), ...data }), 500));
   const response = await fetch(`${BASE_URL}/expenses/harvest`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
   if (!response.ok) throw new Error('Failed to create harvest expense');
-  return unwrapApiData(await response.json());
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteHarvestExpense = async (id) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res(true), 300));
@@ -872,13 +893,14 @@ export const deleteHarvestExpense = async (id) => {
 export const getMaintenanceExpenses = async (farm) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res([]), 300));
   const response = await fetch(`${BASE_URL}/expenses/maintenance?farm=${farm}`, { headers: getHeaders() });
-  return unwrapApiData(await response.json()) || [];
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload.map(normalizeGeneralExpenseRecord) : [];
 };
 export const createMaintenanceExpense = async (data) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res({ id: Date.now(), ...data }), 500));
   const response = await fetch(`${BASE_URL}/expenses/maintenance`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
   if (!response.ok) throw new Error('Failed to create maintenance expense');
-  return unwrapApiData(await response.json());
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteMaintenanceExpense = async (id) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res(true), 300));
@@ -890,13 +912,14 @@ export const deleteMaintenanceExpense = async (id) => {
 export const getCEBBills = async (farm, year) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res([]), 300));
   const response = await fetch(`${BASE_URL}/expenses/ceb?farm=${farm}&year=${year}`, { headers: getHeaders() });
-  return unwrapApiData(await response.json()) || [];
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload.map(normalizeGeneralExpenseRecord) : [];
 };
 export const createCEBBill = async (data) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res({ id: Date.now(), ...data }), 500));
   const response = await fetch(`${BASE_URL}/expenses/ceb`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
   if (!response.ok) throw new Error('Failed to create CEB bill');
-  return unwrapApiData(await response.json());
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteCEBBill = async (id) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res(true), 300));
@@ -908,13 +931,14 @@ export const deleteCEBBill = async (id) => {
 export const getFuelLogs = async (farm) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res([]), 300));
   const response = await fetch(`${BASE_URL}/expenses/fuel?farm=${farm}`, { headers: getHeaders() });
-  return unwrapApiData(await response.json()) || [];
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload.map(normalizeGeneralExpenseRecord) : [];
 };
 export const createFuelLog = async (data) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res({ id: Date.now(), ...data }), 500));
   const response = await fetch(`${BASE_URL}/expenses/fuel`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
   if (!response.ok) throw new Error('Failed to create fuel log');
-  return unwrapApiData(await response.json());
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteFuelLog = async (id) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res(true), 300));
@@ -926,13 +950,14 @@ export const deleteFuelLog = async (id) => {
 export const getMachineryExpenses = async (year) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res([]), 300));
   const response = await fetch(`${BASE_URL}/expenses/machinery?year=${year}`, { headers: getHeaders() });
-  return unwrapApiData(await response.json()) || [];
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload.map(normalizeGeneralExpenseRecord) : [];
 };
 export const createMachineryExpense = async (data) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res({ id: Date.now(), ...data }), 500));
   const response = await fetch(`${BASE_URL}/expenses/machinery`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) });
   if (!response.ok) throw new Error('Failed to create machinery expense');
-  return unwrapApiData(await response.json());
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteMachineryExpense = async (id) => {
   if (USE_MOCK_DATA) return new Promise(res => setTimeout(() => res(true), 300));
