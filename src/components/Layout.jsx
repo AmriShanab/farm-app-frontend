@@ -290,21 +290,7 @@ export default function Layout() {
               <div className="h-8 w-px bg-gray-200"></div>
 
               {/* 2. Global Search Bar */}
-              <div className="relative flex-1 group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search size={16} className="text-gray-400 group-focus-within:text-green-600 transition-colors" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search assets, expenses, or staff..."
-                  className="block w-full pl-10 pr-12 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-500 transition-all shadow-sm"
-                />
-                <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
-                  <kbd className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black text-gray-400 bg-white border border-gray-200 shadow-sm">
-                    ⌘K
-                  </kbd>
-                </div>
-              </div>
+           
             </div>
           </div>
 
