@@ -16,13 +16,17 @@ import FertilizerManagement from './pages/Fertilizer';
 import FinanceManagement from './pages/Finance';
 import AssetManagement from './pages/Assets';
 import GeneralExpenses from './pages/GeneralExpenses';
+import { getStoredAuth } from './services/api';
 
-const Placeholder = ({ title }) => (
-  <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm text-center mt-10">
-    <h2 className="text-xl font-bold text-text font-heading">{title}</h2>
-    <p className="text-earth mt-2 text-sm">This specific sub-module is ready to be designed next.</p>
-  </div>
-);
+const ProtectedRoute = ({ children }) => {
+  const auth = getStoredAuth();
+
+  if (!auth?.username || !auth?.password) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
 
 function App() {
   return (
@@ -30,7 +34,14 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
-        <Route path="/" element={<Layout />}>
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Dashboard />} />
 
           {/* Sub-Routes for Sales & Income */}

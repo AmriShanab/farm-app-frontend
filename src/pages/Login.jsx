@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Leaf, Users, Sprout, Calendar, TrendingUp, Wheat, BarChart3, Lock, Mail } from 'lucide-react';
-import { loginWithCredentials } from '../services/api';
+import { getStoredAuth, loginWithCredentials } from '../services/api';
 
 const AgricultureHRGraphic = () => (
   <div className="relative w-full h-full flex items-center justify-center p-8 overflow-hidden">
@@ -95,6 +95,13 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const auth = getStoredAuth();
+    if (auth?.username && auth?.password) {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

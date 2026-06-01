@@ -23,6 +23,7 @@ import {
   Sun,
   User
 } from 'lucide-react';
+import { clearStoredAuth } from '../services/api';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -44,7 +45,10 @@ export default function Layout() {
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
-  const handleLogout = () => navigate('/login');
+  const handleLogout = () => {
+    clearStoredAuth();
+    navigate('/login', { replace: true });
+  };
 
   const getHeaderContent = () => {
     const path = location.pathname;
