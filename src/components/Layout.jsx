@@ -106,7 +106,7 @@ export default function Layout() {
     }
 
     return {
-      title: 'Farm Manager',
+      title: 'MR Farm',
       subtitle: 'Estate & poultry operations',
       section: 'Home',
     };
@@ -163,7 +163,7 @@ export default function Layout() {
             <Tractor size={20} />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-text font-heading leading-tight">Farm Manager</h1>
+            <h1 className="text-lg font-bold text-text font-heading leading-tight">MR Farm</h1>
             <p className="text-[11px] text-earth font-bold uppercase tracking-wider">Estate & Poultry</p>
           </div>
         </div>

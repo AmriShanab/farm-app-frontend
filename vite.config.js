@@ -7,8 +7,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://backendmrfarm.dpdns.org',
+        target: 'https://backendmrfarm.dpdns.org',
         changeOrigin: true,
+        followRedirects: true,
       },
     },
   },
