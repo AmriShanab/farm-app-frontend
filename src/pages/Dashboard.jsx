@@ -7,20 +7,56 @@ import { getHeaders } from '../services/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const asNumber = (value) => Number(value || 0);
+const dashboardFarm = 'MR1';
+
+const incomeTypes = new Set(['coconut_sale', 'cashew_sale', 'other_income', 'poultry_sale']);
+
+const normalizeRecentTransaction = (record) => {
+   const direction = incomeTypes.has(record?.type) ? 'Income' : 'Expense';
+
+   return {
+      ...record,
+      title: record?.description || record?.title || 'Transaction',
+      type: direction,
+      status: direction,
+   };
+};
+
+const normalizeExpenseEntry = (record) => ({
+   ...record,
+   amount: asNumber(record?.amount),
+});
+
+const groupExpensesBySection = (entries = []) => {
+   const grouped = entries.reduce((acc, entry) => {
+      const section = (entry?.section || entry?.category || 'other').toString();
+      if (!acc[section]) {
+         acc[section] = { section, total: 0, count: 0 };
+      }
+
+      acc[section].total += asNumber(entry?.amount);
+      acc[section].count += 1;
+      return acc;
+   }, {});
+
+   return Object.values(grouped).sort((a, b) => b.total - a.total);
+};
 
 export default function Dashboard() {
   // --- STATE ---
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [kpiData, setKpiData] = useState({
-    totalRevenue: 0,
-    totalPayroll: 0,
+      totalIncome: 0,
+      totalExpenses: 0,
+      payrollCost: 0,
     netProfit: 0,
-    activeWorkforce: 0
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
-  
-  const currentMonth = "May 2026"; // In a real app, calculate this dynamically (e.g., dayjs/moment)
+   const [expenseEntries, setExpenseEntries] = useState([]);
+   const [profitability, setProfitability] = useState({ months: [], totals: { income: 0, expenses: 0, profit: 0 } });
+   const [currentMonth, setCurrentMonth] = useState('May 2026');
 
   // --- API INTEGRATION ---
   useEffect(() => {
@@ -32,32 +68,53 @@ export default function Dashboard() {
 
       try {
         // Fetch Summary KPIs and Recent Activity concurrently
-        const [summaryRes, recentRes] = await Promise.all([
+            const [summaryRes, recentRes, expensesRes, profitabilityRes] = await Promise.all([
                fetch(`${apiBaseUrl}/dashboard/summary?month=05&year=2026`, { headers }),
-               fetch(`${apiBaseUrl}/dashboard/recent`, { headers })
+                      fetch(`${apiBaseUrl}/dashboard/recent`, { headers }),
+                      fetch(`${apiBaseUrl}/dashboard/expenses?farm=${dashboardFarm}`, { headers }),
+                      fetch(`${apiBaseUrl}/dashboard/profitability?year=2026`, { headers })
         ]);
 
-        if (!summaryRes.ok || !recentRes.ok) {
+            if (!summaryRes.ok || !recentRes.ok || !expensesRes.ok || !profitabilityRes.ok) {
           throw new Error('Failed to fetch dashboard data from server.');
         }
 
         const summaryData = await summaryRes.json();
         const recentData = await recentRes.json();
+            const expensesData = await expensesRes.json();
+            const profitabilityData = await profitabilityRes.json();
 
-        // Update State (Assuming backend returns these keys, adjust mapping as needed based on actual JSON response)
+            const summaryPayload = summaryData?.data || summaryData;
+            const period = summaryPayload?.period || {};
+            if (period.month && period.year) {
+               setCurrentMonth(new Date(period.year, period.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+            }
+
+            const income = summaryPayload?.income || {};
+            const expenses = summaryPayload?.expenses || {};
+
         setKpiData({
-          totalRevenue: summaryData.totalRevenue || 0,
-          totalPayroll: summaryData.totalPayroll || 0,
-          netProfit: summaryData.netProfit || 0,
-          activeWorkforce: summaryData.activeWorkforce || 0
+               totalIncome: asNumber(income.total),
+               totalExpenses: asNumber(expenses.total),
+               payrollCost: asNumber(expenses.payroll) + asNumber(expenses.managerSalary),
+               netProfit: asNumber(summaryPayload?.netProfit)
         });
 
         // Ensure recentData is an array before setting
         if (Array.isArray(recentData)) {
-          setRecentTransactions(recentData);
+               setRecentTransactions(recentData.map(normalizeRecentTransaction));
         } else if (recentData.data && Array.isArray(recentData.data)) {
-          setRecentTransactions(recentData.data);
+               setRecentTransactions(recentData.data.map(normalizeRecentTransaction));
         }
+
+            const expensePayload = expensesData?.data || expensesData;
+            setExpenseEntries(Array.isArray(expensePayload) ? expensePayload.map(normalizeExpenseEntry) : []);
+
+            const profitabilityPayload = profitabilityData?.data || profitabilityData;
+            setProfitability({
+               months: Array.isArray(profitabilityPayload?.months) ? profitabilityPayload.months : [],
+               totals: profitabilityPayload?.totals || { income: 0, expenses: 0, profit: 0 },
+            });
 
       } catch (err) {
         console.error("API Error:", err);
@@ -70,9 +127,11 @@ export default function Dashboard() {
     fetchDashboardData();
   }, []);
 
+   const groupedExpenses = groupExpensesBySection(expenseEntries);
+   const highestMonthlyValue = profitability.months.reduce((max, month) => Math.max(max, asNumber(month.income), asNumber(month.expenses), Math.abs(asNumber(month.profit))), 0) || 1;
+
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
-      
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
         <div>
@@ -113,11 +172,11 @@ export default function Dashboard() {
                   </div>
                   <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Income</span>
                </div>
-               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Total Revenue</p>
-               <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.totalRevenue)}</h3>
+               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Total Income</p>
+               <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.totalIncome)}</h3>
             </div>
 
-            {/* Expenses/Payroll Card */}
+            {/* Expenses Card */}
             <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 hover:-translate-y-1 transition-transform">
                <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white group-hover:opacity-40 transition-opacity"></div>
                <div className="flex justify-between items-start mb-4 relative z-10">
@@ -126,8 +185,8 @@ export default function Dashboard() {
                   </div>
                   <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Expense</span>
                </div>
-               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Total Payroll & Advances</p>
-               <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.totalPayroll)}</h3>
+               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Total Expenses</p>
+               <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.totalExpenses)}</h3>
             </div>
 
             {/* Net Profit Card */}
@@ -139,21 +198,21 @@ export default function Dashboard() {
                   </div>
                   <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Profit</span>
                </div>
-               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Estimated Net Flow</p>
+               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Net Profit</p>
                <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.netProfit)}</h3>
             </div>
 
-            {/* Workforce Card */}
+            {/* Payroll Card */}
             <div className="relative overflow-hidden rounded-[1.25rem] p-5 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 hover:-translate-y-1 transition-transform">
                <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white group-hover:opacity-40 transition-opacity"></div>
                <div className="flex justify-between items-start mb-4 relative z-10">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
                      <Users size={20} className="text-orange-300" />
                   </div>
-                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Active</span>
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Payroll</span>
                </div>
-               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Total Workforce</p>
-               <h3 className="text-2xl font-black relative z-10">{kpiData.activeWorkforce} Staff</h3>
+               <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Payroll + Manager Salary</p>
+               <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.payrollCost)}</h3>
             </div>
           </div>
 
@@ -206,49 +265,94 @@ export default function Dashboard() {
 
             {/* ── ACTION CENTER / ALERTS ── */}
             <div className="flex flex-col gap-6">
-               <div className="bg-green-50/50 rounded-2xl border border-green-100 p-5 shadow-sm">
-                  <h2 className="text-sm font-black text-green-900 flex items-center gap-2 mb-4">
-                     <AlertCircle size={16} className="text-green-600" /> Pending Actions
+               <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                  <h2 className="text-sm font-black text-gray-900 flex items-center gap-2 mb-4">
+                     <Wallet size={16} className="text-green-600" /> Expense Breakdown ({dashboardFarm})
                   </h2>
                   <div className="space-y-3">
-                     <div className="bg-white p-3 rounded-xl border border-green-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                        <div>
-                           <p className="text-xs font-bold text-gray-900">Mark Today's Attendance</p>
-                           <p className="text-[10px] text-gray-500 font-medium">Pending verification</p>
-                        </div>
-                        <ChevronRight size={16} className="text-green-500" />
-                     </div>
-                     <div className="bg-white p-3 rounded-xl border border-green-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                        <div>
-                           <p className="text-xs font-bold text-gray-900">Run Weekly Payroll</p>
-                           <p className="text-[10px] text-gray-500 font-medium">Draft ready for review</p>
-                        </div>
-                        <ChevronRight size={16} className="text-green-500" />
-                     </div>
+                     {groupedExpenses.length === 0 ? (
+                        <p className="text-sm text-gray-400 font-medium">No expenses found.</p>
+                     ) : (
+                        groupedExpenses.slice(0, 5).map((item) => (
+                          <div key={item.section} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-bold text-gray-900 capitalize">{item.section.replace(/[-_]/g, ' ')}</p>
+                              <p className="text-[10px] text-gray-500 font-medium">{item.count} entries</p>
+                            </div>
+                            <p className="text-sm font-black text-gray-900">Rs. {fmt(item.total)}</p>
+                          </div>
+                        ))
+                     )}
                   </div>
                </div>
 
                <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm flex-1">
                   <h2 className="text-sm font-black text-gray-900 flex items-center gap-2 mb-4">
-                     <Sprout size={16} className="text-green-600" /> Active Operations
+                     <TrendingUp size={16} className="text-green-600" /> Monthly Profitability
                   </h2>
-                  <div className="space-y-4">
-                     <div className="pt-2 flex flex-col gap-3">
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                           <CheckCircle2 size={14} className="text-green-500" />
-                           API Connection Established
+                  <div className="space-y-3">
+                     <div className="flex items-center justify-between text-xs font-bold text-gray-500">
+                        <span>Income</span>
+                        <span>Expenses</span>
+                        <span>Profit</span>
+                     </div>
+                     <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                        {profitability.months.map((month) => {
+                          const incomeWidth = (asNumber(month.income) / highestMonthlyValue) * 100;
+                          const expenseWidth = (asNumber(month.expenses) / highestMonthlyValue) * 100;
+                          const profitWidth = (Math.abs(asNumber(month.profit)) / highestMonthlyValue) * 100;
+                          return (
+                            <div key={month.month} className="rounded-xl border border-gray-100 p-3 bg-gray-50/60">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-black text-gray-900">{month.monthName}</p>
+                                <p className={`text-[10px] font-bold uppercase tracking-wider ${asNumber(month.profit) >= 0 ? 'text-green-600' : 'text-rose-600'}`}>
+                                  {asNumber(month.profit) >= 0 ? '+' : '-'}Rs. {fmt(Math.abs(month.profit))}
+                                </p>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-10 text-[10px] font-bold text-gray-500">Inc</span>
+                                  <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                                    <div className="h-full rounded-full bg-green-500" style={{ width: `${incomeWidth}%` }} />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="w-10 text-[10px] font-bold text-gray-500">Exp</span>
+                                  <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                                    <div className="h-full rounded-full bg-rose-500" style={{ width: `${expenseWidth}%` }} />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="w-10 text-[10px] font-bold text-gray-500">Pft</span>
+                                  <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                                    <div className={`h-full rounded-full ${asNumber(month.profit) >= 0 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${profitWidth}%` }} />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                     </div>
+                     <div className="grid grid-cols-3 gap-2 pt-2">
+                        <div className="rounded-xl bg-green-50 border border-green-100 p-3 text-center">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-green-700">Income</p>
+                          <p className="text-sm font-black text-green-900">Rs. {fmt(profitability.totals.income)}</p>
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                           <CheckCircle2 size={14} className="text-green-500" />
-                           Data synchronized securely
+                        <div className="rounded-xl bg-rose-50 border border-rose-100 p-3 text-center">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Expenses</p>
+                          <p className="text-sm font-black text-rose-900">Rs. {fmt(profitability.totals.expenses)}</p>
+                        </div>
+                        <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 text-center">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Profit</p>
+                          <p className="text-sm font-black text-blue-900">Rs. {fmt(profitability.totals.profit)}</p>
                         </div>
                      </div>
                   </div>
                </div>
             </div>
-          </div>
-        </>
-      )}
-    </div>
+               </div>
+            </>
+         )}
+      </div>
   );
 }
