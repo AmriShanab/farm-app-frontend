@@ -268,7 +268,7 @@ function ChequeTrackerTab({ data, isLoading, search, setSearch }) {
               ) : data.map(cheque => (
                 <tr key={cheque.id} className="border-t border-gray-50 hover:bg-gray-50/50">
                   <td className="p-4"><span className="font-black text-gray-800 bg-gray-100 px-2 py-1 rounded tracking-widest">{cheque.chequeNo}</span></td>
-                  <td className="p-4 font-bold text-gray-600">{cheque.date}</td>
+                  <td className="p-4 font-bold text-gray-600">{cheque.cheque_date}</td>
                   <td className="p-4 font-bold text-gray-900">{cheque.payee}</td>
                   <td className="p-4 text-gray-600 font-medium">{cheque.category}</td>
                   <td className="p-4 text-right font-black text-green-700">Rs. {fmt(cheque.amount)}</td>

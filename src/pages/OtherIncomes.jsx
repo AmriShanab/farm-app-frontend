@@ -8,6 +8,7 @@ import {
 
 import { getOtherIncomes, createOtherIncome, deleteOtherIncome } from '../services/api';
 import { useToast } from '../components/ToastProvider';
+import { downloadCsv } from '../utils/csv';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -116,6 +117,14 @@ export default function OtherIncomes() {
     setNewRow({ date: new Date().toISOString().split('T')[0], description: '', amount: '' });
   };
 
+  const handleExportCsv = () => {
+    downloadCsv('other-incomes.csv', [
+      { label: 'Date', value: (row) => row.date || '' },
+      { label: 'Description', value: (row) => row.description || '' },
+      { label: 'Amount', value: (row) => Number(row.amount || 0).toFixed(2) },
+    ], filtered);
+  };
+
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
 
@@ -136,7 +145,7 @@ export default function OtherIncomes() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button style={{
+          <button onClick={handleExportCsv} style={{
             display: 'flex', alignItems: 'center', gap: '6px',
             padding: '9px 16px', background: '#fff',
             border: '1.5px solid #e5e7eb', borderRadius: '10px',

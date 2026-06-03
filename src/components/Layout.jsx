@@ -303,15 +303,15 @@ export default function Layout() {
             </div>
 
             {/* Notification Bell */}
-            <button className="relative p-2 text-gray-400 hover:text-green-600 transition-colors rounded-full hover:bg-green-50">
+            {/* <button className="relative p-2 text-gray-400 hover:text-green-600 transition-colors rounded-full hover:bg-green-50">
               <Bell size={20} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            </button> */}
 
             {/* User Avatar */}
-            <button className="h-8 w-8 rounded-full bg-gradient-to-br from-green-600 to-emerald-800 border-2 border-white shadow-md flex items-center justify-center hover:scale-105 transition-transform">
+            {/* <button className="h-8 w-8 rounded-full bg-gradient-to-br from-green-600 to-emerald-800 border-2 border-white shadow-md flex items-center justify-center hover:scale-105 transition-transform">
               <User size={16} className="text-white" />
-            </button>
+            </button> */}
           </div>
         </header>
 

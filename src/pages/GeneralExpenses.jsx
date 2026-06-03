@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  Plus, Loader2, Check, X, Trash2, MapPin, 
+import {
+  Plus, Loader2, Check, X, Trash2, MapPin,
   Leaf, Wrench, Zap, Fuel, Settings, Calculator, Save
 } from 'lucide-react';
-import { 
+import {
   getHarvestExpenses, createHarvestExpense, deleteHarvestExpense,
   getMaintenanceExpenses, createMaintenanceExpense, deleteMaintenanceExpense,
   getCEBBills, createCEBBill, deleteCEBBill,
@@ -17,7 +17,7 @@ export default function GeneralExpenses() {
   const [activeTab, setActiveTab] = useState('harvest');
   const [selectedFarm, setSelectedFarm] = useState('MR1');
   const [selectedYear, setSelectedYear] = useState('2026');
-  
+
   const tabs = [
     { id: 'harvest', label: 'Harvest', icon: Leaf },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
@@ -28,7 +28,7 @@ export default function GeneralExpenses() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito']">
-      
+
       {/* ── HEADER & GLOBAL FILTERS ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
         <div>
@@ -42,9 +42,9 @@ export default function GeneralExpenses() {
             Manage operational costs, utilities, and field labor expenses.
           </p>
         </div>
-        
+
         <div className="flex gap-2">
-          <select 
+          <select
             value={selectedFarm} onChange={(e) => setSelectedFarm(e.target.value)}
             className="bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded-xl px-4 py-2 outline-none cursor-pointer shadow-sm focus:border-green-500"
           >
@@ -52,7 +52,7 @@ export default function GeneralExpenses() {
             <option value="MR1">MR1 Farm</option>
             <option value="MR2">MR2 Farm</option>
           </select>
-          <select 
+          <select
             value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}
             className="bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded-xl px-4 py-2 outline-none cursor-pointer shadow-sm focus:border-green-500"
           >
@@ -68,11 +68,10 @@ export default function GeneralExpenses() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${
-              activeTab === tab.id 
-                ? 'border-green-600 text-green-700 bg-green-50/50 rounded-t-xl' 
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === tab.id
+                ? 'border-green-600 text-green-700 bg-green-50/50 rounded-t-xl'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+              }`}
           >
             <tab.icon size={16} /> {tab.label}
           </button>
@@ -93,13 +92,13 @@ function ExpenseCategoryTab({ category, farm, year }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Generic form state covering all possible payload combinations
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0], farm: 'MR1', notes: '', description: '',
-    mainLabor: '', collectors: '', tractorDriver: '', foodExpenses: '', 
-    categoryType: '', amount: '', chequeNo: '', chequeDate: '', 
-    unitsUsed: '', billAmount: '', vehicle: '', liters: '', ratePerLiter: '' 
+    mainLabor: '', collectors: '', tractorDriver: '', foodExpenses: '',
+    categoryType: '', amount: '', chequeNo: '', chequeDate: '',
+    unitsUsed: '', billAmount: '', vehicle: '', liters: '', ratePerLiter: ''
   });
 
   // Explicitly call the exact GET function based on category
@@ -127,35 +126,35 @@ function ExpenseCategoryTab({ category, farm, year }) {
       if (category === 'harvest') {
         savedRecord = await createHarvestExpense({
           date: form.date, farm: form.farm, notes: form.notes,
-          mainLabor: parseFloat(form.mainLabor||0), collectors: parseFloat(form.collectors||0),
-          tractorDriver: parseFloat(form.tractorDriver||0), foodExpenses: parseFloat(form.foodExpenses||0)
+          mainLabor: parseFloat(form.mainLabor || 0), collectors: parseFloat(form.collectors || 0),
+          tractorDriver: parseFloat(form.tractorDriver || 0), foodExpenses: parseFloat(form.foodExpenses || 0)
         });
       } else if (category === 'maintenance') {
         savedRecord = await createMaintenanceExpense({
           date: form.date, farm: form.farm, category: form.categoryType, description: form.description,
-          amount: parseFloat(form.amount||0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
+          amount: parseFloat(form.amount || 0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
         });
       } else if (category === 'ceb') {
         savedRecord = await createCEBBill({
-          date: form.date, farm: form.farm, billAmount: parseFloat(form.billAmount||0),
-          unitsUsed: parseFloat(form.unitsUsed||0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
+          date: form.date, farm: form.farm, billAmount: parseFloat(form.billAmount || 0),
+          unitsUsed: parseFloat(form.unitsUsed || 0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
         });
       } else if (category === 'fuel') {
         savedRecord = await createFuelLog({
           date: form.date, farm: form.farm, vehicle: form.vehicle,
-          liters: parseFloat(form.liters||0), ratePerLiter: parseFloat(form.ratePerLiter||0),
-          totalCost: (parseFloat(form.liters||0) * parseFloat(form.ratePerLiter||0))
+          liters: parseFloat(form.liters || 0), ratePerLiter: parseFloat(form.ratePerLiter || 0),
+          totalCost: (parseFloat(form.liters || 0) * parseFloat(form.ratePerLiter || 0))
         });
       } else if (category === 'machinery') {
         savedRecord = await createMachineryExpense({
           date: form.date, farm: form.farm, type: form.categoryType, description: form.description,
-          amount: parseFloat(form.amount||0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
+          amount: parseFloat(form.amount || 0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
         });
       }
 
       setData([savedRecord, ...data]);
       setIsAdding(false);
-      
+
       // Reset form
       setForm({
         date: new Date().toISOString().split('T')[0], farm: 'MR1', notes: '', description: '',
@@ -163,19 +162,19 @@ function ExpenseCategoryTab({ category, farm, year }) {
         categoryType: '', amount: '', chequeNo: '', chequeDate: '',
         unitsUsed: '', billAmount: '', vehicle: '', liters: '', ratePerLiter: ''
       });
-    } catch (err) { alert(`Failed to save ${category} record.`); } 
+    } catch (err) { alert(`Failed to save ${category} record.`); }
     finally { setIsSaving(false); }
   };
 
   const handleDelete = async (id) => {
-    if(window.confirm("Are you sure you want to delete this record?")) {
+    if (window.confirm("Are you sure you want to delete this record?")) {
       try {
         if (category === 'harvest') await deleteHarvestExpense(id);
         else if (category === 'maintenance') await deleteMaintenanceExpense(id);
         else if (category === 'ceb') await deleteCEBBill(id);
         else if (category === 'fuel') await deleteFuelLog(id);
         else if (category === 'machinery') await deleteMachineryExpense(id);
-        
+
         setData(data.filter(item => item.id !== id));
       } catch (err) { alert("Delete failed."); }
     }
@@ -183,37 +182,37 @@ function ExpenseCategoryTab({ category, farm, year }) {
 
   const calcTotal = () => {
     return data.reduce((acc, curr) => {
-      if (category === 'harvest') return acc + (parseFloat(curr.mainLabor||0) + parseFloat(curr.collectors||0) + parseFloat(curr.tractorDriver||0) + parseFloat(curr.foodExpenses||0));
-      if (category === 'ceb') return acc + parseFloat(curr.billAmount||0);
-      if (category === 'fuel') return acc + parseFloat(curr.totalCost||0);
-      return acc + parseFloat(curr.amount||0);
+      if (category === 'harvest') return acc + (parseFloat(curr.mainLabor || 0) + parseFloat(curr.collectors || 0) + parseFloat(curr.tractorDriver || 0) + parseFloat(curr.foodExpenses || 0));
+      if (category === 'ceb') return acc + parseFloat(curr.billAmount || 0);
+      if (category === 'fuel') return acc + parseFloat(curr.totalCost || 0);
+      return acc + parseFloat(curr.amount || 0);
     }, 0);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      
+
       {/* ── DEDICATED REGISTRATION PANEL (UX Redesign) ── */}
       {isAdding && (
         <div className="bg-gradient-to-b from-green-50 to-white border border-green-200 rounded-xl p-6 shadow-md mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center mb-5 border-b border-green-100 pb-3">
             <h3 className="text-lg font-black text-green-900 capitalize flex items-center gap-2">
-              <Plus size={18} className="text-green-600"/> Add {category} Expense
+              <Plus size={18} className="text-green-600" /> Add {category} Expense
             </h3>
             <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm border border-gray-200"><X size={18} /></button>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
             {/* Common Fields */}
             <div className="md:col-span-3">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Date</label>
-              <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold" disabled={isSaving} />
+              <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold" disabled={isSaving} />
             </div>
-            
+
             {/* Conditional Farm Select (Machinery has no farm in Postman payload requirement, but we'll include it for consistency or hide it based on strict spec) */}
             <div className="md:col-span-3">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Estate Location</label>
-              <select value={form.farm} onChange={e => setForm({...form, farm: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold" disabled={isSaving}>
+              <select value={form.farm} onChange={e => setForm({ ...form, farm: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold" disabled={isSaving}>
                 <option value="MR1">MR1 Farm</option><option value="MR2">MR2 Farm</option>
               </select>
             </div>
@@ -221,39 +220,49 @@ function ExpenseCategoryTab({ category, farm, year }) {
             {/* Dynamic Fields based on Category */}
             {category === 'harvest' && (
               <>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Notes</label><input type="text" placeholder="e.g. May harvest" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
-                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Main Labor (Rs.)</label><input type="number" placeholder="0.00" value={form.mainLabor} onChange={e => setForm({...form, mainLabor: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
-                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Collectors (Rs.)</label><input type="number" placeholder="0.00" value={form.collectors} onChange={e => setForm({...form, collectors: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
-                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Tractor Driver (Rs.)</label><input type="number" placeholder="0.00" value={form.tractorDriver} onChange={e => setForm({...form, tractorDriver: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
-                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Food Expenses (Rs.)</label><input type="number" placeholder="0.00" value={form.foodExpenses} onChange={e => setForm({...form, foodExpenses: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Notes</label><input type="text" placeholder="e.g. May harvest" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
+                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Main Labor (Rs.)</label><input type="number" placeholder="0.00" value={form.mainLabor} onChange={e => setForm({ ...form, mainLabor: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Collectors (Rs.)</label><input type="number" placeholder="0.00" value={form.collectors} onChange={e => setForm({ ...form, collectors: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Tractor Driver (Rs.)</label><input type="number" placeholder="0.00" value={form.tractorDriver} onChange={e => setForm({ ...form, tractorDriver: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Food Expenses (Rs.)</label><input type="number" placeholder="0.00" value={form.foodExpenses} onChange={e => setForm({ ...form, foodExpenses: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
               </>
             )}
 
             {(category === 'maintenance' || category === 'machinery') && (
               <>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">{category === 'machinery' ? 'Type' : 'Category'}</label><input type="text" placeholder={category === 'machinery' ? 'e.g. parts' : 'e.g. plumbing, solar'} value={form.categoryType} onChange={e => setForm({...form, categoryType: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
-                <div className="md:col-span-12"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Description</label><input type="text" placeholder="Detailed description of the expense..." value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
-                <div className="md:col-span-4"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Total Amount (Rs.)</label><input type="number" placeholder="0.00" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right font-black focus:border-green-500" /></div>
-                <div className="md:col-span-4"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque No (Optional)</label><input type="text" placeholder="e.g. CHQ-XXX" value={form.chequeNo} onChange={e => setForm({...form, chequeNo: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
-                <div className="md:col-span-4"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque Date</label><input type="date" value={form.chequeDate} onChange={e => setForm({...form, chequeDate: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">{category === 'machinery' ? 'Type' : 'Category'}</label><select
+                  value={form.categoryType}
+                  onChange={e => setForm({ ...form, categoryType: e.target.value })}
+                  className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 bg-white font-bold"
+                >
+                  <option value="">-- Select Type --</option>
+
+                  <option value="maintenance">Maintenance</option>
+                  <option value="parts">Parts</option>
+                  <option value="running">Running</option>
+                </select></div>
+                <div className="md:col-span-12"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Description</label><input type="text" placeholder="Detailed description of the expense..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
+                <div className="md:col-span-4"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Total Amount (Rs.)</label><input type="number" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right font-black focus:border-green-500" /></div>
+                <div className="md:col-span-4"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque No (Optional)</label><input type="text" placeholder="e.g. CHQ-XXX" value={form.chequeNo} onChange={e => setForm({ ...form, chequeNo: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
+                <div className="md:col-span-4"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque Date</label><input type="date" value={form.chequeDate} onChange={e => setForm({ ...form, chequeDate: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
               </>
             )}
 
             {category === 'ceb' && (
               <>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Units Used</label><input type="number" placeholder="Total kWh" value={form.unitsUsed} onChange={e => setForm({...form, unitsUsed: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
-                <div className="md:col-span-12"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Bill Amount (Rs.)</label><input type="number" placeholder="0.00" value={form.billAmount} onChange={e => setForm({...form, billAmount: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right font-black focus:border-green-500" /></div>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque No (Optional)</label><input type="text" placeholder="e.g. CHQ-XXX" value={form.chequeNo} onChange={e => setForm({...form, chequeNo: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque Date</label><input type="date" value={form.chequeDate} onChange={e => setForm({...form, chequeDate: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Units Used</label><input type="number" placeholder="Total kWh" value={form.unitsUsed} onChange={e => setForm({ ...form, unitsUsed: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-12"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Bill Amount (Rs.)</label><input type="number" placeholder="0.00" value={form.billAmount} onChange={e => setForm({ ...form, billAmount: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right font-black focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque No (Optional)</label><input type="text" placeholder="e.g. CHQ-XXX" value={form.chequeNo} onChange={e => setForm({ ...form, chequeNo: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque Date</label><input type="date" value={form.chequeDate} onChange={e => setForm({ ...form, chequeDate: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
               </>
             )}
 
             {category === 'fuel' && (
               <>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Vehicle / Equipment</label><input type="text" placeholder="e.g. TAFE Tractor" value={form.vehicle} onChange={e => setForm({...form, vehicle: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Vehicle / Equipment</label><input type="text" placeholder="e.g. TAFE Tractor" value={form.vehicle} onChange={e => setForm({ ...form, vehicle: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500" /></div>
                 <div className="md:col-span-6"></div> {/* Spacer */}
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Liters</label><input type="number" placeholder="0.0" value={form.liters} onChange={e => setForm({...form, liters: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
-                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Rate / Liter (Rs.)</label><input type="number" placeholder="0.00" value={form.ratePerLiter} onChange={e => setForm({...form, ratePerLiter: e.target.value})} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Liters</label><input type="number" placeholder="0.0" value={form.liters} onChange={e => setForm({ ...form, liters: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+                <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Rate / Liter (Rs.)</label><input type="number" placeholder="0.00" value={form.ratePerLiter} onChange={e => setForm({ ...form, ratePerLiter: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
               </>
             )}
           </div>
@@ -280,7 +289,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
             </button>
           )}
         </div>
-        
+
         {isLoading ? (
           <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-green-600 mb-4" size={24} /></div>
         ) : (
@@ -289,13 +298,13 @@ function ExpenseCategoryTab({ category, farm, year }) {
               <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="p-4 text-left">Date & Location</th>
-                  
+
                   {/* Dynamic Headers */}
                   {category === 'harvest' && <><th className="p-4 text-left">Notes</th><th className="p-4 text-right">Labor Breakdown (Rs.)</th></>}
                   {(category === 'maintenance' || category === 'machinery') && <><th className="p-4 text-left">Details</th><th className="p-4 text-left">Cheque Info</th></>}
                   {category === 'ceb' && <><th className="p-4 text-right">Units</th><th className="p-4 text-left">Cheque Info</th></>}
                   {category === 'fuel' && <><th className="p-4 text-left">Vehicle</th><th className="p-4 text-right">Fuel Details</th></>}
-                  
+
                   <th className="p-4 text-right">Total Cost (Rs.)</th>
                   <th className="p-4 text-right"></th>
                 </tr>
@@ -304,11 +313,11 @@ function ExpenseCategoryTab({ category, farm, year }) {
                 {data.length === 0 ? (
                   <tr><td colSpan={6} className="p-8 text-center text-gray-400 font-bold">No records found for this filter.</td></tr>
                 ) : data.map(row => {
-                  
+
                   // Calculate row total dynamically
                   let rowTotal = parseFloat(row.amount || row.billAmount || row.totalCost || 0);
                   if (category === 'harvest') {
-                    rowTotal = parseFloat(row.mainLabor||0) + parseFloat(row.collectors||0) + parseFloat(row.tractorDriver||0) + parseFloat(row.foodExpenses||0);
+                    rowTotal = parseFloat(row.mainLabor || 0) + parseFloat(row.collectors || 0) + parseFloat(row.tractorDriver || 0) + parseFloat(row.foodExpenses || 0);
                   }
 
                   return (
@@ -316,7 +325,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
                       <td className="p-4">
                         <p className="font-bold text-gray-900">{row.date}</p>
                         <span className={`mt-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide flex items-center w-max gap-1 ${row.farm === 'MR1' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
-                          <MapPin size={10}/> {row.farm}
+                          <MapPin size={10} /> {row.farm}
                         </span>
                       </td>
 

@@ -5,7 +5,7 @@ import {
   getPoultryBatches, createPoultryBatch, 
   getPoultryFeed, createPoultryFeed, deletePoultryFeed,
   getPoultrySales, createPoultrySale, deletePoultrySale,
-  getPoultryProfit, distributePoultryProfit
+  getPoultryProfit, distributePoultryProfit, createInvestor
 } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 
@@ -104,39 +104,164 @@ export default function PoultryManagement() {
 }
 
 // ─── INVESTORS TABLE ─────────────────────────────────────────────────────────
-function InvestorsTable({ data }) {
+function InvestorsTable({ data: initialData }) {
+  const [data, setData] = useState(initialData || []);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const toast = useToast();
+
+  const [form, setForm] = useState({
+    name: "",
+    contactInfo: "",
+    investmentAmount: "",
+    ownershipPercent: ""
+  });
+
+  const handleSave = async () => {
+    if (!form.name || !form.contactInfo) {
+      toast.error("Name and contact required");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        name: form.name,
+        contactInfo: form.contactInfo,
+        investmentAmount: parseFloat(form.investmentAmount),
+        ownershipPercent: parseFloat(form.ownershipPercent)
+      };
+
+      const res = await createInvestor(payload);
+
+      setData([res, ...data]);
+      setIsOpen(false);
+
+      setForm({
+        name: "",
+        contactInfo: "",
+        investmentAmount: "",
+        ownershipPercent: ""
+      });
+
+      toast.success("Investor added successfully");
+    } catch (e) {
+      toast.error("Failed to add investor");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-        <h2 className="font-bold text-gray-800 flex items-center gap-2"><Users size={16} className="text-green-600"/> Investor Ledger</h2>
-        <button className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:-translate-y-0.5 transition-transform flex items-center gap-2">
+
+      {/* HEADER */}
+      <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+        <h2 className="font-bold flex items-center gap-2">
+          <Users size={16} className="text-green-600" />
+          Investor Ledger
+        </h2>
+
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
+        >
           <Plus size={14} /> Add Investor
         </button>
       </div>
+
+      {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm whitespace-nowrap">
-          <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase">
             <tr>
               <th className="p-4 text-left">Name</th>
               <th className="p-4 text-left">Contact</th>
-              <th className="p-4 text-right">Investment (Rs.)</th>
+              <th className="p-4 text-right">Investment</th>
               <th className="p-4 text-right">Ownership %</th>
             </tr>
           </thead>
+
           <tbody>
             {data.length === 0 ? (
-              <tr><td colSpan={4} className="p-6 text-center text-gray-400 font-bold">No investors found.</td></tr>
-            ) : data.map(inv => (
-              <tr key={inv.id} className="border-t border-gray-50 hover:bg-gray-50/50">
-                <td className="p-4 font-bold text-gray-900">{inv.name}</td>
-                <td className="p-4 text-gray-600">{inv.contact_info}</td>
-                <td className="p-4 text-right font-black text-green-700">{fmt(inv.investment_amount)}</td>
-                <td className="p-4 text-right font-bold text-gray-800">{inv.ownership_percent}%</td>
+              <tr>
+                <td colSpan={4} className="p-6 text-center text-gray-400">
+                  No investors found
+                </td>
               </tr>
-            ))}
+            ) : (
+              data.map(inv => (
+                <tr key={inv.id} className="border-t hover:bg-gray-50">
+                  <td className="p-4 font-bold">{inv.name}</td>
+                  <td className="p-4">{inv.contact_info}</td>
+                  <td className="p-4 text-right font-bold text-green-700">
+                    {fmt(inv.investment_amount)}
+                  </td>
+                  <td className="p-4 text-right">{inv.ownership_percent}%</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* MODAL */}
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+          <div className="bg-white w-[400px] p-5 rounded-xl shadow-xl space-y-3">
+
+            <h3 className="font-bold text-lg">Add Investor</h3>
+
+            <input
+              placeholder="Name"
+              className="w-full border p-2 rounded"
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+            />
+
+            <input
+              placeholder="Contact"
+              className="w-full border p-2 rounded"
+              value={form.contactInfo}
+              onChange={e => setForm({ ...form, contactInfo: e.target.value })}
+            />
+
+            <input
+              type="number"
+              placeholder="Investment Amount"
+              className="w-full border p-2 rounded"
+              value={form.investmentAmount}
+              onChange={e => setForm({ ...form, investmentAmount: e.target.value })}
+            />
+
+            <input
+              type="number"
+              placeholder="Ownership %"
+              className="w-full border p-2 rounded"
+              value={form.ownershipPercent}
+              onChange={e => setForm({ ...form, ownershipPercent: e.target.value })}
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIsOpen(false)}
+                className="px-3 py-1 bg-gray-200 rounded"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-3 py-1 bg-green-600 text-white rounded"
+              >
+                {isSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -411,8 +536,6 @@ function PoultrySalesTable({ data, setData, batches }) {
   });
 
   const getCategoryLabel = (category) => {
-    if (category === 'eggs') return 'Eggs';
-    if (category === 'meat') return 'Meat';
     if (category === 'manure') return 'Manure';
     return category;
   };
@@ -488,9 +611,7 @@ function PoultrySalesTable({ data, setData, batches }) {
                   <td className="p-2"><input type="date" value={newRow.date} onChange={e => setNewRow({...newRow, date: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
                   <td className="p-2">
                     <select value={newRow.category} onChange={e => setNewRow({...newRow, category: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none bg-white" disabled={isSaving}>
-                      <option value="eggs">Eggs</option>
-                      <option value="meat">Meat</option>
-                      <option value="manure">Manure</option>
+                      <option value="manure">Birds</option>
                     </select>
                   </td>
                   <td className="p-2 text-right"><input type="number" placeholder="Qty" value={newRow.quantity} onChange={e => setNewRow({...newRow, quantity: e.target.value})} className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto" disabled={isSaving} /></td>

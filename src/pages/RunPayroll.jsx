@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { createManagerSalary, finalizePayroll, getEmployees, getManagerSalaries, getPayrollHistory, getPayrollPreview, updateManagerSalary } from '../services/api';
+import { downloadCsv } from '../utils/csv';
 
 const fmt = (n) => n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -279,6 +280,20 @@ export default function RunPayroll() {
     }
   };
 
+  const handleExportCsv = () => {
+    downloadCsv(`payroll-${farm}-${startDate}-to-${endDate}.csv`, [
+      { label: 'Employee', value: (row) => row.name || '' },
+      { label: 'Role', value: (row) => row.role || '' },
+      { label: 'Type', value: (row) => row.type || '' },
+      { label: 'Base Rate', value: (row) => Number(row.wage || 0).toFixed(2) },
+      { label: 'Days Worked', value: (row) => row.daysWorked ?? 0 },
+      { label: 'Gross Earnings', value: (row) => Number(row.gross || 0).toFixed(2) },
+      { label: 'Advances Deducted', value: (row) => Number(row.advanceDeduction || 0).toFixed(2) },
+      { label: 'Net Payable', value: (row) => Number(row.netPay ?? ((row.gross || 0) - (row.advanceDeduction || 0)) || 0).toFixed(2) },
+      { label: 'Status', value: (row) => row.status || '' },
+    ], filtered);
+  };
+
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
       
@@ -309,7 +324,7 @@ export default function RunPayroll() {
             <option value="MR1">MR1</option>
             <option value="MR2">MR2</option>
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:text-green-700 transition-colors">
+          <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:text-green-700 transition-colors">
             <Download size={14} /> Export Payslips
           </button>
           {!isFinalized && (

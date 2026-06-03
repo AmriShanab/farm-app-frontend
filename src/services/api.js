@@ -860,14 +860,22 @@ export const deleteOwnerFinancial = async (id) => {
 };
 
 export const searchCheques = async (chequeNo) => {
-  if (USE_MOCK_DATA) {
-    return new Promise(res => setTimeout(() => {
-      if (!chequeNo) return res(mockChequeData);
-      return res(mockChequeData.filter(c => c.chequeNo.toLowerCase().includes(chequeNo.toLowerCase())));
-    }, 300));
-  }
-  const response = await fetch(`${BASE_URL}/finance/cheques?chequeNo=${chequeNo || ''}`, { headers: getHeaders() });
-  return unwrapApiData(await response.json()) || [];
+  const response = await fetch(
+    `${BASE_URL}/finance/cheques?chequeNo=${chequeNo || ''}`,
+    { headers: getHeaders() }
+  );
+
+  const result = unwrapApiData(await response.json()) || [];
+
+  return result.map(item => ({
+    id: item.id,
+    chequeNo: item.cheque_no,
+    cheque_date: item.cheque_date,
+    payee: item.description,
+    category: item.source,
+    amount: item.amount,
+    status: item.status || 'Pending'
+  }));
 };
 
 

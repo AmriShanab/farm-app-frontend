@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import {
-  Plus, Search, Download, MoreHorizontal,
+  Plus, Search, Download,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Wallet, Banknote, AlertCircle, Check, X,
-  User, CheckCircle2
+  User, CheckCircle2, Edit2, Loader2, Save
 } from 'lucide-react';
 
 import { useToast } from '../components/ToastProvider';
 import { getAdvances, createAdvance, getEmployees, updateAdvance } from '../services/api';
+import { downloadCsv } from '../utils/csv';
 
-// --- MOCK DATA ---
+// --- MOCK DATA FALLBACK ---
 const mockEmployees = [
   { id: '1', name: 'Faizaar', role: 'Manager' },
   { id: '2', name: 'Jabir', role: 'Laborer' },
@@ -19,9 +20,7 @@ const mockEmployees = [
   { id: '6', name: 'Askan', role: 'Laborer' },
 ];
 
-// Keep employee list local; advances are loaded from API
-
-const fmt = (n) => n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function CashAdvances() {
   const [advances, setAdvances] = useState([]);
@@ -29,199 +28,229 @@ export default function CashAdvances() {
   const [statusFilter, setStatusFilter] = useState('Unpaid');
   const [selected, setSelected] = useState([]);
 
-  // --- Inline Row State ---
+  // API & Loading States
+  const [isLoading, setIsLoading] = useState(true);
+  const [employees, setEmployees] = useState(mockEmployees);
+  const toast = useToast();
+
+  // --- Registration Panel & Modal States ---
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split('T')[0],
-    empId: '',
-    amount: ''
+    empId: '', amount: '', notes: ''
   });
-  const toast = useToast();
-  const [employees, setEmployees] = useState(mockEmployees);
+  
   const [editAdvance, setEditAdvance] = useState(null);
   const [editRow, setEditRow] = useState({ date: '', amount: '', status: 'Unpaid', notes: '' });
-  const [openMenuId, setOpenMenuId] = useState(null);
 
+  // --- Fetch Data ---
   useEffect(() => {
     let active = true;
-    const load = async () => {
+    
+    const loadData = async () => {
+      setIsLoading(true);
       try {
         const params = {};
         if (statusFilter && statusFilter !== 'All') params.status = statusFilter.toLowerCase();
-        const data = await getAdvances(params);
-        if (!active) return;
-        setAdvances(Array.isArray(data) ? data : (data?.data || []));
+        
+        const response = await getAdvances(params);
+        const rawData = Array.isArray(response) ? response : (response?.data || []);
+        
+        // --- FIXED: Normalize backend data keys to match frontend expectations ---
+        const normalizedData = rawData.map(adv => ({
+          id: adv.id || adv.advance_id,
+          date: adv.date,
+          empId: String(adv.employee_id ?? adv.empId ?? ''),
+          name: adv.employee_name ?? adv.name ?? '',
+          amount: adv.amount,
+          status: (adv.status || 'unpaid').charAt(0).toUpperCase() + (adv.status || 'unpaid').slice(1),
+          notes: adv.notes || ''
+        }));
+
+        if (active) setAdvances(normalizedData);
       } catch {
-        toast.error('Failed to load advances. Showing local sample data.');
-        setAdvances([]);
+        if (active) toast.error('Failed to load advances. Showing local data if available.');
+      } finally {
+        if (active) setIsLoading(false);
       }
     };
-    load();
-    // load employees once
+
     const loadEmployees = async () => {
       try {
         const emps = await getEmployees('All');
-        if (!active) return;
-        if (Array.isArray(emps) && emps.length) {
-          setEmployees(emps.map(e => ({ id: String(e.id ?? e.employeeId ?? e.empId ?? ''), name: e.name ?? e.employee_name ?? e.employeeName ?? '', role: e.role ?? '' })));
+        if (active && Array.isArray(emps) && emps.length) {
+          setEmployees(emps.map(e => ({ 
+            id: String(e.id ?? e.employeeId ?? e.empId ?? ''), 
+            name: e.name ?? e.employee_name ?? e.employeeName ?? '', 
+            role: e.role ?? '' 
+          })));
         }
       } catch {
-        // keep mock employees on error
+        // Keep mock employees on error
       }
     };
+
+    loadData();
     loadEmployees();
     return () => { active = false; };
-  }, [statusFilter, toast]);
+    
+    // FIXED: Removed 'toast' from dependency array to prevent infinite re-fetching loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   const filtered = advances.filter(adv =>
     (statusFilter === 'All' || adv.status === statusFilter) &&
-    (!search || adv.name.toLowerCase().includes(search.toLowerCase()))
+    (!search || adv.name?.toLowerCase().includes(search.toLowerCase()))
   );
 
   // KPIs
-  const totalUnpaid = advances.filter(a => a.status === 'Unpaid').reduce((sum, a) => sum + a.amount, 0);
+  const totalUnpaid = advances.filter(a => a.status === 'Unpaid').reduce((sum, a) => sum + (Number(a.amount)||0), 0);
   const unpaidCount = advances.filter(a => a.status === 'Unpaid').length;
-  const totalGivenAllTime = advances.reduce((sum, a) => sum + a.amount, 0);
+  const totalGivenAllTime = advances.reduce((sum, a) => sum + (Number(a.amount)||0), 0);
 
   const toggleSelect = (id) => setSelected(sel => sel.includes(id) ? sel.filter(i => i !== id) : [...sel, id]);
   const toggleAll = () => setSelected(sel => sel.length === filtered.length ? [] : filtered.map(s => s.id));
 
-  const handleRowChange = (e) => {
-    setNewRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSaveRow = () => {
+  const handleRowChange = (e) => setNewRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  
+  const handleSaveRow = async () => {
     if (!newRow.empId || !newRow.amount) {
       toast.warn("Please select an employee and enter an amount.");
       return;
     }
 
+    setIsSaving(true);
     const payload = {
       date: newRow.date,
       empId: parseInt(newRow.empId, 10),
       amount: parseFloat(newRow.amount) || 0,
-      chequeNo: newRow.chequeNo || '',
-      chequeDate: newRow.chequeDate || null,
       notes: newRow.notes || ''
     };
 
-    (async () => {
-      try {
-        const saved = await createAdvance(payload);
-        const emp = employees.find(e => String(e.id) === String(payload.empId));
-        const record = {
-          id: saved.id || saved.advance_id || String(Date.now()),
-          date: saved.date || payload.date,
-          empId: String(saved.empId ?? saved.employeeId ?? payload.empId),
-          name: saved.name || (emp && emp.name) || '',
-          amount: saved.amount ?? payload.amount,
-          status: (saved.status || 'unpaid').charAt(0).toUpperCase() + (saved.status || 'unpaid').slice(1),
-          notes: saved.notes || ''
-        };
-        setAdvances(prev => [record, ...prev]);
-        setIsAdding(false);
-        if (statusFilter === 'Deducted') setStatusFilter('Unpaid');
-        setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '' });
-        toast.success('Advance issued');
-      } catch {
-        toast.error('Failed to issue advance.');
-      }
-    })();
+    try {
+      const saved = await createAdvance(payload);
+      const emp = employees.find(e => String(e.id) === String(payload.empId));
+      
+      const record = {
+        id: saved.id || saved.advance_id || String(Date.now()),
+        date: saved.date || payload.date,
+        empId: String(saved.empId ?? saved.employeeId ?? payload.empId),
+        name: saved.name || (emp && emp.name) || '',
+        amount: saved.amount ?? payload.amount,
+        status: (saved.status || 'unpaid').charAt(0).toUpperCase() + (saved.status || 'unpaid').slice(1),
+        notes: saved.notes || ''
+      };
+      
+      setAdvances(prev => [record, ...prev]);
+      setIsAdding(false);
+      if (statusFilter === 'Deducted') setStatusFilter('Unpaid');
+      setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '' });
+      toast.success('Advance issued successfully');
+    } catch {
+      toast.error('Failed to issue advance.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleMarkDeducted = async (adv) => {
+    try {
+      const payload = {
+        date: adv.date,
+        amount: parseFloat(adv.amount) || 0,
+        status: 'deducted',
+        notes: adv.notes || ''
+      };
+      
+      await updateAdvance(adv.id, payload);
+      setAdvances(prev => prev.map(a => a.id === adv.id ? ({ ...a, status: 'Deducted' }) : a));
+      toast.success('Advance marked as Deducted');
+    } catch {
+      toast.error('Failed to update advance status');
+    }
+  };
+
+  const handleUpdateAdvance = async () => {
+    if (!editRow.amount || !editRow.date) {
+      toast.warn("Date and Amount are required.");
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const payload = { 
+        date: editRow.date, 
+        amount: parseFloat(editRow.amount) || 0, 
+        status: editRow.status.toLowerCase(), 
+        notes: editRow.notes 
+      };
+      
+      await updateAdvance(editAdvance.id, payload);
+      setAdvances(prev => prev.map(a => a.id === editAdvance.id ? ({ 
+        ...a, date: payload.date, amount: payload.amount, 
+        status: payload.status === 'deducted' ? 'Deducted' : 'Unpaid', 
+        notes: payload.notes 
+      }) : a));
+      
+      toast.success('Advance updated successfully');
+      setEditAdvance(null);
+    } catch {
+      toast.error('Failed to update advance');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const cancelAdd = () => {
     setIsAdding(false);
-    setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '' });
+    setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '' });
+  };
+
+  const handleExportCsv = () => {
+    downloadCsv('cash-advances.csv', [
+      { label: 'Date', value: (row) => row.date || '' },
+      { label: 'Employee', value: (row) => row.name || '' },
+      { label: 'Status', value: (row) => row.status || '' },
+      { label: 'Amount', value: (row) => Number(row.amount || 0).toFixed(2) },
+      { label: 'Notes', value: (row) => row.notes || '' },
+    ], filtered);
   };
 
   return (
-    <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
+    <div className="p-6 max-w-7xl mx-auto font-['Nunito'] pb-10">
       
       {/* ── PAGE HEADER ── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-4">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            <div style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, #166534, #14532d)', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Banknote size={16} color="#86efac" />
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center shadow-lg shadow-green-900/20">
+              <Banknote size={20} className="text-green-300" />
             </div>
-            <h1 style={{ fontSize: '20px', fontWeight: 900, color: '#0d1f0d', margin: 0, letterSpacing: '-0.4px' }}>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
               Cash Advances
             </h1>
           </div>
-          <p style={{ fontSize: '12px', color: '#6b7a6b', margin: 0, paddingLeft: '42px' }}>
+          <p className="text-sm font-medium text-gray-500 pl-[52px]">
             Record employee advances to be deducted from payroll
           </p>
         </div>
-        {/* Edit Modal */}
-        {editAdvance && (
-          <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }}>
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={() => setEditAdvance(null)} />
-            <div style={{ background: '#fff', borderRadius: 12, width: '420px', padding: 20, boxShadow: '0 12px 40px rgba(2,6,23,0.2)', position: 'relative', zIndex: 70 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Edit Advance</h3>
-              <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 700 }}>Date</label>
-                <input type="date" name="date" value={editRow.date} onChange={e => setEditRow(prev => ({ ...prev, date: e.target.value }))} style={inputStyle} />
-                <label style={{ fontSize: 12, fontWeight: 700 }}>Amount</label>
-                <input type="number" name="amount" value={editRow.amount} onChange={e => setEditRow(prev => ({ ...prev, amount: e.target.value }))} style={inputStyle} />
-                <label style={{ fontSize: 12, fontWeight: 700 }}>Status</label>
-                <select value={editRow.status} onChange={e => setEditRow(prev => ({ ...prev, status: e.target.value }))} style={inputStyle}>
-                  <option>Unpaid</option>
-                  <option>Deducted</option>
-                </select>
-                <label style={{ fontSize: 12, fontWeight: 700 }}>Notes</label>
-                <textarea value={editRow.notes} onChange={e => setEditRow(prev => ({ ...prev, notes: e.target.value }))} style={{ ...inputStyle, height: 80 }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-                <button onClick={() => setEditAdvance(null)} style={{ padding: '8px 12px', borderRadius: 8, background: '#f3f4f6', border: 'none', cursor: 'pointer' }}>Cancel</button>
-                <button onClick={async () => {
-                  try {
-                    const payload = { date: editRow.date, amount: parseFloat(editRow.amount) || 0, status: editRow.status.toLowerCase(), notes: editRow.notes };
-                    await updateAdvance(editAdvance.id, payload);
-                    setAdvances(prev => prev.map(a => a.id === editAdvance.id ? ({ ...a, date: payload.date, amount: payload.amount, status: payload.status === 'deducted' ? 'Deducted' : 'Unpaid', notes: payload.notes }) : a));
-                    toast.success('Advance updated');
-                    setEditAdvance(null);
-                  } catch {
-                    toast.error('Failed to update advance');
-                  }
-                }} style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(90deg,#16a34a,#15803d)', color: '#fff', border: 'none', cursor: 'pointer' }}>Save</button>
-              </div>
-            </div>
-          </div>
-        )}
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '9px 16px', background: '#fff',
-            border: '1.5px solid #e5e7eb', borderRadius: '10px',
-            fontSize: '12px', fontWeight: 700, color: '#374151',
-            cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
+        <div className="flex gap-2 items-center">
+          <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
             <Download size={14} /> Export List
           </button>
           <button
             onClick={() => setIsAdding(true)}
-            disabled={isAdding}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '7px',
-              padding: '9px 18px',
-              background: isAdding ? '#9ca3af' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-              border: 'none', borderRadius: '10px',
-              fontSize: '12px', fontWeight: 800, color: '#fff',
-              cursor: isAdding ? 'not-allowed' : 'pointer', fontFamily: "'Nunito', sans-serif",
-              boxShadow: isAdding ? 'none' : '0 4px 14px rgba(22,163,74,0.35)',
-              transition: 'all 0.2s',
-            }}
-            onMouseOver={e => { if(!isAdding) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(22,163,74,0.45)'; } }}
-            onMouseOut={e => { if(!isAdding) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(22,163,74,0.35)'; } }}
+            disabled={isAdding || isLoading}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white border-none rounded-xl text-xs font-black shadow-md hover:from-green-700 hover:to-green-800 disabled:opacity-50 transition-all"
           >
             <Plus size={16} /> Issue Advance
           </button>
         </div>
       </div>
 
-      {/* ── PREMIUM KPI STAT CARDS (REDUCED HEIGHT) ── */}
+      {/* ── KPI STAT CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {[
           {
@@ -230,6 +259,7 @@ export default function CashAdvances() {
             badge: `${unpaidCount} Pending`,
             sub: 'To Deduct Next Payroll',
             icon: <AlertCircle size={14} />,
+            chartColor: '#A5D6A7',
             path: "M0,40 L0,25 C 20,30 40,10 60,15 C 80,20 90,5 100,5 L100,40 Z"
           },
           {
@@ -238,22 +268,22 @@ export default function CashAdvances() {
             badge: 'Cash Flow',
             sub: 'Historical Total',
             icon: <Wallet size={14} />,
+            chartColor: '#A5D6A7',
             path: "M0,40 L0,20 C 30,35 50,15 70,25 C 85,30 95,10 100,10 L100,40 Z"
           },
           {
             title: 'Highest Unpaid',
-            amount: unpaidCount > 0 ? `Rs. ${fmt(Math.max(...advances.filter(a => a.status === 'Unpaid').map(a => a.amount)))}` : 'Rs. 0.00',
+            amount: unpaidCount > 0 ? `Rs. ${fmt(Math.max(...advances.filter(a => a.status === 'Unpaid').map(a => Number(a.amount))))}` : 'Rs. 0.00',
             badge: 'Max Exposure',
             sub: 'Single Employee',
             icon: <User size={14} />,
+            chartColor: '#A5D6A7',
             path: "M0,40 L0,15 C 25,10 45,30 65,20 C 85,10 95,25 100,20 L100,40 Z"
           }
         ].map((card, i) => {
           const gradId = `grad-adv-${i}`;
-          const chartColor = "#A5D6A7"; 
-
           return (
-            <div key={i} className="relative overflow-hidden rounded-[1.25rem] p-4 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 transition-all hover:shadow-green-900/40 hover:-translate-y-1">
+            <div key={i} className="relative overflow-hidden rounded-[1.25rem] p-4 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 transition-all hover:-translate-y-1 h-28">
               <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white transition-opacity duration-500 group-hover:opacity-40"></div>
               <div className="flex justify-between items-center relative z-10 mb-1">
                  <span className="text-sm font-medium text-white/80">{card.title}</span>
@@ -274,11 +304,11 @@ export default function CashAdvances() {
                   <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
                      <defs>
                         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor={chartColor} stopOpacity="0.4" />
-                           <stop offset="100%" stopColor={chartColor} stopOpacity="0.0" />
+                           <stop offset="0%" stopColor={card.chartColor} stopOpacity="0.4" />
+                           <stop offset="100%" stopColor={card.chartColor} stopOpacity="0.0" />
                         </linearGradient>
                      </defs>
-                     <path d={card.path} fill={`url(#${gradId})`} stroke={chartColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                     <path d={card.path} fill={`url(#${gradId})`} stroke={card.chartColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
                   </svg>
               </div>
             </div>
@@ -286,251 +316,252 @@ export default function CashAdvances() {
         })}
       </div>
 
+      {/* ── DEDICATED REGISTRATION PANEL ── */}
+      {isAdding && (
+        <div className="bg-gradient-to-b from-green-50 to-white border border-green-200 rounded-xl p-6 shadow-md mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex justify-between items-center mb-5 border-b border-green-100 pb-3">
+            <h3 className="text-lg font-black text-green-900 flex items-center gap-2">
+              <Banknote size={18} className="text-green-600"/> Issue New Advance
+            </h3>
+            <button onClick={cancelAdd} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm border border-gray-200"><X size={18} /></button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+            <div className="md:col-span-3">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Issue Date</label>
+              <input type="date" name="date" value={newRow.date} onChange={handleRowChange} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all" disabled={isSaving} />
+            </div>
+
+            <div className="md:col-span-4">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Employee</label>
+              <select name="empId" value={newRow.empId} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving}>
+                 <option value="" disabled>Select Employee...</option>
+                 {employees.map(emp => (
+                   <option key={emp.id} value={emp.id}>{emp.name}</option>
+                 ))}
+              </select>
+            </div>
+            
+            <div className="md:col-span-3">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Amount (Rs.)</label>
+              <input type="number" name="amount" placeholder="0.00" value={newRow.amount} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving} />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Status</label>
+              <div className="w-full p-2.5 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold flex items-center justify-center gap-1.5 cursor-not-allowed">
+                <AlertCircle size={14}/> Unpaid
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end items-center mt-6 pt-4 border-t border-gray-100 gap-3">
+            <button onClick={cancelAdd} disabled={isSaving} className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">Cancel</button>
+            <button onClick={handleSaveRow} disabled={isSaving} className="px-6 py-2.5 bg-green-600 rounded-lg text-white text-sm font-bold shadow-md hover:bg-green-700 flex items-center gap-2 transition-all disabled:opacity-50">
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Advance
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── ADVANCES TABLE ── */}
-      <div style={{ background: '#fff', borderRadius: '16px', border: '1.5px solid #e8ede8', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        
         {/* Toolbar */}
-        <div style={{ padding: '14px 18px', borderBottom: '1.5px solid #f0f4f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-
-          <div style={{ display: 'flex', background: '#f3f4f6', padding: '3px', borderRadius: '10px', gap: '2px' }}>
+        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50">
+          <div className="flex bg-gray-200/60 p-1 rounded-xl gap-1 overflow-x-auto w-full sm:w-auto">
             {['Unpaid', 'Deducted', 'All'].map(f => (
-              <button key={f} onClick={() => setStatusFilter(f)} style={{
-                padding: '6px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 800,
-                border: 'none', cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
-                background: statusFilter === f ? '#fff' : 'transparent',
-                color: statusFilter === f ? (f === 'Unpaid' ? '#b45309' : f === 'Deducted' ? '#15803d' : '#374151') : '#9ca3af',
-                boxShadow: statusFilter === f ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.2s',
-              }}>{f}</button>
+              <button key={f} onClick={() => { setStatusFilter(f); setIsAdding(false); }} 
+                className={`px-4 py-2 rounded-lg text-xs font-black transition-all whitespace-nowrap ${statusFilter === f ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
+                {f} Advances
+              </button>
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={13} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+          <div className="flex gap-2 items-center w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                type="text"
-                placeholder="Search staff..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{
-                  paddingLeft: '32px', paddingRight: '12px', paddingTop: '7px', paddingBottom: '7px',
-                  border: '1.5px solid #e5e7eb', borderRadius: '9px',
-                  fontSize: '12px', color: '#374151', outline: 'none',
-                  fontFamily: "'Nunito', sans-serif", width: '200px',
-                  background: '#fafafa',
-                }}
-                onFocus={e => e.target.style.borderColor = '#16a34a'}
-                onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+                type="text" placeholder="Search staff..." value={search} onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-xl text-xs font-bold outline-none focus:border-green-500 shadow-sm"
               />
             </div>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: '5px',
-              padding: '7px 13px', border: '1.5px solid #e5e7eb',
-              borderRadius: '9px', fontSize: '12px', fontWeight: 600, color: '#374151',
-              background: '#fff', cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
-            }}>
-              <SlidersHorizontal size={13} color="#9ca3af" /> Filters
+            <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-xl text-xs font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm">
+              <SlidersHorizontal size={13} className="text-gray-400" /> Filters
             </button>
           </div>
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ background: '#fafafa', borderBottom: '1.5px solid #f0f4f0' }}>
-                <th style={thStyle('left', '52px')}>
-                  <input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={toggleAll} style={{ accentColor: '#16a34a', cursor: 'pointer' }} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
+            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-100">
+              <tr>
+                <th className="p-4 text-left w-12">
+                  <input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer" />
                 </th>
-                {['Issue Date', 'Employee Name', 'Role', 'Status', 'Advance Amount'].map((h, i) => (
-                  <th key={h} style={thStyle(i === 4 ? 'right' : 'left')}>{h}</th>
-                ))}
-                <th style={thStyle('right', '80px')} />
+                <th className="p-4 text-left">Issue Date</th>
+                <th className="p-4 text-left">Employee Name</th>
+                <th className="p-4 text-left">Status</th>
+                <th className="p-4 text-right">Advance Amount</th>
+                <th className="p-4 text-right">Quick Actions</th>
               </tr>
             </thead>
             <tbody>
 
-              {/* ── INLINE ADD ROW ── */}
-              {isAdding && (
-                <tr style={{ background: '#f0fdf4', borderBottom: '1.5px solid #bbf7d0', boxShadow: 'inset 0 2px 4px rgba(22,163,74,0.05)' }}>
-                  <td style={tdStyle('52px')}></td>
-                  <td style={tdStyle()}>
-                    <input type="date" name="date" value={newRow.date} onChange={handleRowChange} style={inputStyle} />
-                  </td>
-                  <td colSpan={2} style={tdStyle()}>
-                    <select name="empId" value={newRow.empId} onChange={handleRowChange} style={{...inputStyle, cursor: 'pointer', appearance: 'auto'}}>
-                       <option value="" disabled>Select Employee...</option>
-                        {employees.map(emp => (
-                         <option key={emp.id} value={emp.id}>{emp.name}</option>
-                        ))}
-                    </select>
-                  </td>
-                    <td style={tdStyle()}>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                        <AlertCircle size={10} /> Unpaid
-                      </span>
+              {isLoading && (
+                 <tr>
+                    <td colSpan={6} className="p-20 text-center text-green-600">
+                       <Loader2 size={24} className="animate-spin mx-auto mb-2" />
+                       <span className="text-xs font-bold">Loading Advances...</span>
                     </td>
-                  <td style={{ ...tdStyle('150px'), textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Rs.</span>
-                      <input type="number" name="amount" placeholder="0.00" value={newRow.amount} onChange={handleRowChange} style={{...inputStyle, width: '100px', textAlign: 'right'}} />
-                    </div>
-                  </td>
-                  <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                      <button onClick={cancelAdd} style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#6b7280' }}>
-                        <X size={14} strokeWidth={3} />
-                      </button>
-                      <button onClick={handleSaveRow} style={{ background: '#16a34a', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#fff', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' }}>
-                        <Check size={14} strokeWidth={3} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                 </tr>
               )}
 
-                {filtered.map((adv, idx) => {
+              {!isLoading && filtered.map((adv, idx) => {
                 const isSel = selected.includes(adv.id);
                 return (
-                  <tr key={adv.id} style={{
-                    borderBottom: '1px solid #f3f4f6',
-                    background: isSel ? '#f0fdf4' : idx % 2 === 0 ? '#fff' : '#fafafa',
-                    transition: 'background 0.15s',
-                  }}
-                    onMouseOver={e => { if (!isSel) e.currentTarget.style.background = '#f8fff8'; }}
-                    onMouseOut={e => { if (!isSel) e.currentTarget.style.background = idx % 2 === 0 ? '#fff' : '#fafafa'; }}
-                  >
-                    <td style={tdStyle('52px')}>
-                      <input type="checkbox" checked={isSel} onChange={() => toggleSelect(adv.id)} style={{ accentColor: '#16a34a', cursor: 'pointer' }} />
+                  <tr key={adv.id} className={`border-t border-gray-50 transition-colors ${isSel ? 'bg-green-50/40' : 'hover:bg-gray-50/40'}`}>
+                    <td className="p-4">
+                      <input type="checkbox" checked={isSel} onChange={() => toggleSelect(adv.id)} className="rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer" />
                     </td>
 
-                    {/* Date */}
-                    <td style={tdStyle()}>
-                      <span style={{ fontWeight: 800, color: '#0d1f0d', fontSize: '12.5px' }}>{adv.date}</span>
+                    <td className="p-4 font-bold text-gray-900">
+                      {adv.date || '—'}
                     </td>
 
-                    {/* Employee Identity */}
-                    <td style={tdStyle()}>
+                    <td className="p-4">
                       <div className="flex items-center gap-3">
                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs border border-green-200">
-                            {adv.name.substring(0, 2).toUpperCase()}
+                            {(adv.name || 'U').substring(0, 2).toUpperCase()}
                          </div>
-                         <span style={{ fontWeight: 800, color: '#0d1f0d', fontSize: '13px' }}>{adv.name}</span>
+                         <span className="font-bold text-gray-900 text-[13px]">{adv.name}</span>
                       </div>
                     </td>
 
-                    {/* Status Pill */}
-                    <td style={tdStyle()}>
+                    <td className="p-4">
                       {adv.status === 'Unpaid' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                           <AlertCircle size={10} /> Pending
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                          <AlertCircle size={10} /> Pending
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-green-50 text-green-700 border border-green-200">
-                           <CheckCircle2 size={10} /> Deducted
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-green-50 text-green-700 border border-green-200">
+                          <CheckCircle2 size={10} /> Deducted
                         </span>
                       )}
                     </td>
 
-                    {/* Advance Amount */}
-                    <td style={{ ...tdStyle(), textAlign: 'right', paddingRight: '20px' }}>
-                       <span style={{ color: '#0d3320', fontWeight: 900, fontSize: '13px' }}>Rs. {fmt(adv.amount)}</span>
+                    <td className="p-4 text-right">
+                       <span className="font-black text-gray-900 text-[13px]">Rs. {fmt(Number(adv.amount))}</span>
                     </td>
 
-                    {/* Actions */}
-                    <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <button style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '4px', borderRadius: '6px', color: '#9ca3af',
-                        transition: 'all 0.15s',
-                      }}
-                        onMouseOver={e => { e.currentTarget.style.background = '#dcfce7'; e.currentTarget.style.color = '#16a34a'; }}
-                        onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
-                        onClick={() => setOpenMenuId(openMenuId === adv.id ? null : adv.id)}
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
-
-                      {openMenuId === adv.id && (
-                        <div style={{ position: 'absolute', right: 0, top: '28px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.08)', zIndex: 50, minWidth: 160 }}>
-                          <button onClick={() => { setOpenMenuId(null); setEditAdvance(adv); setEditRow({ date: adv.date || '', amount: String(adv.amount || ''), status: adv.status || 'Unpaid', notes: adv.notes || '' }); }} style={{ display: 'block', width: '100%', padding: '10px 12px', border: 'none', textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>Edit</button>
-                          {adv.status === 'Unpaid' && (
-                            <button onClick={async () => { setOpenMenuId(null); try { await updateAdvance(adv.id, { status: 'deducted' }); setAdvances(prev => prev.map(a => a.id === adv.id ? ({ ...a, status: 'Deducted' }) : a)); toast.success('Advance marked as Deducted'); } catch { toast.error('Failed to update advance status'); } }} style={{ display: 'block', width: '100%', padding: '10px 12px', border: 'none', textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>Mark Deducted</button>
-                          )}
-                          <button onClick={() => setOpenMenuId(null)} style={{ display: 'block', width: '100%', padding: '10px 12px', border: 'none', textAlign: 'left', background: 'transparent', cursor: 'pointer' }}>Close</button>
-                        </div>
-                      )}
-                      </div>
+                    <td className="p-4 text-right">
+                       <div className="flex justify-end gap-1">
+                         {adv.status === 'Unpaid' && (
+                           <button 
+                             onClick={() => handleMarkDeducted(adv)} 
+                             title="Mark as Deducted"
+                             className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors flex items-center gap-1"
+                           >
+                             <CheckCircle2 size={15} />
+                           </button>
+                         )}
+                         <button 
+                            title="Edit Record"
+                            onClick={() => { setEditAdvance(adv); setEditRow({ date: adv.date || '', amount: String(adv.amount || ''), status: adv.status || 'Unpaid', notes: adv.notes || '' }); }} 
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                         >
+                            <Edit2 size={14} />
+                         </button>
+                       </div>
                     </td>
                   </tr>
                 );
               })}
 
-                {filtered.length === 0 && !isAdding && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-gray-400 text-sm font-semibold">
-                     No advances found matching your filters.
-                    </td>
-                  </tr>
-                )}
+              {!isLoading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-12 text-center text-gray-400 font-bold">
+                    No advances found matching your filter.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 18px', borderTop: '1.5px solid #f0f4f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafafa' }}>
-          <span style={{ fontSize: '12px', color: '#6b7a6b', fontWeight: 600 }}>
-            Showing <strong style={{ color: '#0d1f0d' }}>{filtered.length}</strong> records
+        <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+          <span className="text-xs font-bold text-gray-500">
+            Showing <strong className="text-gray-900">{filtered.length}</strong> records
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button style={pageBtn(false)}><ChevronLeft size={13} /></button>
-            <button style={pageBtn(true)}>1</button>
-            <button style={pageBtn(false)}><ChevronRight size={13} /></button>
+          <div className="flex gap-1">
+            <button className="p-1.5 rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50"><ChevronLeft size={14} /></button>
+            <button className="px-3 py-1 text-xs font-black rounded bg-gradient-to-br from-green-600 to-green-700 text-white">1</button>
+            <button className="p-1.5 rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50"><ChevronRight size={14} /></button>
           </div>
         </div>
       </div>
+      
+      {/* ── MODAL DIALOG OVERLAY: UPDATE ADVANCE ── */}
+      {editAdvance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-[1.5rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95">
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600">
+                  <Edit2 size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900">Edit Advance</h2>
+                  <p className="text-xs text-gray-400 font-medium">Modifying record #{editAdvance.id}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditAdvance(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <div className="space-y-6">
+                
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
+                    <input type="date" value={editRow.date} onChange={e => setEditRow(prev => ({ ...prev, date: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Amount (Rs.)</label>
+                    <input type="number" value={editRow.amount} onChange={e => setEditRow(prev => ({ ...prev, amount: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Status</label>
+                  <select value={editRow.status} onChange={e => setEditRow(prev => ({ ...prev, status: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
+                    <option value="Unpaid">Unpaid (Pending)</option>
+                    <option value="Deducted">Deducted (Settled)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Notes (Optional)</label>
+                  <textarea value={editRow.notes} onChange={e => setEditRow(prev => ({ ...prev, notes: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" rows={3}></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setEditAdvance(null)} className="px-5 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={handleUpdateAdvance} disabled={isSaving} className="bg-blue-600 px-6 py-2.5 text-sm shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5 rounded-xl text-white font-bold disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// ── Shared Inline Styles ──
-
-const thStyle = (align = 'left', width) => ({
-  padding: '10px 14px',
-  fontSize: '10.5px', fontWeight: 800,
-  color: '#6b7a6b', textTransform: 'uppercase', letterSpacing: '0.7px',
-  textAlign: align,
-  ...(width ? { width } : {}),
-});
-
-const tdStyle = (width) => ({
-  padding: '12px 14px',
-  verticalAlign: 'middle',
-  ...(width ? { width } : {}),
-});
-
-const inputStyle = {
-  padding: '6px 10px',
-  borderRadius: '6px',
-  border: '1.5px solid #d1d5db',
-  fontSize: '12px',
-  fontWeight: 600,
-  fontFamily: "'Nunito', sans-serif",
-  color: '#111827',
-  outline: 'none',
-  transition: 'border-color 0.2s',
-  width: '100%'
-};
-
-const pageBtn = (active) => ({
-  width: '28px', height: '28px', borderRadius: '7px',
-  border: active ? 'none' : '1.5px solid #e5e7eb',
-  background: active ? 'linear-gradient(135deg, #16a34a, #15803d)' : '#fff',
-  color: active ? '#fff' : '#6b7280',
-  fontSize: '12px', fontWeight: 800, cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  fontFamily: "'Nunito', sans-serif",
-  boxShadow: active ? '0 2px 8px rgba(22,163,74,0.3)' : 'none',
-});
