@@ -555,7 +555,7 @@ export const getPayrollPreview = async ({ startDate, endDate, farm }) => {
 
       grossPay: Number(row.gross ?? row.grossPay ?? 0),
       advanceDeducted: Number(
-        row.advanceDeduction ?? row.advance_deducted ?? 0,
+        row.advanceDeducted ?? row.advanceDeducted ?? 0,
       ),
       netPay: Number(row.netPay ?? row.net_pay ?? 0),
     }));
