@@ -14,24 +14,8 @@ const toNumber = (value) => Number(value ?? 0) || 0;
 
 const payrollPeriodLabel = (startDate, endDate) => `${startDate} to ${endDate}`;
 
-const normalizePreviewRow = (row) => ({
-  id: String(row.empId ?? row.employeeId ?? row.id ?? row.name ?? crypto.randomUUID()),
-  name: row.name ?? '',
-  role: row.role ?? '',
-  type: row.type ?? 'Daily',
-  wage: toNumber(row.wage),
-  fullDays: toNumber(row.fullDays),
-  halfDays: toNumber(row.halfDays),
-  absentDays: toNumber(row.absentDays),
-  daysWorked: row.daysWorked ?? (toNumber(row.fullDays) + (toNumber(row.halfDays) * 0.5)),
-  gross: toNumber(row.gross),
-  advanceDeduction: toNumber(row.advanceDeduction),
-  status: row.status ?? 'Draft',
-  netPay: row.netPay ?? Math.max(0, toNumber(row.gross) - toNumber(row.advanceDeduction)),
-});
-
 const normalizeHistoryRow = (row) => ({
-  id: String(row.id ?? crypto.randomUUID()),
+  id: String(row.id ?? `${Date.now()}-${Math.random()}`),
   period: row.period ?? '',
   farm: row.farm ?? '',
   employeeCount: toNumber(row.employeeCount),
@@ -64,7 +48,34 @@ const normalizeManagerSalaryRow = (row) => ({
   createdAt: row.createdAt ?? '',
 });
 
+const getSalaryWeek = () => {
+  const today = new Date();
+
+  // JS: Sunday=0, Monday=1 ... Thursday=4, Friday=5
+  const day = today.getDay();
+
+  let friday = new Date(today);
+  let thursday = new Date(today);
+
+  if (day >= 5) {
+    // Friday, Saturday
+    friday.setDate(today.getDate() - (day - 5));
+    thursday.setDate(friday.getDate() + 6);
+  } else {
+    // Sunday - Thursday
+    friday.setDate(today.getDate() - (day + 2));
+    thursday = new Date(friday);
+    thursday.setDate(friday.getDate() + 6);
+  }
+
+  return {
+    startDate: friday.toISOString().split('T')[0],
+    endDate: thursday.toISOString().split('T')[0],
+  };
+};
+
 export default function RunPayroll() {
+  const salaryWeek = getSalaryWeek();
   const [payrollData, setPayrollData] = useState([]);
   const [historyRows, setHistoryRows] = useState([]);
   const [search, setSearch] = useState('');
@@ -72,8 +83,8 @@ export default function RunPayroll() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [startDate, setStartDate] = useState('2026-05-18');
-  const [endDate, setEndDate] = useState('2026-05-24');
+  const [startDate, setStartDate] = useState(salaryWeek.startDate);
+  const [endDate, setEndDate] = useState(salaryWeek.endDate);
   const [farm, setFarm] = useState('MR1');
   const [managerYear, setManagerYear] = useState('2026');
   const [managerSalaries, setManagerSalaries] = useState([]);
@@ -86,6 +97,7 @@ export default function RunPayroll() {
   const [isManagerSaving, setIsManagerSaving] = useState(false);
   const toast = useToast();
 
+
   useEffect(() => {
     let active = true;
 
@@ -95,7 +107,7 @@ export default function RunPayroll() {
       try {
         const preview = await getPayrollPreview({ startDate, endDate, farm });
         if (!active) return;
-        setPayrollData(Array.isArray(preview) ? preview.map(normalizePreviewRow) : []);
+        setPayrollData(Array.isArray(preview) ? preview : []);
       } catch {
         if (active) {
           setError('Failed to load payroll preview.');
@@ -175,15 +187,31 @@ export default function RunPayroll() {
     return () => { active = false; };
   }, [startDate, farm]);
 
-  const filtered = useMemo(() => payrollData.filter(emp =>
-    !search || emp.name.toLowerCase().includes(search.toLowerCase()) || emp.role.toLowerCase().includes(search.toLowerCase())
-  ), [payrollData, search]);
+  const filtered = useMemo(() => {
+    return payrollData.filter(emp =>
+      !search ||
+      emp.name?.toLowerCase().includes(search.toLowerCase()) ||
+      emp.role?.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [payrollData, search]);
 
   // --- KPI Math ---
   // Net Pay = Gross - Advances
-  const totalGross = payrollData.reduce((sum, emp) => sum + emp.gross, 0);
-  const totalDeductions = payrollData.reduce((sum, emp) => sum + emp.advanceDeduction, 0);
-  const totalNetPayout = totalGross - totalDeductions;
+  const totalGross = payrollData.reduce(
+    (sum, emp) => sum + emp.grossPay,
+    0
+  );
+
+  const totalDeductions = payrollData.reduce(
+    (sum, emp) => sum + emp.advanceDeducted,
+    0
+  );
+
+  const totalNetPayout = payrollData.reduce(
+    (sum, emp) => sum + emp.netPay,
+    0
+  );
+
 
   // --- Action Handler ---
   const handleFinalizePayroll = async () => {
@@ -203,9 +231,9 @@ export default function RunPayroll() {
       farm,
       employeePayouts: payrollData.map(emp => ({
         empId: Number(emp.id),
-        grossPay: toNumber(emp.gross),
-        advanceDeducted: toNumber(emp.advanceDeduction),
-        netPay: toNumber(emp.netPay ?? emp.gross - emp.advanceDeduction),
+        grossPay: emp.grossPay,
+        advanceDeducted: emp.advanceDeducted,
+        netPay: emp.netPay,
       })),
     };
 
@@ -281,22 +309,25 @@ export default function RunPayroll() {
   };
 
   const handleExportCsv = () => {
-    downloadCsv(`payroll-${farm}-${startDate}-to-${endDate}.csv`, [
-      { label: 'Employee', value: (row) => row.name || '' },
-      { label: 'Role', value: (row) => row.role || '' },
-      { label: 'Type', value: (row) => row.type || '' },
-      { label: 'Base Rate', value: (row) => Number(row.wage || 0).toFixed(2) },
-      { label: 'Days Worked', value: (row) => row.daysWorked ?? 0 },
-      { label: 'Gross Earnings', value: (row) => Number(row.gross || 0).toFixed(2) },
-      { label: 'Advances Deducted', value: (row) => Number(row.advanceDeduction || 0).toFixed(2) },
-      { label: 'Net Payable', value: (row) => Number(row.netPay ?? ((row.gross || 0) - (row.advanceDeduction || 0)) || 0).toFixed(2) },
-      { label: 'Status', value: (row) => row.status || '' },
-    ], filtered);
+    downloadCsv(
+      `payroll-${farm}-${startDate}-to-${endDate}.csv`,
+      [
+        { label: 'Employee', value: row => row.name },
+        { label: 'Wage / Day', value: row => row.wagePerDay.toFixed(2) },
+        { label: 'Full Days', value: row => row.fullDays },
+        { label: 'Half Days', value: row => row.halfDays },
+        { label: 'Absent Days', value: row => row.absentDays },
+        { label: 'Gross Pay', value: row => row.grossPay.toFixed(2) },
+        { label: 'Advance', value: row => row.advanceDeducted.toFixed(2) },
+        { label: 'Net Pay', value: row => row.netPay.toFixed(2) },
+      ],
+      filtered
+    );
   };
 
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
-      
+
       {/* ── PAGE HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
         <div>
@@ -328,7 +359,7 @@ export default function RunPayroll() {
             <Download size={14} /> Export Payslips
           </button>
           {!isFinalized && (
-            <button 
+            <button
               onClick={handleFinalizePayroll}
               disabled={isSaving || isLoading}
               className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
@@ -346,8 +377,10 @@ export default function RunPayroll() {
       )}
 
       {isLoading && (
-        <div className="mb-6 p-4 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-semibold shadow-sm">
-          Loading payroll preview...
+        <div className="animate-pulse space-y-3">
+          <div className="h-10 bg-gray-100 rounded"></div>
+          <div className="h-10 bg-gray-100 rounded"></div>
+          <div className="h-10 bg-gray-100 rounded"></div>
         </div>
       )}
 
@@ -380,36 +413,36 @@ export default function RunPayroll() {
           }
         ].map((card, i) => {
           const gradId = `grad-pay-${i}`;
-          const chartColor = "#A5D6A7"; 
+          const chartColor = "#A5D6A7";
 
           return (
             <div key={i} className="relative overflow-hidden rounded-[1.25rem] p-4 bg-gradient-to-br from-[#166534] to-[#14532d] text-white shadow-lg shadow-green-900/20 group border border-green-800/50 transition-all hover:shadow-green-900/40 hover:-translate-y-1">
               <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white transition-opacity duration-500 group-hover:opacity-40"></div>
               <div className="flex justify-between items-center relative z-10 mb-1">
-                 <span className="text-sm font-medium text-white/80">{card.title}</span>
+                <span className="text-sm font-medium text-white/80">{card.title}</span>
               </div>
               <h3 className="text-2xl font-bold font-heading relative z-10 mb-3 tracking-tight truncate">
                 {card.amount}
               </h3>
               <div className="flex items-center gap-2 relative z-10">
-                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 text-white backdrop-blur-md">
-                    {card.icon}
-                    <span>{card.badge}</span>
-                 </div>
-                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 truncate">
-                    {card.sub}
-                 </span>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 text-white backdrop-blur-md">
+                  {card.icon}
+                  <span>{card.badge}</span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 truncate">
+                  {card.sub}
+                </span>
               </div>
               <div className="absolute bottom-0 left-0 w-full h-[45%] opacity-60 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                  <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
-                     <defs>
-                        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor={chartColor} stopOpacity="0.4" />
-                           <stop offset="100%" stopColor={chartColor} stopOpacity="0.0" />
-                        </linearGradient>
-                     </defs>
-                     <path d={card.path} fill={`url(#${gradId})`} stroke={chartColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-                  </svg>
+                <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
+                  <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={chartColor} stopOpacity="0.4" />
+                      <stop offset="100%" stopColor={chartColor} stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  <path d={card.path} fill={`url(#${gradId})`} stroke={chartColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                </svg>
               </div>
             </div>
           );
@@ -421,16 +454,16 @@ export default function RunPayroll() {
 
         {/* Toolbar */}
         <div style={{ padding: '14px 18px', borderBottom: '1.5px solid #f0f4f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          
+
           <div className="flex items-center gap-3">
-             <div className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs font-bold shadow-sm">
-                Period: May 18 - May 24, 2026
-             </div>
-             {isFinalized && (
-                <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg text-xs font-bold flex items-center gap-1">
-                   <CheckCircle2 size={14} /> Payroll Finalized
-                </div>
-             )}
+            <div className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs font-bold shadow-sm">
+              Period: {startDate} - {endDate}
+            </div>
+            {isFinalized && (
+              <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg text-xs font-bold flex items-center gap-1">
+                <CheckCircle2 size={14} /> Payroll Finalized
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -468,78 +501,66 @@ export default function RunPayroll() {
           <table style={{ width: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#fafafa', borderBottom: '1.5px solid #f0f4f0' }}>
-                {['Employee', 'Base Rate', 'Days Worked', 'Gross Earnings', 'Advances Deducted', 'Net Payable', 'Status'].map((h, i) => (
+                {['Employee', 'Wage / Day', 'Full Days', 'Half Days', 'Absent Days', 'Gross Pay', 'Advance', 'Net Pay'].map((h, i) => (
                   <th key={h} style={thStyle(i >= 3 && i <= 5 ? 'right' : 'left')}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map((emp, idx) => {
-                const netPay = emp.netPay ?? (emp.gross - emp.advanceDeduction);
-                
+                const netPay =
+                  emp.netPay ??
+                  (emp.grossPay - emp.advanceDeducted);
+
                 return (
-                  <tr key={emp.id} style={{
-                    borderBottom: '1px solid #f3f4f6',
-                    background: idx % 2 === 0 ? '#fff' : '#fafafa',
-                    transition: 'background 0.15s',
-                  }}
-                    onMouseOver={e => { e.currentTarget.style.background = '#f8fff8'; }}
-                    onMouseOut={e => { e.currentTarget.style.background = idx % 2 === 0 ? '#fff' : '#fafafa'; }}
-                  >
-                    {/* Employee Identity */}
+                  <tr key={emp.id}>
                     <td style={tdStyle()}>
                       <div className="flex items-center gap-3">
-                         <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs border border-green-200">
-                            {emp.name.substring(0, 2).toUpperCase()}
-                         </div>
-                         <div className="flex flex-col">
-                            <span style={{ fontWeight: 800, color: '#0d1f0d', fontSize: '13px' }}>{emp.name}</span>
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: 600 }}>{emp.role}</span>
-                         </div>
+                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">
+                          {emp.name.substring(0, 2).toUpperCase()}
+                        </div>
+
+                        <span className="font-bold">
+                          {emp.name}
+                        </span>
                       </div>
                     </td>
 
-                    {/* Base Rate */}
                     <td style={tdStyle()}>
-                      <span style={{ color: '#475569', fontWeight: 600 }}>Rs. {fmt(emp.wage)}</span>
-                      <span className="text-[10px] text-gray-400 ml-1">/{emp.type === 'Daily' ? 'Day' : 'Mo'}</span>
+                      Rs. {fmt(emp.wagePerDay)}
                     </td>
 
-                    {/* Days Worked */}
                     <td style={tdStyle()}>
-                      <span className={`inline-flex items-center justify-center min-w-[32px] px-2 py-1 rounded-md text-xs font-bold ${emp.daysWorked === 'N/A' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                         {typeof emp.daysWorked === 'number' ? emp.daysWorked.toFixed(1).replace(/\.0$/, '') : emp.daysWorked}
-                      </span>
+                      {emp.fullDays}
                     </td>
 
-                    {/* Gross Earnings */}
-                    <td style={{ ...tdStyle(), textAlign: 'right' }}>
-                       <span style={{ color: '#1f2937', fontWeight: 700 }}>Rs. {fmt(emp.gross)}</span>
-                    </td>
-
-                    {/* Advance Deductions */}
-                    <td style={{ ...tdStyle(), textAlign: 'right' }}>
-                      {emp.advanceDeduction > 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-50 text-red-600 font-bold text-xs border border-red-100">
-                           - Rs. {fmt(emp.advanceDeduction)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 font-medium text-xs">Rs. 0.00</span>
-                      )}
-                    </td>
-
-                    {/* Net Payable */}
-                    <td style={{ ...tdStyle(), textAlign: 'right' }}>
-                       <span style={{ color: '#0d3320', fontWeight: 900, fontSize: '14px' }}>Rs. {fmt(netPay)}</span>
-                    </td>
-
-                      {/* Status */}
                     <td style={tdStyle()}>
-                      {emp.status === 'Draft' ? (
-                         <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">Review</span>
-                      ) : (
-                         <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">Paid</span>
-                      )}
+                      {emp.halfDays}
+                    </td>
+
+                    <td style={tdStyle()}>
+                      {emp.absentDays}
+                    </td>
+
+                    <td style={{ ...tdStyle(), textAlign: 'right' }}>
+                      Rs. {fmt(emp.grossPay)}
+                    </td>
+
+                    <td style={{ ...tdStyle(), textAlign: 'right' }}>
+                      {emp.advanceDeducted > 0
+                        ? `Rs. ${fmt(emp.advanceDeducted)}`
+                        : '-'}
+                    </td>
+
+                    <td
+                      style={{
+                        ...tdStyle(),
+                        textAlign: 'right',
+                        fontWeight: 900,
+                        color: '#166534',
+                      }}
+                    >
+                      Rs. {fmt(emp.netPay)}
                     </td>
                   </tr>
                 );
@@ -692,14 +713,14 @@ export default function RunPayroll() {
                 </label>
                 <label className="grid gap-1 text-xs font-bold text-gray-600">
                   Amount
-                  <input type="number" value={managerRow.amount} onChange={e => setManagerRow(prev => ({ ...prev, amount: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
+                  <input type="number" value={managerRow.amount} onChange={e => setManagerRow(prev => ({ ...prev, amount: Number(e.target.value) }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
                 </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="grid gap-1 text-xs font-bold text-gray-600">
                   Month
-                  <select value={managerRow.month} onChange={e => setManagerRow(prev => ({ ...prev, month: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800">
+                  <select value={managerRow.month} onChange={e => setManagerRow(prev => ({ ...prev, month: Number(e.target.value) }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800">
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                       <option key={month} value={month}>{monthLabel(month)}</option>
                     ))}
@@ -707,7 +728,7 @@ export default function RunPayroll() {
                 </label>
                 <label className="grid gap-1 text-xs font-bold text-gray-600">
                   Year
-                  <input type="number" value={managerRow.year} onChange={e => setManagerRow(prev => ({ ...prev, year: e.target.value }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
+                  <input type="number" value={managerRow.year} onChange={e => setManagerRow(prev => ({ ...prev, year: Number(e.target.value) }))} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800" />
                 </label>
               </div>
 
