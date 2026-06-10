@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // Import API services
-import { getCoconutSales, createCoconutSale, updateCoconutSale, deleteCoconutSale } from '../services/api';
+import { getCoconutSales, createCoconutSale, updateCoconutSale, deleteCoconutSale, createHarvestExpense } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 import { downloadCsv } from '../utils/csv';
 
@@ -29,10 +29,15 @@ const emptySaleForm = () => ({
   farm: 'MR1',
   qty1: '',
   rate1: '',
-  disc1: '',
+  free_qty1: '', // Replaced disc1
   qty2: '',
   rate2: '',
-  disc2: '',
+  free_qty2: '', // Replaced disc2
+  // --- New Harvest Expense Fields ---
+  mainLabor: '',
+  collectors: '',
+  tractorDriver: '',
+  foodExpenses: '',
 });
 
 const saleToForm = (sale) => ({
@@ -40,10 +45,12 @@ const saleToForm = (sale) => ({
   farm: sale?.farm || 'MR1',
   qty1: sale?.qty1 ?? '',
   rate1: sale?.rate1 ?? '',
-  disc1: sale?.disc1 ?? '',
+  free_qty1: sale?.free_qty1 ?? '',
   qty2: sale?.qty2 ?? '',
   rate2: sale?.rate2 ?? '',
-  disc2: sale?.disc2 ?? '',
+  free_qty2: sale?.free_qty2 ?? '',
+  // Expenses aren't loaded into the edit form by default unless you fetch them, 
+  // so we leave them blank for existing records to prevent overwriting.
 });
 
 export default function CoconutSales() {
@@ -51,7 +58,7 @@ export default function CoconutSales() {
   const [sales, setSales] = useState([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState([]);
-  
+
   // API States
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -68,14 +75,10 @@ export default function CoconutSales() {
   const calcNet = (row) => {
     const q1 = parseFloat(row.qty1) || 0;
     const r1 = parseFloat(row.rate1) || 0;
-    const d1 = parseFloat(row.disc1) || 0;
     const q2 = parseFloat(row.qty2) || 0;
     const r2 = parseFloat(row.rate2) || 0;
-    const d2 = parseFloat(row.disc2) || 0; 
-    
-    const sub1 = Math.max(0, (q1 - d1)) * r1;
-    const sub2 = Math.max(0, (q2 - d2)) * r2;
-    return sub1 + sub2;
+
+    return (q1 * r1) + (q2 * r2);
   };
 
   // --- Fetch Data ---
@@ -134,6 +137,11 @@ export default function CoconutSales() {
     setIsSaving(false);
   };
 
+  const cancelAdd = () => {
+    setIsAdding(false);
+    setNewRow(emptySaleForm());
+  }
+
   // --- API Actions ---
   const handleSaveRow = async () => {
     if (!newRow.qty1 || !newRow.rate1) {
@@ -143,27 +151,46 @@ export default function CoconutSales() {
 
     setIsSaving(true);
     try {
-      const payload = {
+      // 1. Create the Sale
+      const salePayload = {
         date: newRow.date,
-        farm: farmFilter,
+        farm: farmFilter, // Or newRow.farm depending on your UI layout
         qty1: parseFloat(newRow.qty1) || 0,
         rate1: parseFloat(newRow.rate1) || 0,
-        disc1: parseFloat(newRow.disc1) || 0,
+        free_qty1: parseFloat(newRow.free_qty1) || 0,
         qty2: parseFloat(newRow.qty2) || 0,
         rate2: parseFloat(newRow.rate2) || 0,
-        disc2: parseFloat(newRow.disc2) || 0,
+        free_qty2: parseFloat(newRow.free_qty2) || 0,
       };
 
-      const savedRecord = await createCoconutSale(payload);
-      const completeRecord = normalizeSaleRecord(savedRecord, payload);
-      completeRecord.total = completeRecord.total || calcNet(payload);
+      const savedRecord = await createCoconutSale(salePayload);
+
+      // 2. Check if any expenses were entered, if so, create the expense record
+      const hasExpenses = newRow.mainLabor || newRow.collectors || newRow.tractorDriver || newRow.foodExpenses;
+
+      if (hasExpenses) {
+        const expensePayload = {
+          date: newRow.date,
+          farm: farmFilter,
+          mainLabor: parseFloat(newRow.mainLabor) || 0,
+          collectors: parseFloat(newRow.collectors) || 0,
+          tractorDriver: parseFloat(newRow.tractorDriver) || 0,
+          foodExpenses: parseFloat(newRow.foodExpenses) || 0,
+          notes: "Linked to Coconut Sale"
+        };
+        await createHarvestExpense(expensePayload);
+      }
+
+      // 3. Update the local UI state
+      const completeRecord = normalizeSaleRecord(savedRecord, salePayload);
+      completeRecord.total = calcNet(salePayload);
 
       setSales(prev => [completeRecord, ...prev]);
       setIsAdding(false);
       setNewRow(emptySaleForm());
-      toast.success("Sales record added successfully.");
+      toast.success(hasExpenses ? "Sale and Expenses saved successfully." : "Sale saved successfully.");
     } catch {
-      toast.error("Failed to save record to database.");
+      toast.error("Failed to save records to database.");
     } finally {
       setIsSaving(false);
     }
@@ -183,10 +210,10 @@ export default function CoconutSales() {
         farm: editRow.farm,
         qty1: parseFloat(editRow.qty1) || 0,
         rate1: parseFloat(editRow.rate1) || 0,
-        disc1: parseFloat(editRow.disc1) || 0,
+        free_qty1: parseFloat(editRow.free_qty1) || 0,
         qty2: parseFloat(editRow.qty2) || 0,
         rate2: parseFloat(editRow.rate2) || 0,
-        disc2: parseFloat(editRow.disc2) || 0,
+        free_qty2: parseFloat(editRow.free_qty2) || 0,
       };
 
       const updatedRecord = normalizeSaleRecord(await updateCoconutSale(editSale.id, payload), {
@@ -205,7 +232,7 @@ export default function CoconutSales() {
   };
 
   const handleDelete = async (id) => {
-    if(window.confirm("Are you sure you want to delete this record?")) {
+    if (window.confirm("Are you sure you want to delete this record?")) {
       try {
         await deleteCoconutSale(id);
         setSales(prev => prev.filter(s => s.id !== id));
@@ -232,7 +259,7 @@ export default function CoconutSales() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito'] pb-10">
-      
+
       {/* ── PAGE HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-4">
         <div>
@@ -306,30 +333,30 @@ export default function CoconutSales() {
             <div key={i} className="relative overflow-hidden rounded-[1.25rem] p-4 bg-gradient-to-br from-green-700 to-green-800 text-white shadow-lg shadow-green-900/20 group border border-green-800/50 transition-all hover:shadow-green-900/40 hover:-translate-y-1 h-28">
               <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-[45px] opacity-20 bg-white transition-opacity duration-500 group-hover:opacity-40"></div>
               <div className="flex justify-between items-center relative z-10 mb-1">
-                 <span className="text-sm font-medium text-white/80">{card.title}</span>
+                <span className="text-sm font-medium text-white/80">{card.title}</span>
               </div>
               <h3 className="text-2xl font-bold font-heading relative z-10 mb-3 tracking-tight truncate">
                 {card.amount}
               </h3>
               <div className="flex items-center gap-2 relative z-10">
-                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 text-white backdrop-blur-md">
-                    {card.icon}
-                    <span>{card.badge}</span>
-                 </div>
-                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 truncate">
-                    {card.sub}
-                 </span>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 text-white backdrop-blur-md">
+                  {card.icon}
+                  <span>{card.badge}</span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 truncate">
+                  {card.sub}
+                </span>
               </div>
               <div className="absolute bottom-0 left-0 w-full h-[45%] opacity-60 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                  <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
-                     <defs>
-                        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor={card.chartColor} stopOpacity="0.4" />
-                           <stop offset="100%" stopColor={card.chartColor} stopOpacity="0.0" />
-                        </linearGradient>
-                     </defs>
-                     <path d={card.path} fill={`url(#${gradId})`} stroke={card.chartColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-                  </svg>
+                <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
+                  <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={card.chartColor} stopOpacity="0.4" />
+                      <stop offset="100%" stopColor={card.chartColor} stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  <path d={card.path} fill={`url(#${gradId})`} stroke={card.chartColor} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                </svg>
               </div>
             </div>
           );
@@ -341,11 +368,11 @@ export default function CoconutSales() {
         <div className="bg-gradient-to-b from-green-50 to-white border border-green-200 rounded-xl p-6 shadow-md mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center mb-5 border-b border-green-100 pb-3">
             <h3 className="text-lg font-black text-green-900 flex items-center gap-2">
-              <Sprout size={18} className="text-green-600"/> Record Harvest Yield Distribution
+              <Sprout size={18} className="text-green-600" /> Record Harvest Yield Distribution
             </h3>
             <button onClick={cancelAdd} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm border border-gray-200"><X size={18} /></button>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
             <div className="md:col-span-4">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Date of Sale</label>
@@ -357,7 +384,7 @@ export default function CoconutSales() {
             <div className="md:col-span-12 p-4 rounded-xl border border-green-100 bg-green-50/20 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-12 font-bold text-sm text-green-800">1st Quality Grade</div>
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 mb-1">Quantity (Nuts)</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1">Paid Qty (Nuts)</label>
                 <input type="number" name="qty1" placeholder="0" value={newRow.qty1} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold" disabled={isSaving} />
               </div>
               <div>
@@ -365,16 +392,16 @@ export default function CoconutSales() {
                 <input type="number" name="rate1" placeholder="0.00" value={newRow.rate1} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold" disabled={isSaving} />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-red-600 mb-1">Discount Qty (-)</label>
-                <input type="number" name="disc1" placeholder="0" value={newRow.disc1} onChange={handleRowChange} className="w-full p-2.5 text-sm border border-red-200 bg-red-50/50 rounded-lg outline-none focus:border-red-500 font-bold text-red-700" disabled={isSaving} />
+                <label className="block text-[11px] font-bold text-blue-600 mb-1">Free Coconuts (+)</label>
+                <input type="number" name="free_qty1" placeholder="0" value={newRow.free_qty1} onChange={handleRowChange} className="w-full p-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg outline-none focus:border-blue-500 font-bold text-blue-700" disabled={isSaving} />
               </div>
             </div>
 
-            {/* 2nd Quality Section with missing Discount included */}
+            {/* 2nd Quality Section */}
             <div className="md:col-span-12 p-4 rounded-xl border border-gray-200 bg-gray-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-12 font-bold text-sm text-gray-800">2nd Quality Grade</div>
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 mb-1">Quantity (Nuts)</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1">Paid Qty (Nuts)</label>
                 <input type="number" name="qty2" placeholder="0" value={newRow.qty2} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold" disabled={isSaving} />
               </div>
               <div>
@@ -382,9 +409,37 @@ export default function CoconutSales() {
                 <input type="number" name="rate2" placeholder="0.00" value={newRow.rate2} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold" disabled={isSaving} />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-red-600 mb-1">Discount Qty (-)</label>
-                <input type="number" name="disc2" placeholder="0" value={newRow.disc2} onChange={handleRowChange} className="w-full p-2.5 text-sm border border-red-200 bg-red-50/50 rounded-lg outline-none focus:border-red-500 font-bold text-red-700" disabled={isSaving} />
+                <label className="block text-[11px] font-bold text-blue-600 mb-1">Free Coconuts (+)</label>
+                <input type="number" name="free_qty2" placeholder="0" value={newRow.free_qty2} onChange={handleRowChange} className="w-full p-2.5 text-sm border border-blue-200 bg-blue-50/50 rounded-lg outline-none focus:border-blue-500 font-bold text-blue-700" disabled={isSaving} />
               </div>
+            </div>
+
+            {/* LINKED HARVEST EXPENSES */}
+            <div className="md:col-span-12 mt-2">
+              <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <Leaf size={16} className="text-green-600" /> Linked Harvest Expenses
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Main Labor</label>
+                  <input type="number" name="mainLabor" value={newRow.mainLabor} onChange={handleRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-bold focus:border-green-500 outline-none" disabled={isSaving} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Collectors</label>
+                  <input type="number" name="collectors" value={newRow.collectors} onChange={handleRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-bold focus:border-green-500 outline-none" disabled={isSaving} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Tractor Driver</label>
+                  <input type="number" name="tractorDriver" value={newRow.tractorDriver} onChange={handleRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-bold focus:border-green-500 outline-none" disabled={isSaving} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Food Expenses</label>
+                  <input type="number" name="foodExpenses" value={newRow.foodExpenses} onChange={handleRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-bold focus:border-green-500 outline-none" disabled={isSaving} />
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-2 font-medium italic">
+                * Entering expenses here will automatically log them into the General Expenses ledger for {farmFilter}.
+              </p>
             </div>
           </div>
 
@@ -405,12 +460,12 @@ export default function CoconutSales() {
 
       {/* ── MAIN LEDGER CONTAINER ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        
+
         {/* Table Filters Toolbar */}
         <div className="p-4 border-b border-gray-100 display flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50">
           <div className="flex bg-gray-200/60 p-1 rounded-xl gap-1">
             {['MR1', 'MR2'].map(f => (
-              <button key={f} onClick={() => { setIsLoading(true); setError(null); setFarmFilter(f); setIsAdding(false); }} 
+              <button key={f} onClick={() => { setIsLoading(true); setError(null); setFarmFilter(f); setIsAdding(false); }}
                 className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${farmFilter === f ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
                 {f} Yields
               </button>
@@ -441,22 +496,22 @@ export default function CoconutSales() {
                 </th>
                 <th className="p-4 text-left">Harvest Date</th>
                 <th className="p-4 text-left">1st Quality (Nuts)</th>
-                <th className="p-4 text-left">1st Rate / Disc</th>
+                <th className="p-4 text-left">1st Rate / Free</th>
                 <th className="p-4 text-left">2nd Quality (Nuts)</th>
-                <th className="p-4 text-left">2nd Rate / Disc</th>
+                <th className="p-4 text-left">2nd Rate / Free</th>
                 <th className="p-4 text-right">Invoice Total</th>
                 <th className="p-4 text-right w-24"></th>
               </tr>
             </thead>
             <tbody>
-              
+
               {isLoading && (
-                 <tr>
-                    <td colSpan={8} className="p-20 text-center text-green-600">
-                       <Loader2 size={24} className="animate-spin mx-auto mb-2" />
-                       <span className="text-xs font-bold">Querying {farmFilter} Block Sales Data...</span>
-                    </td>
-                 </tr>
+                <tr>
+                  <td colSpan={8} className="p-20 text-center text-green-600">
+                    <Loader2 size={24} className="animate-spin mx-auto mb-2" />
+                    <span className="text-xs font-bold">Querying {farmFilter} Block Sales Data...</span>
+                  </td>
+                </tr>
               )}
 
               {!isLoading && filtered.map((sale, idx) => {
@@ -475,12 +530,12 @@ export default function CoconutSales() {
                     <td className="p-4 font-bold text-gray-900">
                       {Number(sale.qty1 || 0).toLocaleString()}
                     </td>
-                    
+
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-700 font-medium">Rs. {sale.rate1 || '—'}</span>
-                        {Number(sale.disc1 || 0) > 0 && (
-                          <span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 py-0.5 text-[10px] font-black">−{sale.disc1}</span>
+                        {Number(sale.free_qty1 || 0) > 0 && (
+                          <span className="bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 text-[10px] font-black">+{sale.free_qty1} Free</span>
                         )}
                       </div>
                     </td>
@@ -488,25 +543,25 @@ export default function CoconutSales() {
                     <td className="p-4 font-bold text-gray-600">
                       {Number(sale.qty2 || 0) > 0 ? Number(sale.qty2).toLocaleString() : <span className="text-gray-300">—</span>}
                     </td>
-                    
+
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-600 font-medium">{Number(sale.rate2 || 0) > 0 ? `Rs. ${sale.rate2}` : <span className="text-gray-300">—</span>}</span>
-                        {Number(sale.disc2 || 0) > 0 && (
-                          <span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 py-0.5 text-[10px] font-black">−{sale.disc2}</span>
+                        {Number(sale.free_qty2 || 0) > 0 && (
+                          <span className="bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 text-[10px] font-black">+{sale.free_qty2} Free</span>
                         )}
                       </div>
                     </td>
-                    
+
                     <td className="p-4 text-right font-black text-gray-900 text-base">
                       Rs. {fmt(sale.total || calcNet(sale))}
                     </td>
 
                     <td className="p-4 text-right">
-                       <div className="flex justify-end gap-1">
-                         <button onClick={() => openEditSale(sale)} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"><Edit2 size={13} /></button>
-                         <button onClick={() => handleDelete(sale.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={13} /></button>
-                       </div>
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => openEditSale(sale)} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"><Edit2 size={13} /></button>
+                        <button onClick={() => handleDelete(sale.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={13} /></button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -573,7 +628,7 @@ export default function CoconutSales() {
                 <h3 className="text-sm font-black text-green-800">1st Quality Yield</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Quantity</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Paid Qty</label>
                     <input type="number" name="qty1" value={editRow.qty1} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
                   </div>
                   <div>
@@ -581,8 +636,8 @@ export default function CoconutSales() {
                     <input type="number" name="rate1" value={editRow.rate1} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-red-600 mb-1">Discount Qty (-)</label>
-                    <input type="number" name="disc1" value={editRow.disc1} onChange={handleEditRowChange} className="w-full border border-red-200 bg-red-50 text-sm font-bold focus:border-red-500 focus:outline-none text-red-700" />
+                    <label className="block text-xs font-bold text-blue-600 mb-1">Free Coconuts (+)</label>
+                    <input type="number" name="free_qty1" value={editRow.free_qty1} onChange={handleEditRowChange} className="w-full border border-blue-200 bg-blue-50 text-sm font-bold focus:border-blue-500 focus:outline-none text-blue-700" />
                   </div>
                 </div>
               </div>
@@ -592,7 +647,7 @@ export default function CoconutSales() {
                 <h3 className="text-sm font-black text-gray-800">2nd Quality Yield</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Quantity</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Paid Qty</label>
                     <input type="number" name="qty2" value={editRow.qty2} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
                   </div>
                   <div>
@@ -600,8 +655,8 @@ export default function CoconutSales() {
                     <input type="number" name="rate2" value={editRow.rate2} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-red-600 mb-1">Discount Qty (-)</label>
-                    <input type="number" name="disc2" value={editRow.disc2} onChange={handleEditRowChange} className="w-full border border-red-200 bg-red-50 text-sm font-bold focus:border-red-500 focus:outline-none text-red-700" />
+                    <label className="block text-xs font-bold text-blue-600 mb-1">Free Coconuts (+)</label>
+                    <input type="number" name="free_qty2" value={editRow.free_qty2} onChange={handleEditRowChange} className="w-full border border-blue-200 bg-blue-50 text-sm font-bold focus:border-blue-500 focus:outline-none text-blue-700" />
                   </div>
                 </div>
               </div>
