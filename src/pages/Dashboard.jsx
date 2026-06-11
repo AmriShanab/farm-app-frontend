@@ -97,14 +97,13 @@ export default function Dashboard() {
                setCurrentMonth(new Date(period.year, period.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }));
             }
 
-            const income = summaryPayload?.income || {};
-            const expenses = summaryPayload?.expenses || {};
+            const salaries = summaryPayload?.salaries || {};
 
             setKpiData({
-               totalIncome: asNumber(income.total),
-               totalExpenses: asNumber(expenses.total),
-               payrollCost: asNumber(expenses.payroll) + asNumber(expenses.managerSalary),
-               netProfit: asNumber(summaryPayload?.netProfit)
+               totalIncome: asNumber(summaryPayload?.totalIncome),
+               totalExpenses: asNumber(summaryPayload?.totalExpenses),
+               payrollCost: asNumber(salaries.total),
+               netProfit: asNumber(summaryPayload?.netProfit),
             });
 
             // Ensure recentData is an array before setting
@@ -219,7 +218,7 @@ export default function Dashboard() {
                         <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Payroll</span>
                      </div>
                      <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Payroll + Manager Salary</p>
-                     <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.managerSalary)}</h3>
+                     <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.payrollCost)}</h3>
                   </div>
                </div>
 
