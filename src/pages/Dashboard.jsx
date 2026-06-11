@@ -219,7 +219,7 @@ export default function Dashboard() {
                         <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/20 uppercase tracking-wider backdrop-blur-md">Payroll</span>
                      </div>
                      <p className="text-white/80 text-sm font-medium mb-1 relative z-10">Payroll + Manager Salary</p>
-                     <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.payrollCost)}</h3>
+                     <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.managerSalary)}</h3>
                   </div>
                </div>
 
