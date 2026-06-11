@@ -16,6 +16,7 @@ import FertilizerManagement from './pages/Fertilizer';
 import FinanceManagement from './pages/Finance';
 import AssetManagement from './pages/Assets';
 import GeneralExpenses from './pages/GeneralExpenses';
+import MonthlyBreakdown from './pages/MonthlyBreakdown';
 import { getStoredAuth } from './services/api';
 
 const ProtectedRoute = ({ children }) => {
@@ -51,6 +52,7 @@ function App() {
             <Route path="coconuts" element={<CoconutSales />} />
             <Route path="cashews" element={<CashewSales />} />
             <Route path="other" element={<OtherIncomes />} />
+            
           </Route>
 
           <Route path="payroll">
@@ -65,6 +67,7 @@ function App() {
           <Route path="poultry" element={<PoultryManagement />} />
           <Route path="finances" element={<FinanceManagement />} />
           <Route path="assets" element={<AssetManagement />} />
+          <Route path="breakdown" element={<MonthlyBreakdown />} />
         </Route>
       </Routes>
     </BrowserRouter>

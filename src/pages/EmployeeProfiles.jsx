@@ -3,7 +3,7 @@ import {
   Search, Download,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Users, UserPlus, MapPin, Briefcase, Check, X, Edit2, ArrowUpRight,
-  Loader2, AlertCircle, Trash2, Save
+  Loader2, AlertCircle, Trash2, Save, CalendarClock
 } from 'lucide-react';
 
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../services/api';
@@ -22,15 +22,17 @@ export default function EmployeeProfiles() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- UI States ---
+  // --- UI States (UPDATED FOR NEW SCHEMA) ---
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newRow, setNewRow] = useState({
-    name: '', role: '', farm: 'MR1', type: 'daily', wage: ''
+    name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: ''
   });
 
   const [editEmployee, setEditEmployee] = useState(null);
-  const [editRow, setEditRow] = useState({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+  const [editRow, setEditRow] = useState({ 
+    name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' 
+  });
   const toast = useToast();
 
   // --- Fetch Data ---
@@ -41,7 +43,7 @@ export default function EmployeeProfiles() {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await getEmployees(farmFilter);
+        const data = await getEmployees(farmFilter === 'All' ? null : farmFilter);
         if (!isActive) return;
         setEmployees(data);
       } catch {
@@ -62,7 +64,7 @@ export default function EmployeeProfiles() {
   // KPIs
   const totalHeadcount = employees.length;
   const mr1Count = employees.filter(e => e.farm === 'MR1').length;
-  const mr2Count = employees.filter(e => e.farm === 'MR2').length;
+  const poultryCount = employees.filter(e => e.farm === 'Poultry').length;
 
   const toggleSelect = (id) => setSelected(sel => sel.includes(id) ? sel.filter(i => i !== id) : [...sel, id]);
   const toggleAll = () => setSelected(sel => sel.length === filtered.length ? [] : filtered.map(s => s.id));
@@ -72,9 +74,9 @@ export default function EmployeeProfiles() {
     const { name, value } = e.target;
     setNewRow(prev => {
       const updated = { ...prev, [name]: value };
-      // Auto-switch to Fixed salary if role is Manager
       if (name === 'role' && value.toLowerCase().includes('manager')) {
         updated.type = 'fixed';
+        updated.payFrequency = 'monthly'; // Managers are usually monthly
       }
       return updated;
     });
@@ -86,6 +88,7 @@ export default function EmployeeProfiles() {
       const updated = { ...prev, [name]: value };
       if (name === 'role' && value.toLowerCase().includes('manager')) {
         updated.type = 'fixed';
+        updated.payFrequency = 'monthly';
       }
       return updated;
     });
@@ -96,18 +99,20 @@ export default function EmployeeProfiles() {
     setEditRow({
       name: emp.name || '',
       role: emp.role || '',
-      farm: emp.farm || 'MR1', // Fallback safely to MR1
+      farm: emp.farm || 'MR1', 
       type: emp.type || 'daily',
+      payFrequency: emp.pay_frequency || emp.payFrequency || 'weekly', // Map new DB field
       wage: emp.wage_per_day || emp.wagePerDay || ''
     });
   };
 
   const closeEditEmployee = () => {
     setEditEmployee(null);
-    setEditRow({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+    setEditRow({ name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' });
     setIsSaving(false);
   };
 
+  // (UPDATED FOR NEW SCHEMA)
   const handleUpdateEmployee = async () => {
     if (!editEmployee?.id) return;
     if (!editRow.name || !editRow.role || !editRow.wage) {
@@ -120,8 +125,9 @@ export default function EmployeeProfiles() {
       const payload = {
         name: editRow.name,
         role: editRow.role,
-        farm: editRow.farm, // Will strictly be MR1 or MR2 now
+        farm: editRow.farm, 
         type: editRow.type,
+        payFrequency: editRow.payFrequency, 
         wagePerDay: parseFloat(editRow.wage) || 0,
         status: editEmployee.status || 'active'
       };
@@ -137,6 +143,7 @@ export default function EmployeeProfiles() {
     }
   };
 
+  // (UPDATED FOR NEW SCHEMA)
   const handleSaveRow = async () => {
     if (!newRow.name || !newRow.role || !newRow.wage) {
       toast.warn("Please fill out Name, Role, and Base Wage.");
@@ -148,8 +155,9 @@ export default function EmployeeProfiles() {
       const payload = {
         name: newRow.name,
         role: newRow.role,
-        farm: newRow.farm, // Will strictly be MR1 or MR2
+        farm: newRow.farm,
         type: newRow.type,
+        payFrequency: newRow.payFrequency,
         wagePerDay: parseFloat(newRow.wage) || 0,
         status: 'active'
       };
@@ -158,7 +166,7 @@ export default function EmployeeProfiles() {
 
       setEmployees(prev => [savedRecord, ...prev]);
       setIsAdding(false);
-      setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+      setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' });
       toast.success('Employee added to directory.');
     } catch {
       toast.error("Failed to save employee to database.");
@@ -181,16 +189,17 @@ export default function EmployeeProfiles() {
 
   const cancelAdd = () => {
     setIsAdding(false);
-    setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', wage: '' });
+    setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' });
   };
 
   const handleExportCsv = () => {
     downloadCsv('employee-profiles.csv', [
       { label: 'Name', value: (row) => row.name || '' },
       { label: 'Role', value: (row) => row.role || '' },
-      { label: 'Farm', value: (row) => row.farm || '' },
-      { label: 'Type', value: (row) => row.type || '' },
-      { label: 'Wage Per Day', value: (row) => Number(row.wage_per_day || row.wagePerDay || row.wage || 0).toFixed(2) },
+      { label: 'Farm Base', value: (row) => row.farm || '' },
+      { label: 'Wage Type', value: (row) => row.type || '' },
+      { label: 'Pay Frequency', value: (row) => row.pay_frequency || row.payFrequency || 'weekly' },
+      { label: 'Base Rate', value: (row) => Number(row.wage_per_day || row.wagePerDay || row.wage || 0).toFixed(2) },
     ], filtered);
   };
 
@@ -204,6 +213,7 @@ export default function EmployeeProfiles() {
         <option value="Laborer">General Laborer</option>
         <option value="Tractor Driver">Tractor Driver</option>
         <option value="Security">Security Guard</option>
+        <option value="Poultry Worker">Poultry Worker</option>
       </datalist>
 
       {/* ── PAGE HEADER ── */}
@@ -218,7 +228,7 @@ export default function EmployeeProfiles() {
             </h1>
           </div>
           <p className="text-sm font-medium text-gray-500 pl-[52px]">
-            Maintain estate workforce details and salary defaults
+            Maintain estate workforce details, base locations, and salary structures
           </p>
         </div>
 
@@ -256,7 +266,7 @@ export default function EmployeeProfiles() {
             path: "M0,40 L0,25 C 20,30 40,10 60,15 C 80,20 90,5 100,5 L100,40 Z"
           },
           {
-            title: 'MR1 Workforce',
+            title: 'MR1 Base Workforce',
             amount: mr1Count.toString(),
             badge: 'Assigned',
             sub: 'Including Managers',
@@ -265,10 +275,10 @@ export default function EmployeeProfiles() {
             path: "M0,40 L0,20 C 30,35 50,15 70,25 C 85,30 95,10 100,10 L100,40 Z"
           },
           {
-            title: 'MR2 Workforce',
-            amount: mr2Count.toString(),
+            title: 'Poultry Workforce',
+            amount: poultryCount.toString(),
             badge: 'Assigned',
-            sub: 'Including Managers',
+            sub: 'Specialized Staff',
             icon: <MapPin size={14} />,
             chartColor: '#A5D6A7',
             path: "M0,40 L0,15 C 25,10 45,30 65,20 C 85,10 95,25 100,20 L100,40 Z"
@@ -330,22 +340,34 @@ export default function EmployeeProfiles() {
               <input type="text" list="roleOptions" name="role" placeholder="Select or type..." value={newRow.role} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving} />
             </div>
 
+            {/* EXPANDED FARM LOCATIONS */}
             <div className="md:col-span-4">
               <div className="flex justify-between items-center mb-1">
-                 <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider">Primary Base Farm</label>
+                 <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider">Primary Base Location</label>
                  <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">Required</span>
               </div>
               <select name="farm" value={newRow.farm} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving}>
                 <option value="MR1">MR1 Block</option>
                 <option value="MR2">MR2 Block</option>
+                <option value="Poultry">Poultry Farm</option>
+                <option value="Floating">Floating (No Fixed Base)</option>
               </select>
             </div>
 
             <div className="md:col-span-4">
-              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Payment Type</label>
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Wage Type</label>
               <select name="type" value={newRow.type} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving}>
                 <option value="daily">Daily Wage (Standard)</option>
                 <option value="fixed">Monthly Fixed Salary</option>
+              </select>
+            </div>
+
+            {/* NEW PAY FREQUENCY DROPDOWN */}
+            <div className="md:col-span-4">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Pay Frequency</label>
+              <select name="payFrequency" value={newRow.payFrequency} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving}>
+                <option value="weekly">Weekly (Thursdays)</option>
+                <option value="monthly">Monthly</option>
               </select>
             </div>
 
@@ -370,7 +392,8 @@ export default function EmployeeProfiles() {
         {/* Toolbar */}
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50">
           <div className="flex bg-gray-200/60 p-1 rounded-xl gap-1 overflow-x-auto w-full sm:w-auto">
-            {['All', 'MR1', 'MR2'].map(f => (
+            {/* UPDATED FILTERS */}
+            {['All', 'MR1', 'MR2', 'Poultry', 'Floating'].map(f => (
               <button key={f} onClick={() => { setFarmFilter(f); setIsAdding(false); }}
                 className={`px-4 py-2 rounded-lg text-xs font-black transition-all whitespace-nowrap ${farmFilter === f ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
                 {f === 'All' ? 'All Staff' : `${f} Staff`}
@@ -403,7 +426,7 @@ export default function EmployeeProfiles() {
                 <th className="p-4 text-left">Employee Name</th>
                 <th className="p-4 text-left">Job Role</th>
                 <th className="p-4 text-left">Primary Base Farm</th>
-                <th className="p-4 text-left">Pay Type</th>
+                <th className="p-4 text-left">Wage / Frequency</th>
                 <th className="p-4 text-right">Base Salary Default</th>
                 <th className="p-4 text-right w-24"></th>
               </tr>
@@ -421,7 +444,9 @@ export default function EmployeeProfiles() {
 
               {!isLoading && filtered.map((emp, idx) => {
                 const isSel = selected.includes(emp.id);
-                const payTypeLabel = emp.type === 'fixed' ? 'Monthly' : 'Daily';
+                const wageTypeLabel = emp.type === 'fixed' ? 'Fixed' : 'Daily';
+                // Pull payFrequency safely handling both camelCase and snake_case backend returns
+                const payFreqLabel = (emp.pay_frequency || emp.payFrequency) === 'monthly' ? 'Monthly' : 'Weekly';
                 const wageValue = emp.wage_per_day || emp.wagePerDay || 0;
 
                 return (
@@ -444,21 +469,26 @@ export default function EmployeeProfiles() {
                     </td>
 
                     <td className="p-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${emp.farm === 'All' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${emp.farm === 'Poultry' ? 'bg-amber-50 text-amber-700 border border-amber-200' : emp.farm === 'Floating' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
                         <MapPin size={10} /> {emp.farm}
                       </span>
                     </td>
 
                     <td className="p-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${payTypeLabel === 'Monthly' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
-                        <Briefcase size={10} /> {payTypeLabel}
-                      </span>
+                      <div className="flex gap-1.5">
+                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-600 border border-gray-200">
+                           <Briefcase size={10} /> {wageTypeLabel}
+                         </span>
+                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${payFreqLabel === 'Monthly' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
+                           <CalendarClock size={10} /> {payFreqLabel} Pay
+                         </span>
+                      </div>
                     </td>
 
                     <td className="p-4 text-right">
                       <div className="flex flex-col items-end">
                         <span className="text-gray-900 font-black text-[13px]">Rs. {fmt(parseFloat(wageValue))}</span>
-                        <span className="text-[10px] text-gray-400 font-bold uppercase">/ {payTypeLabel === 'Daily' ? 'Day' : 'Month'}</span>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase">/ {wageTypeLabel === 'Daily' ? 'Day' : 'Month'}</span>
                       </div>
                     </td>
 
@@ -528,37 +558,47 @@ export default function EmployeeProfiles() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 gap-5">
                   <div>
                     <div className="flex justify-between items-center mb-1.5">
                        <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Primary Base Farm</label>
                        <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">Required</span>
                     </div>
-                    <div className="flex gap-2">
-                      {/* FIXED: Removed 'All' option from Edit buttons */}
-                      {['MR1', 'MR2'].map(f => (
+                    {/* EXPANDED FARM TOGGLE BUTTONS */}
+                    <div className="flex flex-wrap gap-2">
+                      {['MR1', 'MR2', 'Poultry', 'Floating'].map(f => (
                         <button key={f} type="button" onClick={() => setEditRow((prev) => ({ ...prev, farm: f }))}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${editRow.farm === f ? 'bg-blue-50 border-blue-500 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                          {f} Block
+                          className={`flex-1 min-w-[100px] py-2.5 rounded-xl text-sm font-bold border transition-all ${editRow.farm === f ? 'bg-blue-50 border-blue-500 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                          {f}
                         </button>
                       ))}
                     </div>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Pay Type</label>
-                    <select name="type" value={editRow.type} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
-                      <option value="daily">Daily Wage (Standard)</option>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Wage Type</label>
+                    <select name="type" value={editRow.type} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
+                      <option value="daily">Daily Wage</option>
                       <option value="fixed">Monthly Fixed</option>
                     </select>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Base Wage / Salary (Rs.)</label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" name="wage" value={editRow.wage} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Pay Frequency</label>
+                    <select name="payFrequency" value={editRow.payFrequency} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
+                      <option value="weekly">Weekly (Thursdays)</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Base Rate (Rs.)</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" name="wage" value={editRow.wage} onChange={handleEditRowChange} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                    </div>
                   </div>
                 </div>
+
               </div>
             </div>
 

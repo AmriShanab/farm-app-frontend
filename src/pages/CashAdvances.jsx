@@ -10,16 +10,6 @@ import { useToast } from '../components/ToastProvider';
 import { getAdvances, createAdvance, getEmployees, updateAdvance } from '../services/api';
 import { downloadCsv } from '../utils/csv';
 
-// --- MOCK DATA FALLBACK ---
-const mockEmployees = [
-  { id: '1', name: 'Faizaar', role: 'Manager' },
-  { id: '2', name: 'Jabir', role: 'Laborer' },
-  { id: '3', name: 'Ajmeer', role: 'Laborer' },
-  { id: '4', name: 'Jarsan', role: 'Tractor Driver' },
-  { id: '5', name: 'Rifaideen', role: 'Laborer' },
-  { id: '6', name: 'Askan', role: 'Laborer' },
-];
-
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function CashAdvances() {
@@ -30,19 +20,19 @@ export default function CashAdvances() {
 
   // API & Loading States
   const [isLoading, setIsLoading] = useState(true);
-  const [employees, setEmployees] = useState(mockEmployees);
+  const [employees, setEmployees] = useState([]);
   const toast = useToast();
 
-  // --- Registration Panel & Modal States ---
+  // --- Registration Panel & Modal States (UPDATED WITH CHEQUE DETAILS) ---
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split('T')[0],
-    empId: '', amount: '', notes: ''
+    empId: '', amount: '', notes: '', chequeNo: '', chequeDate: ''
   });
   
   const [editAdvance, setEditAdvance] = useState(null);
-  const [editRow, setEditRow] = useState({ date: '', amount: '', status: 'Unpaid', notes: '' });
+  const [editRow, setEditRow] = useState({ date: '', amount: '', status: 'Unpaid', notes: '', chequeNo: '', chequeDate: '' });
 
   // --- Fetch Data ---
   useEffect(() => {
@@ -57,7 +47,6 @@ export default function CashAdvances() {
         const response = await getAdvances(params);
         const rawData = Array.isArray(response) ? response : (response?.data || []);
         
-        // --- FIXED: Normalize backend data keys to match frontend expectations ---
         const normalizedData = rawData.map(adv => ({
           id: adv.id || adv.advance_id,
           date: adv.date,
@@ -65,12 +54,14 @@ export default function CashAdvances() {
           name: adv.employee_name ?? adv.name ?? '',
           amount: adv.amount,
           status: (adv.status || 'unpaid').charAt(0).toUpperCase() + (adv.status || 'unpaid').slice(1),
-          notes: adv.notes || ''
+          notes: adv.notes || '',
+          chequeNo: adv.cheque_no || adv.chequeNo || '',
+          chequeDate: adv.cheque_date || adv.chequeDate || ''
         }));
 
         if (active) setAdvances(normalizedData);
       } catch {
-        if (active) toast.error('Failed to load advances. Showing local data if available.');
+        if (active) toast.error('Failed to load advances.');
       } finally {
         if (active) setIsLoading(false);
       }
@@ -87,16 +78,13 @@ export default function CashAdvances() {
           })));
         }
       } catch {
-        // Keep mock employees on error
+        // Keep empty array on error
       }
     };
 
     loadData();
     loadEmployees();
     return () => { active = false; };
-    
-    // FIXED: Removed 'toast' from dependency array to prevent infinite re-fetching loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   const filtered = advances.filter(adv =>
@@ -114,6 +102,7 @@ export default function CashAdvances() {
 
   const handleRowChange = (e) => setNewRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
   
+  // --- SAVE OPERATION MAPPED TO NEW BACKEND SCHEMA ---
   const handleSaveRow = async () => {
     if (!newRow.empId || !newRow.amount) {
       toast.warn("Please select an employee and enter an amount.");
@@ -125,7 +114,9 @@ export default function CashAdvances() {
       date: newRow.date,
       empId: parseInt(newRow.empId, 10),
       amount: parseFloat(newRow.amount) || 0,
-      notes: newRow.notes || ''
+      notes: newRow.notes || '',
+      chequeNo: newRow.chequeNo || null,
+      chequeDate: newRow.chequeNo ? (newRow.chequeDate || newRow.date) : null
     };
 
     try {
@@ -139,13 +130,15 @@ export default function CashAdvances() {
         name: saved.name || (emp && emp.name) || '',
         amount: saved.amount ?? payload.amount,
         status: (saved.status || 'unpaid').charAt(0).toUpperCase() + (saved.status || 'unpaid').slice(1),
-        notes: saved.notes || ''
+        notes: saved.notes || '',
+        chequeNo: saved.cheque_no || saved.chequeNo || payload.chequeNo || '',
+        chequeDate: saved.cheque_date || saved.chequeDate || payload.chequeDate || ''
       };
       
       setAdvances(prev => [record, ...prev]);
       setIsAdding(false);
       if (statusFilter === 'Deducted') setStatusFilter('Unpaid');
-      setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '' });
+      setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '', chequeNo: '', chequeDate: '' });
       toast.success('Advance issued successfully');
     } catch {
       toast.error('Failed to issue advance.');
@@ -160,7 +153,9 @@ export default function CashAdvances() {
         date: adv.date,
         amount: parseFloat(adv.amount) || 0,
         status: 'deducted',
-        notes: adv.notes || ''
+        notes: adv.notes || '',
+        chequeNo: adv.chequeNo || null,
+        chequeDate: adv.chequeDate || null
       };
       
       await updateAdvance(adv.id, payload);
@@ -171,6 +166,7 @@ export default function CashAdvances() {
     }
   };
 
+  // --- UPDATE OPERATION MAPPED TO NEW BACKEND SCHEMA ---
   const handleUpdateAdvance = async () => {
     if (!editRow.amount || !editRow.date) {
       toast.warn("Date and Amount are required.");
@@ -183,14 +179,18 @@ export default function CashAdvances() {
         date: editRow.date, 
         amount: parseFloat(editRow.amount) || 0, 
         status: editRow.status.toLowerCase(), 
-        notes: editRow.notes 
+        notes: editRow.notes,
+        chequeNo: editRow.chequeNo || null,
+        chequeDate: editRow.chequeNo ? (editRow.chequeDate || editRow.date) : null
       };
       
       await updateAdvance(editAdvance.id, payload);
       setAdvances(prev => prev.map(a => a.id === editAdvance.id ? ({ 
         ...a, date: payload.date, amount: payload.amount, 
         status: payload.status === 'deducted' ? 'Deducted' : 'Unpaid', 
-        notes: payload.notes 
+        notes: payload.notes,
+        chequeNo: payload.chequeNo || '',
+        chequeDate: payload.chequeDate || ''
       }) : a));
       
       toast.success('Advance updated successfully');
@@ -204,7 +204,7 @@ export default function CashAdvances() {
 
   const cancelAdd = () => {
     setIsAdding(false);
-    setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '' });
+    setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '', chequeNo: '', chequeDate: '' });
   };
 
   const handleExportCsv = () => {
@@ -213,6 +213,7 @@ export default function CashAdvances() {
       { label: 'Employee', value: (row) => row.name || '' },
       { label: 'Status', value: (row) => row.status || '' },
       { label: 'Amount', value: (row) => Number(row.amount || 0).toFixed(2) },
+      { label: 'Cheque No', value: (row) => row.chequeNo || 'Cash' },
       { label: 'Notes', value: (row) => row.notes || '' },
     ], filtered);
   };
@@ -232,7 +233,7 @@ export default function CashAdvances() {
             </h1>
           </div>
           <p className="text-sm font-medium text-gray-500 pl-[52px]">
-            Record employee advances to be deducted from payroll
+            Record employee advances to be deducted natively during payroll computations
           </p>
         </div>
 
@@ -316,7 +317,7 @@ export default function CashAdvances() {
         })}
       </div>
 
-      {/* ── DEDICATED REGISTRATION PANEL ── */}
+      {/* ── DEDICATED REGISTRATION PANEL (UPGRADED WITH NEW METADATA FIELDS) ── */}
       {isAdding && (
         <div className="bg-gradient-to-b from-green-50 to-white border border-green-200 rounded-xl p-6 shadow-md mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center mb-5 border-b border-green-100 pb-3">
@@ -337,7 +338,7 @@ export default function CashAdvances() {
               <select name="empId" value={newRow.empId} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving}>
                  <option value="" disabled>Select Employee...</option>
                  {employees.map(emp => (
-                   <option key={emp.id} value={emp.id}>{emp.name}</option>
+                   <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
                  ))}
               </select>
             </div>
@@ -352,6 +353,24 @@ export default function CashAdvances() {
               <div className="w-full p-2.5 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold flex items-center justify-center gap-1.5 cursor-not-allowed">
                 <AlertCircle size={14}/> Unpaid
               </div>
+            </div>
+
+            {/* NEW FIELD: CHEQUE NUMBER */}
+            <div className="md:col-span-4">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque Number <span className="text-gray-400 font-normal">(Leave blank if cash)</span></label>
+              <input type="text" name="chequeNo" placeholder="E.g. CHQ102934" value={newRow.chequeNo} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving} />
+            </div>
+
+            {/* NEW FIELD: CHEQUE DATE */}
+            <div className="md:col-span-3">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Cheque Maturity Date</label>
+              <input type="date" name="chequeDate" value={newRow.chequeDate || newRow.date} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={!newRow.chequeNo || isSaving} />
+            </div>
+
+            {/* NEW FIELD: NOTES */}
+            <div className="md:col-span-5">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Reason / Notes</label>
+              <input type="text" name="notes" placeholder="E.g. Festival advance, Medical emergency..." value={newRow.notes} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving} />
             </div>
           </div>
 
@@ -402,16 +421,17 @@ export default function CashAdvances() {
                 </th>
                 <th className="p-4 text-left">Issue Date</th>
                 <th className="p-4 text-left">Employee Name</th>
+                <th className="p-4 text-left">Funding Type / Notes</th>
                 <th className="p-4 text-left">Status</th>
                 <th className="p-4 text-right">Advance Amount</th>
-                <th className="p-4 text-right">Quick Actions</th>
+                <th className="p-4 text-right w-28">Actions</th>
               </tr>
             </thead>
             <tbody>
 
               {isLoading && (
                  <tr>
-                    <td colSpan={6} className="p-20 text-center text-green-600">
+                    <td colSpan={7} className="p-20 text-center text-green-600">
                        <Loader2 size={24} className="animate-spin mx-auto mb-2" />
                        <span className="text-xs font-bold">Loading Advances...</span>
                     </td>
@@ -433,9 +453,25 @@ export default function CashAdvances() {
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs border border-green-200">
-                            {(adv.name || 'U').substring(0, 2).toUpperCase()}
+                           {(adv.name || 'U').substring(0, 2).toUpperCase()}
                          </div>
                          <span className="font-bold text-gray-900 text-[13px]">{adv.name}</span>
+                      </div>
+                    </td>
+
+                    {/* NEW CELL RENDERING FOR CHEQUE DETAILS AND REMARKS */}
+                    <td className="p-4">
+                      <div className="flex flex-col max-w-[240px] truncate">
+                        {adv.chequeNo ? (
+                          <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 inline-block w-max mb-0.5">
+                            Chq: {adv.chequeNo} ({adv.chequeDate})
+                          </span>
+                        ) : (
+                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wide mb-0.5">Liquid Cash Transfer</span>
+                        )}
+                        <span className="text-xs text-gray-500 italic font-medium truncate" title={adv.notes}>
+                          {adv.notes || 'No notes provided'}
+                        </span>
                       </div>
                     </td>
 
@@ -452,7 +488,7 @@ export default function CashAdvances() {
                     </td>
 
                     <td className="p-4 text-right">
-                       <span className="font-black text-gray-900 text-[13px]">Rs. {fmt(Number(adv.amount))}</span>
+                       <span className="font-black text-gray-900 text-[13px]">Rs. {fmt(window.parseFloat(adv.amount))}</span>
                     </td>
 
                     <td className="p-4 text-right">
@@ -468,7 +504,17 @@ export default function CashAdvances() {
                          )}
                          <button 
                             title="Edit Record"
-                            onClick={() => { setEditAdvance(adv); setEditRow({ date: adv.date || '', amount: String(adv.amount || ''), status: adv.status || 'Unpaid', notes: adv.notes || '' }); }} 
+                            onClick={() => { 
+                              setEditAdvance(adv); 
+                              setEditRow({ 
+                                date: adv.date || '', 
+                                amount: String(adv.amount || ''), 
+                                status: adv.status || 'Unpaid', 
+                                notes: adv.notes || '',
+                                chequeNo: adv.chequeNo || '',
+                                chequeDate: adv.chequeDate || ''
+                              }); 
+                            }} 
                             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                          >
                             <Edit2 size={14} />
@@ -481,7 +527,7 @@ export default function CashAdvances() {
 
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-gray-400 font-bold">
+                  <td colSpan={7} className="p-12 text-center text-gray-400 font-bold">
                     No advances found matching your filter.
                   </td>
                 </tr>
@@ -503,18 +549,18 @@ export default function CashAdvances() {
         </div>
       </div>
       
-      {/* ── MODAL DIALOG OVERLAY: UPDATE ADVANCE ── */}
+      {/* ── MODAL DIALOG OVERLAY: UPDATE ADVANCE (UPGRADED WITH ALL NEW SCHEMAS) ── */}
       {editAdvance && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-lg rounded-[1.5rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95">
+          <div className="bg-white w-full max-w-xl rounded-[1.5rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95">
             <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600">
                   <Edit2 size={20} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-gray-900">Edit Advance</h2>
-                  <p className="text-xs text-gray-400 font-medium">Modifying record #{editAdvance.id}</p>
+                  <h2 className="text-xl font-black text-gray-900">Edit Advance Record</h2>
+                  <p className="text-xs text-gray-400 font-medium">Modifying payload for {editAdvance.name} (ID #{editAdvance.id})</p>
                 </div>
               </div>
               <button onClick={() => setEditAdvance(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
@@ -522,12 +568,10 @@ export default function CashAdvances() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto">
-              <div className="space-y-6">
-                
-                <div className="grid grid-cols-2 gap-5">
+            <div className="p-6 overflow-y-auto space-y-5">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Date Issued</label>
                     <input type="date" value={editRow.date} onChange={e => setEditRow(prev => ({ ...prev, date: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
                   </div>
                   <div>
@@ -536,19 +580,30 @@ export default function CashAdvances() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Status</label>
-                  <select value={editRow.status} onChange={e => setEditRow(prev => ({ ...prev, status: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
-                    <option value="Unpaid">Unpaid (Pending)</option>
-                    <option value="Deducted">Deducted (Settled)</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Cheque No <span className="text-gray-400 font-normal">(Optional)</span></label>
+                    <input type="text" value={editRow.chequeNo} onChange={e => setEditRow(prev => ({ ...prev, chequeNo: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Cheque Maturity Date</label>
+                    <input type="date" value={editRow.chequeDate || editRow.date} onChange={e => setEditRow(prev => ({ ...prev, chequeDate: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" disabled={!editRow.chequeNo} />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Notes (Optional)</label>
-                  <textarea value={editRow.notes} onChange={e => setEditRow(prev => ({ ...prev, notes: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" rows={3}></textarea>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Deduction Status</label>
+                    <select value={editRow.status} onChange={e => setEditRow(prev => ({ ...prev, status: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
+                      <option value="Unpaid">Unpaid (Pending Deduction)</option>
+                      <option value="Deducted">Deducted (Settled / Locked)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Reason / Notes</label>
+                    <input type="text" value={editRow.notes} onChange={e => setEditRow(prev => ({ ...prev, notes: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all" />
+                  </div>
                 </div>
-              </div>
             </div>
 
             <div className="px-6 py-5 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3">

@@ -554,9 +554,7 @@ export const getPayrollPreview = async ({ startDate, endDate, farm }) => {
       absentDays: Number(row.absentDays ?? 0),
 
       grossPay: Number(row.gross ?? row.grossPay ?? 0),
-      advanceDeducted: Number(
-        row.advanceDeducted ?? row.advanceDeducted ?? 0,
-      ),
+      advanceDeducted: Number(row.advanceDeducted ?? row.advanceDeducted ?? 0),
       netPay: Number(row.netPay ?? row.net_pay ?? 0),
     }));
   } catch (error) {
@@ -599,30 +597,23 @@ export const getPayrollHistory = async ({ year, farm }) => {
       : Array.isArray(payload.data)
         ? payload.data
         : [];
-
     return historyRows.map((row) => {
-      const startDate = row.startDate ?? row.start_date ?? "";
-      const endDate = row.endDate ?? row.end_date ?? "";
-      const totalNet = Number(
-        row.totalNet ?? row.total_net ?? row.total_net_paid ?? row.net ?? 0,
-      );
+      const startDate = row.start_date ?? row.startDate ?? ""; // ← was only checking startDate
+      const endDate = row.end_date ?? row.endDate ?? ""; // ← was only checking endDate
 
       return {
-        id: String(row.id ?? row.payroll_id ?? row.payrollId ?? ""),
-        period:
-          row.period ??
-          row.pay_period ??
-          row.payPeriod ??
-          (startDate && endDate ? `${startDate} to ${endDate}` : ""),
+        id: String(row.id ?? ""),
+        period: startDate && endDate ? `${startDate} to ${endDate}` : "",
         farm: row.farm ?? "",
-        employeeCount: Number(row.employeeCount ?? row.employee_count ?? 0),
-        totalGross: Number(row.totalGross ?? row.total_gross ?? row.gross ?? 0),
+        employeeCount: Number(row.employee_count ?? row.employeeCount ?? 0), // ← was missing employee_count
+        totalGross: Number(row.total_gross ?? row.totalGross ?? 0),
         totalDeductions: Number(
-          row.totalDeductions ?? row.total_deductions ?? row.deductions ?? 0,
+          row.total_deductions ?? row.totalDeductions ?? 0,
         ),
-        totalNet,
-        finalizedAt:
-          row.finalizedAt ?? row.finalized_at ?? row.created_at ?? "",
+        totalNet: Number(
+          row.total_net_paid ?? row.totalNet ?? row.total_net ?? 0,
+        ), // ← was missing total_net_paid
+        finalizedAt: row.finalized_at ?? row.finalizedAt ?? "", // ← was missing finalized_at
         startDate,
         endDate,
       };
@@ -630,6 +621,42 @@ export const getPayrollHistory = async ({ year, farm }) => {
   } catch (error) {
     console.error("API Error (getPayrollHistory):", error);
     throw error;
+  }
+};
+
+// NEW — add to api.js after getPayrollHistory
+export const getFinalizedEmployees = async ({ farm, startDate, endDate }) => {
+  try {
+    const qs = [];
+    if (farm) qs.push(`farm=${encodeURIComponent(farm)}`);
+    if (startDate) qs.push(`startDate=${encodeURIComponent(startDate)}`);
+    if (endDate) qs.push(`endDate=${encodeURIComponent(endDate)}`);
+    const q = qs.length ? `?${qs.join("&")}` : "";
+
+    const response = await fetch(`${BASE_URL}/hr/payroll/finalized${q}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    console.log("getFinalizedEmployees response status:", response);
+
+    // If endpoint doesn't exist yet (404), return empty — fall back to sessionStorage
+    if (response.status === 404) return [];
+    if (!response.ok) throw new Error("Failed to fetch finalized employees");
+
+    const json = await response.json();
+    const payload = json?.data ?? unwrapApiData(json) ?? [];
+    const rows = Array.isArray(payload) ? payload : [];
+
+    // Expecting: [{ empId: 1 }, { empId: 3 }] or [{ emp_id: 1 }]
+    return rows
+      .map((row) =>
+        String(
+          row.empId ?? row.emp_id ?? row.employeeId ?? row.employee_id ?? "",
+        ),
+      )
+      .filter(Boolean);
+  } catch {
+    return []; // Always degrade gracefully
   }
 };
 

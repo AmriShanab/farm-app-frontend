@@ -147,6 +147,7 @@ export default function Layout() {
     { name: 'Poultry Farm', path: '/poultry', icon: Bird },
     { name: 'Finances', path: '/finances', icon: Landmark },
     { name: 'Assets & Warranty', path: '/assets', icon: ShieldCheck },
+    { name: 'Monthly Breakdown', path: '/breakdown', icon: Calculator },
   ];
 
   return (
