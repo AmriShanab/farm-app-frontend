@@ -7,9 +7,10 @@ import {
 } from 'lucide-react';
 
 // Import API services
-import { getCoconutSales, createCoconutSale, updateCoconutSale, deleteCoconutSale, createHarvestExpense } from '../services/api';
+import { getCoconutSales, createCoconutSale, updateCoconutSale, deleteCoconutSale, createHarvestExpense, getEmployees, markHarvestAttendanceBulk } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 import { downloadCsv } from '../utils/csv';
+import HarvestLaborPanel from '../components/HarvestLaborPanel';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -71,6 +72,11 @@ export default function CoconutSales() {
   const [editRow, setEditRow] = useState(emptySaleForm());
   const toast = useToast();
 
+  // --- Harvest Attendance States ---
+  const [employees, setEmployees] = useState([]);
+  const [empLoading, setEmpLoading] = useState(false);
+  const [harvestAtt, setHarvestAtt] = useState({});
+
   // Helper to calculate total
   const calcNet = (row) => {
     const q1 = parseFloat(row.qty1) || 0;
@@ -103,6 +109,17 @@ export default function CoconutSales() {
     loadSales();
     return () => { isActive = false; };
   }, [farmFilter]);
+
+  useEffect(() => {
+    if (!isAdding) return;
+    let active = true;
+    setEmpLoading(true);
+    getEmployees(null, 'active')
+      .then((data) => { if (active) setEmployees(Array.isArray(data) ? data : []); })
+      .catch(() => { if (active) setEmployees([]); })
+      .finally(() => { if (active) setEmpLoading(false); });
+    return () => { active = false; };
+  }, [isAdding]);
 
   const filtered = sales.filter(s => !search || s.date.includes(search));
 
@@ -140,6 +157,7 @@ export default function CoconutSales() {
   const cancelAdd = () => {
     setIsAdding(false);
     setNewRow(emptySaleForm());
+    setHarvestAtt({});
   }
 
   // --- API Actions ---
@@ -181,14 +199,35 @@ export default function CoconutSales() {
         await createHarvestExpense(expensePayload);
       }
 
-      // 3. Update the local UI state
+      // 3. Mark harvest attendance if any employees were marked
+      const attendanceRecords = Object.entries(harvestAtt)
+        .filter(([, status]) => status !== null)
+        .map(([empId, status]) => ({ employeeId: Number(empId), status }));
+
+      const saleId = normalizeSaleRecord(savedRecord).id;
+      if (attendanceRecords.length > 0 && saleId) {
+        await markHarvestAttendanceBulk({
+          date: newRow.date,
+          farm: farmFilter,
+          saleId,
+          records: attendanceRecords,
+        });
+      }
+
+      // 4. Update the local UI state
       const completeRecord = normalizeSaleRecord(savedRecord, salePayload);
       completeRecord.total = calcNet(salePayload);
 
       setSales(prev => [completeRecord, ...prev]);
       setIsAdding(false);
       setNewRow(emptySaleForm());
-      toast.success(hasExpenses ? "Sale and Expenses saved successfully." : "Sale saved successfully.");
+      setHarvestAtt({});
+      const parts = [
+        'Sale saved.',
+        hasExpenses && 'Expenses logged.',
+        attendanceRecords.length > 0 && `${attendanceRecords.length} attendance record(s) marked.`,
+      ].filter(Boolean);
+      toast.success(parts.join(' '));
     } catch {
       toast.error("Failed to save records to database.");
     } finally {
@@ -441,6 +480,15 @@ export default function CoconutSales() {
                 * Entering expenses here will automatically log them into the General Expenses ledger for {farmFilter}.
               </p>
             </div>
+
+            <HarvestLaborPanel
+              employees={employees}
+              loading={empLoading}
+              attendance={harvestAtt}
+              onChange={(empId, status) =>
+                setHarvestAtt(prev => ({ ...prev, [empId]: status }))
+              }
+            />
           </div>
 
           <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">

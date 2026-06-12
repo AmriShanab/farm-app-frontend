@@ -389,6 +389,31 @@ export const deleteEmployee = async (id) => {
   }
 };
 
+export const markHarvestAttendanceBulk = async ({ date, farm, saleId, records }) => {
+  try {
+    const body = {
+      date,
+      records: records.map((r) => ({
+        empId: r.employeeId,
+        status: r.status,
+        locationWorked: farm,
+        is_harvest_day: 1,
+        linked_sale_id: saleId,
+      })),
+    };
+    const response = await fetch(`${BASE_URL}/hr/attendance/bulk`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error("Failed to mark harvest attendance");
+    return unwrapApiData(await response.json()) || {};
+  } catch (error) {
+    console.error("API Error (markHarvestAttendanceBulk):", error);
+    throw error;
+  }
+};
+
 // --- ATTENDANCE ENDPOINTS ---
 
 export const getAttendance = async (date, farm) => {
