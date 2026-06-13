@@ -30,10 +30,10 @@ const emptySaleForm = () => ({
   farm: 'MR1',
   qty1: '',
   rate1: '',
-  free_qty1: '', // Replaced disc1
+  free_qty1: '', // Replaced free_qty1
   qty2: '',
   rate2: '',
-  free_qty2: '', // Replaced disc2
+  free_qty2: '', // Replaced free_qty2
   // --- New Harvest Expense Fields ---
   mainLabor: '',
   collectors: '',
@@ -288,10 +288,10 @@ export default function CoconutSales() {
       { label: 'Farm', value: (row) => row.farm || farmFilter || '' },
       { label: 'Qty 1', value: (row) => row.qty1 ?? 0 },
       { label: 'Rate 1', value: (row) => row.rate1 ?? 0 },
-      { label: 'Discount 1', value: (row) => row.disc1 ?? 0 },
+      { label: 'Discount 1', value: (row) => row.free_qty1 ?? 0 },
       { label: 'Qty 2', value: (row) => row.qty2 ?? 0 },
       { label: 'Rate 2', value: (row) => row.rate2 ?? 0 },
-      { label: 'Discount 2', value: (row) => row.disc2 ?? 0 },
+      { label: 'Discount 2', value: (row) => row.free_qty2 ?? 0 },
       { label: 'Total', value: (row) => Number(row.total || calcNet(row)).toFixed(2) },
     ], filtered);
   };

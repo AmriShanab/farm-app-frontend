@@ -5,7 +5,7 @@
 | Method | Endpoint | Description | Payload / Query Params |
 |--------|----------|-------------|------------------------|
 | GET | `/api/sales/coconuts` | Get coconut sales ledger | `?farm=MR1&date=YYYY-MM-DD` |
-| POST | `/api/sales/coconuts` | Record new coconut sale | `{ date, farm, qty1, rate1, disc1, qty2, rate2 }` |
+| POST | `/api/sales/coconuts` | Record new coconut sale | `{ date, farm, qty1, rate1, free_qty1, qty2, rate2 }` |
 | GET | `/api/sales/cashews` | Get cashew nuts ledger | `?year=2024` |
 | POST | `/api/sales/cashews` | Record new cashew sale | `{ date, kg, rate }` |
 | GET | `/api/sales/other` | Get miscellaneous incomes | `?category=Timber` |
