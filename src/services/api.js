@@ -430,8 +430,11 @@ export const getAttendance = async (date, farm) => {
           employeeId: r.employee_id ?? r.employeeId ?? null,
           name: r.name,
           farm: r.farm,
+          home_farm: r.home_farm ?? r.farm,
           wagePerDay: r.wage_per_day ?? r.wagePerDay ?? 0,
           status: r.status,
+          locationWorked: r.location_worked ?? r.locationWorked ?? null,
+          taskType: r.task_type ?? r.taskType ?? null,
           attendanceId: r.attendance_id ?? r.attendanceId ?? null,
         }))
       : [];

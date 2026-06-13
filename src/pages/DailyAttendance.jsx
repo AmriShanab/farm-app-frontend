@@ -49,9 +49,12 @@ export default function DailyAttendance() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [search, setSearch] = useState('');
 
-  // States to hold attendance status and dynamic locations
+  // States to hold attendance status, dynamic locations, and task types
   const [attendance, setAttendance] = useState({}); // { id: 1, 0.5, 0 }
   const [locations, setLocations] = useState({});   // { id: 'MR1', 'Poultry', etc. }
+  const [taskTypes, setTaskTypes] = useState({});   // { id: 'MR1 Coconut Harvest' | null }
+
+  const TASK_TYPE_OPTIONS = ['MR1 Coconut Harvest', 'MR2 Coconut Harvest', 'Cashew Harvest'];
 
   const [employees, setEmployees] = useState([]);
   const [farm, setFarm] = useState('MR1');
@@ -83,7 +86,7 @@ export default function DailyAttendance() {
 
     if (attendanceId) {
       try {
-        await updateAttendance(attendanceId, { status: statusStr, locationWorked: locToSave });
+        await updateAttendance(attendanceId, { status: statusStr, locationWorked: locToSave, taskType: taskTypes[id] ?? null });
       } catch {
         toast.error('Failed to update attendance.');
       }
@@ -100,9 +103,28 @@ export default function DailyAttendance() {
     if (attendanceId && currentStatus !== undefined && currentStatus !== 0) {
       const statusStr = currentStatus === 1 ? 'full' : 'half';
       try {
-        await updateAttendance(attendanceId, { status: statusStr, locationWorked: newLocation });
+        await updateAttendance(attendanceId, { status: statusStr, locationWorked: newLocation, taskType: taskTypes[id] ?? null });
       } catch {
         toast.error('Failed to update location.');
+      }
+    }
+  };
+
+  const handleTaskTypeChange = async (id, newTaskType) => {
+    const value = newTaskType || null;
+    setTaskTypes(prev => ({ ...prev, [id]: value }));
+
+    const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
+    const attendanceId = emp?.attendanceId;
+    const currentStatus = attendance[id];
+
+    if (attendanceId && currentStatus !== undefined && currentStatus !== 0) {
+      const statusStr = currentStatus === 1 ? 'full' : 'half';
+      const loc = locations[id] || emp?.farm;
+      try {
+        await updateAttendance(attendanceId, { status: statusStr, locationWorked: loc, taskType: value });
+      } catch {
+        toast.error('Failed to update task type.');
       }
     }
   };
@@ -137,7 +159,8 @@ export default function DailyAttendance() {
       return {
         empId: emp.employeeId || parseInt(emp.id, 10),
         status: statusStr,
-        locationWorked: loc 
+        locationWorked: loc,
+        taskType: taskTypes[id] ?? null,
       };
     });
 
@@ -174,21 +197,23 @@ export default function DailyAttendance() {
         }));
         setEmployees(emps);
 
-        // Build attendance & locations map
+        // Build attendance, locations, and task types map
         const att = {};
         const locs = {};
+        const tasks = {};
         data.forEach(d => {
           const key = String(d.employeeId);
           if (d.status === 'full') att[key] = 1;
           else if (d.status === 'half') att[key] = 0.5;
           else if (d.status === 'absent') att[key] = 0;
 
-          // Hydrate location worked map (fallback to home_farm if missing)
-          locs[key] = d.locationWorked || d.location_worked || d.home_farm || d.farm;
+          locs[key] = d.locationWorked || d.home_farm || d.farm;
+          tasks[key] = d.taskType ?? null;
         });
 
         setAttendance(att);
         setLocations(locs);
+        setTaskTypes(tasks);
       } catch {
         if (active) setError('Failed to load attendance.');
       } finally {
@@ -227,14 +252,15 @@ export default function DailyAttendance() {
               value={selectedDate}
               onChange={(e) => {
                 setSelectedDate(e.target.value);
-                setAttendance({}); // Reset when date changes
+                setAttendance({});
                 setLocations({});
+                setTaskTypes({});
               }}
               className="bg-transparent border-none outline-none text-sm font-bold text-gray-800 pr-3 cursor-pointer"
             />
           </div>
 
-          <select value={farm} onChange={(e) => { setFarm(e.target.value); setAttendance({}); setLocations({}); }} className="text-sm font-bold border border-gray-200 bg-white rounded-xl px-3 py-1.5 outline-none shadow-sm cursor-pointer">
+          <select value={farm} onChange={(e) => { setFarm(e.target.value); setAttendance({}); setLocations({}); setTaskTypes({}); }} className="text-sm font-bold border border-gray-200 bg-white rounded-xl px-3 py-1.5 outline-none shadow-sm cursor-pointer">
             <option value="MR1">MR1 Staff</option>
             <option value="MR2">MR2 Staff</option>
             <option value="Poultry">Poultry Staff</option>
@@ -290,27 +316,30 @@ export default function DailyAttendance() {
 
         {/* List Body */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse whitespace-nowrap min-w-[750px]">
+          <table className="w-full text-left border-collapse whitespace-nowrap min-w-[900px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[30%]">Employee</th>
+                <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[25%]">Employee</th>
 
-                {/* NEW LOCATION COLUMN */}
-                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[25%] text-center">
+                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%] text-center">
                   Location Worked
                 </th>
 
-                <th className="py-3 px-2 text-center w-[15%]">
+                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[22%] text-center">
+                  Task Type
+                </th>
+
+                <th className="py-3 px-2 text-center w-[11%]">
                   <div className="flex flex-col items-center gap-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">Full Day</span>
                   </div>
                 </th>
-                <th className="py-3 px-2 text-center w-[15%]">
+                <th className="py-3 px-2 text-center w-[11%]">
                   <div className="flex flex-col items-center gap-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Half Day</span>
                   </div>
                 </th>
-                <th className="py-3 px-2 text-center w-[15%]">
+                <th className="py-3 px-2 text-center w-[11%]">
                   <div className="flex flex-col items-center gap-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Absent</span>
                   </div>
@@ -320,7 +349,7 @@ export default function DailyAttendance() {
             <tbody className="divide-y divide-gray-50">
               {filteredEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-10 text-center text-gray-400 text-sm font-semibold">
+                  <td colSpan="6" className="p-10 text-center text-gray-400 text-sm font-semibold">
                     No employees found matching your search.
                   </td>
                 </tr>
@@ -365,6 +394,26 @@ export default function DailyAttendance() {
                           <option value="MR1">MR1 Block</option>
                           <option value="MR2">MR2 Block</option>
                           <option value="Poultry">Poultry Farm</option>
+                        </select>
+                      </td>
+
+                      {/* Task Type Dropdown */}
+                      <td className="py-3 px-2 text-center align-middle">
+                        <select
+                          value={taskTypes[emp.id] || ''}
+                          onChange={(e) => handleTaskTypeChange(emp.id, e.target.value)}
+                          disabled={isAbsent}
+                          className={`w-full max-w-[170px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                              ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                              : taskTypes[emp.id]
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-sm'
+                                : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
+                            }`}
+                        >
+                          <option value="">— None —</option>
+                          {TASK_TYPE_OPTIONS.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
                         </select>
                       </td>
 
