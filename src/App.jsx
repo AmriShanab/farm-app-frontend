@@ -8,6 +8,7 @@ import OtherIncomes from './pages/OtherIncomes';
 import Payroll from './pages/EmployeeProfiles';
 import EmployeeProfiles from './pages/EmployeeProfiles';
 import DailyAttendance from './pages/DailyAttendance';
+import AttendanceRecord from './pages/AttendanceRecord';
 import CashAdvances from './pages/CashAdvances';
 import RunPayroll from './pages/RunPayroll';
 import Operations from './pages/Operations';
@@ -59,6 +60,7 @@ function App() {
             <Route index element={<Navigate to="profiles" replace />} />
             <Route path="profiles" element={<EmployeeProfiles />} />
             <Route path="attendance" element={<DailyAttendance />} />
+            <Route path="record" element={<AttendanceRecord />} />
             <Route path="advances" element={<CashAdvances />} />
             <Route path="calculator" element={<RunPayroll />} />
           </Route>

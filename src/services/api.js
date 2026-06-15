@@ -460,6 +460,21 @@ export const saveAttendanceBulk = async (date, records) => {
   }
 };
 
+export const getAttendanceHistory = async (employeeId, startDate, endDate) => {
+  try {
+    const q = `?employeeId=${encodeURIComponent(employeeId)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+    const response = await fetch(`${BASE_URL}/hr/attendance/history${q}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Failed to fetch attendance history");
+    return unwrapApiData(await response.json()) || {};
+  } catch (error) {
+    console.error("API Error (getAttendanceHistory):", error);
+    throw error;
+  }
+};
+
 export const updateAttendance = async (attendanceId, data) => {
   try {
     const response = await fetch(`${BASE_URL}/hr/attendance/${attendanceId}`, {

@@ -19,6 +19,7 @@ import {
   UserPlus,
   CalendarCheck,
   Calculator,
+  ClipboardList,
   Search,
   Sun,
   User
@@ -81,6 +82,10 @@ export default function Layout() {
       return { title: 'Daily Attendance', subtitle: 'Review workforce attendance logs', section: 'HR & Payroll' };
     }
 
+    if (path.includes('/payroll/record')) {
+      return { title: 'Attendance Record', subtitle: 'View employee attendance history by date range', section: 'HR & Payroll' };
+    }
+
     if (path.includes('/payroll/advances')) {
       return { title: 'Cash Advances', subtitle: 'Track advance requests and balances', section: 'HR & Payroll' };
     }
@@ -138,6 +143,7 @@ export default function Layout() {
       subItems: [
         { name: 'Employees', path: '/payroll/profiles', icon: UserPlus },
         { name: 'Daily Attendance', path: '/payroll/attendance', icon: CalendarCheck },
+        { name: 'Attendance Record', path: '/payroll/record', icon: ClipboardList },
         { name: 'Cash Advances', path: '/payroll/advances', icon: Wallet },
         { name: 'Run Payroll', path: '/payroll/calculator', icon: Calculator },
       ]
