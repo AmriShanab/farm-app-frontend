@@ -79,9 +79,9 @@ export default function CoconutSales() {
 
   // Helper to calculate total
   const calcNet = (row) => {
-    const q1 = parseFloat(row.qty1) || 0;
+    const q1 = (parseFloat(row.qty1) || 0) - (parseFloat(row.free_qty1) || 0);
     const r1 = parseFloat(row.rate1) || 0;
-    const q2 = parseFloat(row.qty2) || 0;
+    const q2 = (parseFloat(row.qty2) || 0) - (parseFloat(row.free_qty2) || 0);
     const r2 = parseFloat(row.rate2) || 0;
 
     return (q1 * r1) + (q2 * r2);
@@ -125,7 +125,7 @@ export default function CoconutSales() {
 
   // KPIs
   const totalRevenue = filtered.reduce((a, s) => a + (Number(s.total) || calcNet(s)), 0);
-  const totalNuts = filtered.reduce((a, s) => a + Number(s.qty1 || 0) + Number(s.qty2 || 0), 0);
+  const totalNuts = filtered.reduce((a, s) => a + (Number(s.qty1 || 0) - Number(s.free_qty1 || 0)) + (Number(s.qty2 || 0) - Number(s.free_qty2 || 0)), 0);
   const avgRate = filtered.length
     ? (filtered.reduce((a, s) => a + Number(s.rate1 || 0), 0) / filtered.length).toFixed(0)
     : 0;

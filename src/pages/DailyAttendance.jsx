@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   CalendarCheck, Calendar, CheckCircle2, AlertCircle,
-  Users, Save, Check, X, Search, UserCheck, Minus, MapPin
+  Users, Save, Check, X, Search, UserCheck, Minus
 } from 'lucide-react';
 import { getAttendance, saveAttendanceBulk, updateAttendance } from '../services/api';
 import { useToast } from '../components/ToastProvider';
@@ -57,7 +57,6 @@ export default function DailyAttendance() {
   const TASK_TYPE_OPTIONS = ['MR1 Coconut Harvest', 'MR2 Coconut Harvest', 'Cashew Harvest'];
 
   const [employees, setEmployees] = useState([]);
-  const [farm, setFarm] = useState('MR1');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const toast = useToast();
@@ -180,10 +179,11 @@ export default function DailyAttendance() {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      if (!selectedDate) return;
       setIsLoading(true);
       setError(null);
       try {
-        const data = await getAttendance(selectedDate, farm);
+        const data = await getAttendance(selectedDate);
         if (!active) return;
         const emps = data.map(d => ({
           id: String(d.employeeId),
@@ -207,7 +207,9 @@ export default function DailyAttendance() {
           else if (d.status === 'half') att[key] = 0.5;
           else if (d.status === 'absent') att[key] = 0;
 
-          locs[key] = d.locationWorked || d.home_farm || d.farm;
+          const validLocs = ['MR1', 'MR2', 'Poultry'];
+          const resolvedLoc = d.locationWorked || d.home_farm || d.farm;
+          locs[key] = validLocs.includes(resolvedLoc) ? resolvedLoc : 'MR1';
           tasks[key] = d.taskType ?? null;
         });
 
@@ -222,7 +224,7 @@ export default function DailyAttendance() {
     };
     load();
     return () => { active = false; };
-  }, [selectedDate, farm]);
+  }, [selectedDate]);
 
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
@@ -256,15 +258,11 @@ export default function DailyAttendance() {
                 setLocations({});
                 setTaskTypes({});
               }}
+
               className="bg-transparent border-none outline-none text-sm font-bold text-gray-800 pr-3 cursor-pointer"
             />
           </div>
 
-          <select value={farm} onChange={(e) => { setFarm(e.target.value); setAttendance({}); setLocations({}); setTaskTypes({}); }} className="text-sm font-bold border border-gray-200 bg-white rounded-xl px-3 py-1.5 outline-none shadow-sm cursor-pointer">
-            <option value="MR1">MR1 Staff</option>
-            <option value="MR2">MR2 Staff</option>
-            <option value="Poultry">Poultry Staff</option>
-          </select>
         </div>
       </div>
 
