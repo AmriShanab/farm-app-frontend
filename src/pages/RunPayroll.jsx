@@ -87,7 +87,6 @@ export default function RunPayroll() {
   const [error, setError] = useState(null);
   const [startDate, setStartDate] = useState(salaryWeek.startDate);
   const [endDate, setEndDate] = useState(salaryWeek.endDate);
-  const [farm, setFarm] = useState('MR1');
   const [payFrequency, setPayFrequency] = useState('weekly');
 
   const [managerYear, setManagerYear] = useState('2026');
@@ -109,9 +108,9 @@ export default function RunPayroll() {
       setError(null);
       try {
         const [preview, history, finalizedEmpIds] = await Promise.all([
-          getPayrollPreview({ startDate, endDate, farm, payFrequency }),
-          getPayrollHistory({ year: startDate.slice(0, 4), farm }),
-          getFinalizedEmployees({ farm, startDate, endDate }),
+          getPayrollPreview({ startDate, endDate, payFrequency }),
+          getPayrollHistory({ year: startDate.slice(0, 4) }),
+          getFinalizedEmployees({ startDate, endDate }),
         ]);
 
         if (!active) return;
@@ -125,7 +124,7 @@ export default function RunPayroll() {
         }));
 
         setPayrollData(normalizedRows);
-        const storageKey = `finalized:${farm}:${startDate}:${endDate}`;
+        const storageKey = `finalized:${startDate}:${endDate}`;
 
         if (finalizedEmpIds.length > 0) {
           const map = Object.fromEntries(finalizedEmpIds.map(id => [id, true]));
@@ -154,7 +153,7 @@ export default function RunPayroll() {
 
     loadData();
     return () => { active = false; };
-  }, [startDate, endDate, farm, payFrequency]);
+  }, [startDate, endDate, payFrequency]);
   useEffect(() => {
     let active = true;
     const loadEmployees = async () => {
@@ -229,7 +228,7 @@ export default function RunPayroll() {
     }
 
     const payload = {
-      farm,
+      farm: emp.farm,
       startDate,
       endDate,
       empId: parseInt(rawEmpId, 10),
@@ -244,7 +243,7 @@ export default function RunPayroll() {
 
       setFinalizedMap(prev => {
         const next = { ...prev, [empIdStr]: true };
-        const storageKey = `finalized:${farm}:${startDate}:${endDate}`;
+        const storageKey = `finalized:${startDate}:${endDate}`;
         try { sessionStorage.setItem(storageKey, JSON.stringify(next)); } catch { }
         return next;
       });
@@ -316,7 +315,7 @@ export default function RunPayroll() {
 
   const handleExportCsv = () => {
     downloadCsv(
-      `payroll-${farm}-${startDate}-to-${endDate}.csv`,
+      `payroll-all-${startDate}-to-${endDate}.csv`,
       [
         { label: 'Employee', value: row => row.name },
         { label: 'Wage / Day', value: row => row.wagePerDay?.toFixed(2) || '0.00' },
@@ -365,11 +364,6 @@ export default function RunPayroll() {
             <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">End</label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm font-semibold text-gray-800 bg-transparent outline-none" />
           </div>
-          <select value={farm} onChange={e => setFarm(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 shadow-sm cursor-pointer">
-            <option value="MR1">MR1 Block</option>
-            <option value="MR2">MR2 Block</option>
-            <option value="Poultry">Poultry Farm</option>
-          </select>
           <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:text-green-700 transition-colors">
             <Download size={14} /> Export Sheets
           </button>
@@ -593,7 +587,7 @@ export default function RunPayroll() {
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-black text-gray-900">Payroll History Log</h2>
-              <p className="text-xs text-gray-500">Locked entries for {farm}</p>
+              <p className="text-xs text-gray-500">Locked entries across all farms</p>
             </div>
             <div className="text-xs font-bold text-gray-500">{historyRows.length} record(s)</div>
           </div>

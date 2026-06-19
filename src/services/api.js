@@ -562,12 +562,13 @@ export const updateAdvance = async (id, payload) => {
 
 // --- PAYROLL ENDPOINTS ---
 
-export const getPayrollPreview = async ({ startDate, endDate, farm }) => {
+export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency }) => {
   try {
     const qs = [];
     if (startDate) qs.push(`startDate=${encodeURIComponent(startDate)}`);
     if (endDate) qs.push(`endDate=${encodeURIComponent(endDate)}`);
     if (farm) qs.push(`farm=${encodeURIComponent(farm)}`);
+    if (payFrequency) qs.push(`payFrequency=${encodeURIComponent(payFrequency)}`);
     const q = qs.length ? `?${qs.join("&")}` : "";
 
     const response = await fetch(`${BASE_URL}/hr/payroll/preview${q}`, {

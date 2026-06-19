@@ -97,13 +97,11 @@ export default function Dashboard() {
                setCurrentMonth(new Date(period.year, period.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }));
             }
 
-            const salaries = summaryPayload?.salaries || {};
-
             setKpiData({
-               totalIncome: asNumber(summaryPayload?.totalIncome),
-               totalExpenses: asNumber(summaryPayload?.totalExpenses),
-               payrollCost: asNumber(salaries.total),
-               netProfit: asNumber(summaryPayload?.netProfit),
+               totalIncome:   asNumber(summaryPayload?.income?.total   ?? summaryPayload?.totalIncome),
+               totalExpenses: asNumber(summaryPayload?.expenses?.total  ?? summaryPayload?.totalExpenses),
+               payrollCost:   asNumber(summaryPayload?.expenses?.payroll ?? summaryPayload?.salaries?.total),
+               netProfit:     asNumber(summaryPayload?.netProfit),
             });
 
             // Ensure recentData is an array before setting
