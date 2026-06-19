@@ -126,8 +126,8 @@ export default function CoconutSales() {
   // KPIs
   const totalRevenue = filtered.reduce((a, s) => a + (Number(s.total) || calcNet(s)), 0);
   const totalNuts = filtered.reduce((a, s) => a + (Number(s.qty1 || 0) - Number(s.free_qty1 || 0)) + (Number(s.qty2 || 0) - Number(s.free_qty2 || 0)), 0);
-  const avgRate = filtered.length
-    ? (filtered.reduce((a, s) => a + Number(s.rate1 || 0), 0) / filtered.length).toFixed(0)
+  const avgRate = totalNuts > 0
+    ? (totalRevenue / totalNuts).toFixed(0)
     : 0;
 
   const toggleSelect = (id) =>
