@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   CalendarCheck, Calendar, CheckCircle2, AlertCircle,
-  Users, Save, Check, X, Search, UserCheck, Minus
+  Users, Save, Check, X, Search, UserCheck, Minus, SplitSquareHorizontal
 } from 'lucide-react';
-import { getAttendance, saveAttendanceBulk, updateAttendance } from '../services/api';
+import { getAttendance, saveAttendanceBulk } from '../services/api';
 import { useToast } from '../components/ToastProvider';
+
+const LOCATION_OPTIONS = ['MR1', 'MR2', 'Poultry'];
+const TASK_TYPE_OPTIONS = ['MR1 Coconut Harvest', 'MR2 Coconut Harvest', 'Cashew Harvest'];
 
 // --- REUSABLE STAT CARD COMPONENT ---
 const StatCard = ({ title, amount, badge, sub, icon, path, index }) => {
@@ -44,17 +47,30 @@ const StatCard = ({ title, amount, badge, sub, icon, path, index }) => {
   );
 };
 
+// Each employee's day is represented as one "entry":
+//   { mode: 'single', status: 'full'|'half'|'absent', locationWorked, taskType }
+//   { mode: 'split', splitA: {locationWorked, taskType}, splitB: {locationWorked, taskType} }
+// 'split' is always two half-days at two different locations (= one full day total).
+const entryToSegments = (entry) => {
+  if (!entry) return [];
+  if (entry.mode === 'split') {
+    return [
+      { status: 'half', locationWorked: entry.splitA.locationWorked, taskType: entry.splitA.taskType },
+      { status: 'half', locationWorked: entry.splitB.locationWorked, taskType: entry.splitB.taskType },
+    ];
+  }
+  if (entry.status === 'absent') return [{ status: 'absent' }];
+  return [{ status: entry.status, locationWorked: entry.locationWorked, taskType: entry.taskType }];
+};
+
+const otherLocation = (loc) => LOCATION_OPTIONS.find((l) => l !== loc) || LOCATION_OPTIONS[0];
+
 // --- MAIN PAGE COMPONENT ---
 export default function DailyAttendance() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [search, setSearch] = useState('');
 
-  // States to hold attendance status, dynamic locations, and task types
-  const [attendance, setAttendance] = useState({}); // { id: 1, 0.5, 0 }
-  const [locations, setLocations] = useState({});   // { id: 'MR1', 'Poultry', etc. }
-  const [taskTypes, setTaskTypes] = useState({});   // { id: 'MR1 Coconut Harvest' | null }
-
-  const TASK_TYPE_OPTIONS = ['MR1 Coconut Harvest', 'MR2 Coconut Harvest', 'Cashew Harvest'];
+  const [entries, setEntries] = useState({}); // { [employeeId]: entry }
 
   const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,80 +82,98 @@ export default function DailyAttendance() {
   );
 
   // Derived KPIs
-  const presentCount = Object.values(attendance).filter(val => val === 1 || val === 0.5).length;
-  const absentCount = Object.values(attendance).filter(val => val === 0).length;
-  const unmarkedCount = employees.length - Object.keys(attendance).length;
+  const presentCount = Object.values(entries).filter(e => e.mode === 'split' || e.status === 'full' || e.status === 'half').length;
+  const absentCount = Object.values(entries).filter(e => e.mode === 'single' && e.status === 'absent').length;
+  const unmarkedCount = employees.length - Object.keys(entries).length;
 
-  const handleStatusChange = async (id, status) => {
-    setAttendance(prev => ({ ...prev, [id]: status }));
+  const setEntry = (id, entry) => setEntries(prev => ({ ...prev, [id]: entry }));
 
+  const handleStatusChange = (id, status) => {
     const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
+    const prev = entries[id];
+    const prevLoc = prev?.mode === 'single' ? prev.locationWorked : null;
 
-    if (!locations[id] && emp) {
-      setLocations(prev => ({ ...prev, [id]: emp.farm }));
-    }
-
-    const attendanceId = emp?.attendanceId;
-    const statusStr = status === 1 ? 'full' : status === 0.5 ? 'half' : 'absent';
-    const locToSave = status === 0 ? null : (locations[id] || emp?.farm);
-
-    if (attendanceId) {
-      try {
-        await updateAttendance(attendanceId, { status: statusStr, locationWorked: locToSave, taskType: taskTypes[id] ?? null });
-      } catch {
-        toast.error('Failed to update attendance.');
-      }
-    }
+    setEntry(id, {
+      mode: 'single',
+      status,
+      // Location is optional — leave it unset (defaults to the employee's
+      // home farm server-side) unless the user already picked one explicitly.
+      locationWorked: status === 'absent' ? null : prevLoc,
+      taskType: status === 'absent' ? null : (prev?.mode === 'single' ? prev.taskType : null),
+    });
   };
 
-  const handleLocationChange = async (id, newLocation) => {
-    setLocations(prev => ({ ...prev, [id]: newLocation }));
-
-    const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
-    const attendanceId = emp?.attendanceId;
-    const currentStatus = attendance[id];
-
-    if (attendanceId && currentStatus !== undefined && currentStatus !== 0) {
-      const statusStr = currentStatus === 1 ? 'full' : 'half';
-      try {
-        await updateAttendance(attendanceId, { status: statusStr, locationWorked: newLocation, taskType: taskTypes[id] ?? null });
-      } catch {
-        toast.error('Failed to update location.');
-      }
-    }
+  const handleLocationChange = (id, newLocation) => {
+    setEntries(prev => {
+      const e = prev[id];
+      if (!e || e.mode !== 'single' || e.status === 'absent') return prev;
+      return { ...prev, [id]: { ...e, locationWorked: newLocation } };
+    });
   };
 
-  const handleTaskTypeChange = async (id, newTaskType) => {
-    const value = newTaskType || null;
-    setTaskTypes(prev => ({ ...prev, [id]: value }));
+  const handleTaskTypeChange = (id, newTaskType) => {
+    setEntries(prev => {
+      const e = prev[id];
+      if (!e || e.mode !== 'single' || e.status === 'absent') return prev;
+      return { ...prev, [id]: { ...e, taskType: newTaskType || null } };
+    });
+  };
 
+  const handleToggleSplit = (id) => {
     const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
-    const attendanceId = emp?.attendanceId;
-    const currentStatus = attendance[id];
+    const prev = entries[id];
 
-    if (attendanceId && currentStatus !== undefined && currentStatus !== 0) {
-      const statusStr = currentStatus === 1 ? 'full' : 'half';
-      const loc = locations[id] || emp?.farm;
-      try {
-        await updateAttendance(attendanceId, { status: statusStr, locationWorked: loc, taskType: value });
-      } catch {
-        toast.error('Failed to update task type.');
-      }
+    if (prev?.mode === 'split') {
+      // Collapse back to a single full day at the first split location.
+      setEntry(id, {
+        mode: 'single',
+        status: 'full',
+        locationWorked: prev.splitA.locationWorked,
+        taskType: null,
+      });
+      return;
     }
+
+    const locA = (prev?.mode === 'single' && prev.locationWorked) || emp?.farm || 'MR1';
+    setEntry(id, {
+      mode: 'split',
+      splitA: { locationWorked: locA, taskType: null },
+      splitB: { locationWorked: otherLocation(locA), taskType: null },
+    });
+  };
+
+  const handleSplitLocationChange = (id, which, newLocation) => {
+    setEntries(prev => {
+      const e = prev[id];
+      if (!e || e.mode !== 'split') return prev;
+      const other = which === 'A' ? 'splitB' : 'splitA';
+      const updated = { ...e, [which === 'A' ? 'splitA' : 'splitB']: { ...e[which === 'A' ? 'splitA' : 'splitB'], locationWorked: newLocation } };
+      // Keep the two locations distinct.
+      if (updated[other].locationWorked === newLocation) {
+        updated[other] = { ...updated[other], locationWorked: otherLocation(newLocation) };
+      }
+      return { ...prev, [id]: updated };
+    });
+  };
+
+  const handleSplitTaskTypeChange = (id, which, newTaskType) => {
+    setEntries(prev => {
+      const e = prev[id];
+      if (!e || e.mode !== 'split') return prev;
+      const key = which === 'A' ? 'splitA' : 'splitB';
+      return { ...prev, [id]: { ...e, [key]: { ...e[key], taskType: newTaskType || null } } };
+    });
   };
 
   const handleMarkAllPresent = () => {
-    const allPresent = {};
-    const allLocs = { ...locations };
-    filteredEmployees.forEach(emp => {
-      const id = String(emp.employeeId || emp.id);
-      allPresent[id] = 1;
-      if (!allLocs[id]) {
-        allLocs[id] = emp.farm; 
-      }
+    setEntries(prev => {
+      const next = { ...prev };
+      filteredEmployees.forEach(emp => {
+        const id = String(emp.employeeId || emp.id);
+        next[id] = { mode: 'single', status: 'full', locationWorked: null, taskType: null };
+      });
+      return next;
     });
-    setAttendance(prev => ({ ...prev, ...allPresent }));
-    setLocations(allLocs);
   };
 
   const handleSave = async () => {
@@ -150,24 +184,15 @@ export default function DailyAttendance() {
 
     const records = employees.map(emp => {
       const id = String(emp.employeeId || emp.id);
-      const status = attendance[id];
-      const statusStr = status === 1 ? 'full' : status === 0.5 ? 'half' : 'absent';
-
-      const loc = statusStr === 'absent' ? null : (locations[id] || emp.farm);
-
       return {
         empId: emp.employeeId || parseInt(emp.id, 10),
-        status: statusStr,
-        locationWorked: loc,
-        taskType: taskTypes[id] ?? null,
+        segments: entryToSegments(entries[id]),
       };
     });
 
     try {
       setIsLoading(true);
-
       await saveAttendanceBulk(selectedDate, records);
-
       toast.success('Attendance saved successfully!');
     } catch {
       toast.error('Failed to save attendance.');
@@ -190,32 +215,33 @@ export default function DailyAttendance() {
           employeeId: d.employeeId,
           name: d.name,
           role: d.role || '',
-          farm: d.home_farm || d.farm, // Use home_farm from the new API alias
+          farm: d.home_farm || d.farm,
           wagePerDay: d.wagePerDay,
-          attendanceId: d.attendanceId,
-          status: d.status,
         }));
         setEmployees(emps);
 
-        // Build attendance, locations, and task types map
-        const att = {};
-        const locs = {};
-        const tasks = {};
+        const next = {};
         data.forEach(d => {
           const key = String(d.employeeId);
-          if (d.status === 'full') att[key] = 1;
-          else if (d.status === 'half') att[key] = 0.5;
-          else if (d.status === 'absent') att[key] = 0;
-
-          const validLocs = ['MR1', 'MR2', 'Poultry'];
-          const resolvedLoc = d.locationWorked || d.home_farm || d.farm;
-          locs[key] = validLocs.includes(resolvedLoc) ? resolvedLoc : 'MR1';
-          tasks[key] = d.taskType ?? null;
+          const segs = d.segments || [];
+          if (segs.length === 0) return; // unmarked
+          if (segs.length === 1) {
+            const s = segs[0];
+            next[key] = {
+              mode: 'single',
+              status: s.status,
+              locationWorked: s.status === 'absent' ? null : (s.locationWorked || d.home_farm || d.farm),
+              taskType: s.taskType ?? null,
+            };
+          } else {
+            next[key] = {
+              mode: 'split',
+              splitA: { locationWorked: segs[0].locationWorked, taskType: segs[0].taskType ?? null },
+              splitB: { locationWorked: segs[1].locationWorked, taskType: segs[1].taskType ?? null },
+            };
+          }
         });
-
-        setAttendance(att);
-        setLocations(locs);
-        setTaskTypes(tasks);
+        setEntries(next);
       } catch {
         if (active) setError('Failed to load attendance.');
       } finally {
@@ -239,7 +265,7 @@ export default function DailyAttendance() {
             <h1 className="text-xl font-black text-gray-900 tracking-tight">Daily Attendance</h1>
           </div>
           <p className="text-xs font-medium text-gray-500 pl-11">
-            Grid-style attendance register supporting cross-farm deployment
+            Grid-style attendance register supporting cross-farm deployment and split days
           </p>
         </div>
 
@@ -254,9 +280,7 @@ export default function DailyAttendance() {
               value={selectedDate}
               onChange={(e) => {
                 setSelectedDate(e.target.value);
-                setAttendance({});
-                setLocations({});
-                setTaskTypes({});
+                setEntries({});
               }}
 
               className="bg-transparent border-none outline-none text-sm font-bold text-gray-800 pr-3 cursor-pointer"
@@ -314,53 +338,52 @@ export default function DailyAttendance() {
 
         {/* List Body */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse whitespace-nowrap min-w-[900px]">
+          <table className="w-full text-left border-collapse whitespace-nowrap min-w-[960px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[25%]">Employee</th>
+                <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[22%]">Employee</th>
 
-                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%] text-center">
+                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[18%] text-center">
                   Location Worked
                 </th>
 
-                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[22%] text-center">
+                <th className="py-3 px-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[18%] text-center">
                   Task Type
                 </th>
 
-                <th className="py-3 px-2 text-center w-[11%]">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">Full Day</span>
-                  </div>
+                <th className="py-3 px-2 text-center w-[9%]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">Full Day</span>
                 </th>
-                <th className="py-3 px-2 text-center w-[11%]">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Half Day</span>
-                  </div>
+                <th className="py-3 px-2 text-center w-[9%]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Half Day</span>
                 </th>
-                <th className="py-3 px-2 text-center w-[11%]">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Absent</span>
-                  </div>
+                <th className="py-3 px-2 text-center w-[9%]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Absent</span>
+                </th>
+                <th className="py-3 px-2 text-center w-[15%]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">Split Day</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="p-10 text-center text-gray-400 text-sm font-semibold">
+                  <td colSpan="7" className="p-10 text-center text-gray-400 text-sm font-semibold">
                     No employees found matching your search.
                   </td>
                 </tr>
               ) : (
                 filteredEmployees.map(emp => {
-                  const status = attendance[emp.id];
-                  const isAbsent = status === 0;
+                  const entry = entries[emp.id];
+                  const isSplit = entry?.mode === 'split';
+                  const isAbsent = entry?.mode === 'single' && entry.status === 'absent';
+                  const status = entry?.mode === 'single' ? entry.status : null;
 
                   return (
-                    <tr key={emp.id} className="hover:bg-gray-50/80 transition-colors group">
+                    <tr key={emp.id} className={`hover:bg-gray-50/80 transition-colors group ${isSplit ? 'bg-blue-50/30' : ''}`}>
 
                       {/* Employee Name & Details */}
-                      <td className="py-3 px-5">
+                      <td className="py-3 px-5 align-top">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs border border-green-200 shrink-0">
                             {emp.name.substring(0, 2).toUpperCase()}
@@ -376,73 +399,158 @@ export default function DailyAttendance() {
                         </div>
                       </td>
 
-                      {/* Location Worked Dropdown */}
+                      {isSplit ? (
+                        <>
+                          {/* Split: two location dropdowns stacked */}
+                          <td className="py-3 px-2 text-center align-middle">
+                            <div className="flex flex-col gap-1.5 items-center">
+                              <select
+                                value={entry.splitA.locationWorked}
+                                onChange={(e) => handleSplitLocationChange(emp.id, 'A', e.target.value)}
+                                className="w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-blue-50 text-blue-700 border-blue-200"
+                              >
+                                {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l} — Half</option>)}
+                              </select>
+                              <select
+                                value={entry.splitB.locationWorked}
+                                onChange={(e) => handleSplitLocationChange(emp.id, 'B', e.target.value)}
+                                className="w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-blue-50 text-blue-700 border-blue-200"
+                              >
+                                {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l} — Half</option>)}
+                              </select>
+                            </div>
+                          </td>
+
+                          {/* Split: two task-type dropdowns stacked */}
+                          <td className="py-3 px-2 text-center align-middle">
+                            <div className="flex flex-col gap-1.5 items-center">
+                              <select
+                                value={entry.splitA.taskType || ''}
+                                onChange={(e) => handleSplitTaskTypeChange(emp.id, 'A', e.target.value)}
+                                className="w-full max-w-[160px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-white text-gray-500 border-gray-300"
+                              >
+                                <option value="">— None —</option>
+                                {TASK_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                              <select
+                                value={entry.splitB.taskType || ''}
+                                onChange={(e) => handleSplitTaskTypeChange(emp.id, 'B', e.target.value)}
+                                className="w-full max-w-[160px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-white text-gray-500 border-gray-300"
+                              >
+                                <option value="">— None —</option>
+                                {TASK_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                          </td>
+
+                          {/* Full/Half/Absent radios disabled while split (status is implicitly half+half) */}
+                          <td className="py-3 px-2 text-center align-middle">
+                            <div className="flex justify-center p-2">
+                              <div className="w-6 h-6 rounded-full border-2 border-gray-100 bg-gray-50 opacity-40" />
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-center align-middle">
+                            <div className="flex justify-center p-2">
+                              <div className="w-6 h-6 rounded-full border-2 border-amber-300 bg-amber-100 flex items-center justify-center">
+                                <Minus size={14} className="text-amber-500" strokeWidth={3} />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-center align-middle">
+                            <div className="flex justify-center p-2">
+                              <div className="w-6 h-6 rounded-full border-2 border-gray-100 bg-gray-50 opacity-40" />
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          {/* Location Worked Dropdown — optional, defaults to home farm if left unset */}
+                          <td className="py-3 px-2 text-center align-middle">
+                            <select
+                              value={entry?.locationWorked || ''}
+                              onChange={(e) => handleLocationChange(emp.id, e.target.value || null)}
+                              disabled={isAbsent}
+                              className={`w-3/4 max-w-[150px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                                  ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                                  : entry?.locationWorked && entry.locationWorked !== emp.farm
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
+                                    : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
+                                }`}
+                            >
+                              <option value="">{`Default (${emp.farm})`}</option>
+                              {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l === 'MR1' ? 'MR1 Block' : l === 'MR2' ? 'MR2 Block' : 'Poultry Farm'}</option>)}
+                            </select>
+                          </td>
+
+                          {/* Task Type Dropdown */}
+                          <td className="py-3 px-2 text-center align-middle">
+                            <select
+                              value={entry?.taskType || ''}
+                              onChange={(e) => handleTaskTypeChange(emp.id, e.target.value)}
+                              disabled={isAbsent}
+                              className={`w-full max-w-[170px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                                  ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                                  : entry?.taskType
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-sm'
+                                    : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
+                                }`}
+                            >
+                              <option value="">— None —</option>
+                              {TASK_TYPE_OPTIONS.map(t => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </td>
+
+                          {/* Full Day Radio Button */}
+                          <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 'full')}>
+                            <div className="flex justify-center cursor-pointer p-2">
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 'full' ? 'border-green-500 bg-green-500 shadow-sm shadow-green-500/30' : 'border-gray-200 bg-gray-50 hover:border-green-300'
+                                }`}>
+                                {status === 'full' && <Check size={14} color="white" strokeWidth={3} />}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Half Day Radio Button */}
+                          <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 'half')}>
+                            <div className="flex justify-center cursor-pointer p-2">
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 'half' ? 'border-amber-400 bg-amber-400 shadow-sm shadow-amber-400/30' : 'border-gray-200 bg-gray-50 hover:border-amber-300'
+                                }`}>
+                                {status === 'half' && <Minus size={14} color="white" strokeWidth={3} />}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Absent Radio Button */}
+                          <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 'absent')}>
+                            <div className="flex justify-center cursor-pointer p-2">
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 'absent' ? 'border-red-500 bg-red-500 shadow-sm shadow-red-500/30' : 'border-gray-200 bg-gray-50 hover:border-red-300'
+                                }`}>
+                                {status === 'absent' && <X size={14} color="white" strokeWidth={3} />}
+                              </div>
+                            </div>
+                          </td>
+                        </>
+                      )}
+
+                      {/* Split Day toggle */}
                       <td className="py-3 px-2 text-center align-middle">
-                        <select
-                          value={locations[emp.id] || emp.farm}
-                          onChange={(e) => handleLocationChange(emp.id, e.target.value)}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSplit(emp.id)}
                           disabled={isAbsent}
-                          className={`w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                          title="Split this day's work across two locations (half + half)"
+                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${isAbsent
                               ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
-                              : locations[emp.id] && locations[emp.id] !== emp.farm
-                                ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' // Highlight if working cross-farm
-                                : 'bg-white text-gray-700 border-gray-300 focus:border-green-500'
+                              : isSplit
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-blue-400 hover:text-blue-600'
                             }`}
                         >
-                          <option value="MR1">MR1 Block</option>
-                          <option value="MR2">MR2 Block</option>
-                          <option value="Poultry">Poultry Farm</option>
-                        </select>
-                      </td>
-
-                      {/* Task Type Dropdown */}
-                      <td className="py-3 px-2 text-center align-middle">
-                        <select
-                          value={taskTypes[emp.id] || ''}
-                          onChange={(e) => handleTaskTypeChange(emp.id, e.target.value)}
-                          disabled={isAbsent}
-                          className={`w-full max-w-[170px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
-                              ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
-                              : taskTypes[emp.id]
-                                ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-sm'
-                                : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
-                            }`}
-                        >
-                          <option value="">— None —</option>
-                          {TASK_TYPE_OPTIONS.map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </td>
-
-                      {/* Full Day Radio Button */}
-                      <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 1)}>
-                        <div className="flex justify-center cursor-pointer p-2">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 1 ? 'border-green-500 bg-green-500 shadow-sm shadow-green-500/30' : 'border-gray-200 bg-gray-50 hover:border-green-300'
-                            }`}>
-                            {status === 1 && <Check size={14} color="white" strokeWidth={3} />}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Half Day Radio Button */}
-                      <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 0.5)}>
-                        <div className="flex justify-center cursor-pointer p-2">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 0.5 ? 'border-amber-400 bg-amber-400 shadow-sm shadow-amber-400/30' : 'border-gray-200 bg-gray-50 hover:border-amber-300'
-                            }`}>
-                            {status === 0.5 && <Minus size={14} color="white" strokeWidth={3} />}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Absent Radio Button */}
-                      <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 0)}>
-                        <div className="flex justify-center cursor-pointer p-2">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 0 ? 'border-red-500 bg-red-500 shadow-sm shadow-red-500/30' : 'border-gray-200 bg-gray-50 hover:border-red-300'
-                            }`}>
-                            {status === 0 && <X size={14} color="white" strokeWidth={3} />}
-                          </div>
-                        </div>
+                          <SplitSquareHorizontal size={12} />
+                          {isSplit ? 'Splitting' : 'Split'}
+                        </button>
                       </td>
 
                     </tr>

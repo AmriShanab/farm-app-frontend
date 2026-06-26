@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   ClipboardList, Calendar, CheckCircle2, AlertCircle,
-  Users, Minus, MapPin, ChevronDown, Search, TrendingUp
+  Users, Minus, MapPin, ChevronDown, Search, TrendingUp, SplitSquareHorizontal
 } from 'lucide-react';
 import { getEmployees, getAttendanceHistory } from '../services/api';
 import { useToast } from '../components/ToastProvider';
@@ -96,6 +96,21 @@ export default function AttendanceRecord() {
   };
 
   const filteredRecords = result?.records ?? [];
+
+  // Records sharing the same date are segments of one split day (e.g. half
+  // at MR1 + half at MR2) — group them so they render as a single row.
+  const recordGroups = [];
+  for (let i = 0; i < filteredRecords.length;) {
+    const date = filteredRecords[i].date;
+    const group = [filteredRecords[i]];
+    let j = i + 1;
+    while (j < filteredRecords.length && filteredRecords[j].date === date) {
+      group.push(filteredRecords[j]);
+      j++;
+    }
+    recordGroups.push(group);
+    i = j;
+  }
 
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1200px', margin: '0 auto', paddingBottom: '40px' }}>
@@ -216,7 +231,7 @@ export default function AttendanceRecord() {
           </div>
 
           {/* KPI cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <StatCard
               title="Full Days" value={result.summary.fullDays}
               sub="Full shifts worked" color="green" icon={<CheckCircle2 size={13} />}
@@ -229,6 +244,12 @@ export default function AttendanceRecord() {
               title="Absent Days" value={result.summary.absentDays}
               sub="Did not report" color="red" icon={<AlertCircle size={13} />}
             />
+            {typeof result.summary.splitDays === 'number' && (
+              <StatCard
+                title="Split Days" value={result.summary.splitDays}
+                sub="Worked 2 locations" color="blue" icon={<SplitSquareHorizontal size={13} />}
+              />
+            )}
             <StatCard
               title="Gross Earnings" value={`₹${result.summary.grossPay.toLocaleString()}`}
               sub="For this period" color="blue" icon={<TrendingUp size={13} />}
@@ -267,47 +288,64 @@ export default function AttendanceRecord() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredRecords.map(rec => {
+                    {recordGroups.map(group => {
+                      const rec = group[0];
+                      const isSplit = group.length > 1;
                       const d = new Date(rec.date + 'T00:00:00');
                       const dayName = DAY_NAMES[d.getDay()];
                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                       const formatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                      const crossFarm = rec.location_worked && rec.location_worked !== result.employee.farm;
 
                       return (
-                        <tr key={rec.id} className={`hover:bg-gray-50/80 transition-colors ${isWeekend ? 'bg-blue-50/30' : ''}`}>
+                        <tr key={rec.id} className={`hover:bg-gray-50/80 transition-colors ${isWeekend ? 'bg-blue-50/30' : ''} ${isSplit ? 'bg-blue-50/40' : ''}`}>
                           <td className="py-3 px-5">
                             <span className={`text-xs font-black ${isWeekend ? 'text-blue-500' : 'text-gray-500'}`}>
                               {dayName}
                             </span>
                           </td>
-                          <td className="py-3 px-5 text-sm font-bold text-gray-800">{formatted}</td>
-                          <td className="py-3 px-5">
-                            <StatusBadge status={rec.status} />
-                          </td>
-                          <td className="py-3 px-5">
-                            {rec.location_worked ? (
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
-                                crossFarm
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : 'bg-gray-100 text-gray-600 border-gray-200'
-                              }`}>
-                                <MapPin size={10} />
-                                {rec.location_worked}
-                                {crossFarm && <span className="text-blue-400 ml-0.5">↗</span>}
+                          <td className="py-3 px-5 text-sm font-bold text-gray-800">
+                            {formatted}
+                            {isSplit && (
+                              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                                <SplitSquareHorizontal size={10} /> Split Day
                               </span>
-                            ) : (
-                              <span className="text-gray-300 text-xs font-bold">—</span>
                             )}
                           </td>
                           <td className="py-3 px-5">
-                            {rec.task_type ? (
-                              <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">
-                                {rec.task_type}
-                              </span>
-                            ) : (
-                              <span className="text-gray-300 text-xs font-bold">—</span>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {group.map(g => <StatusBadge key={g.id} status={g.status} />)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-5">
+                            <div className="flex flex-col gap-1">
+                              {group.map(g => {
+                                const crossFarm = g.location_worked && g.location_worked !== result.employee.farm;
+                                return g.location_worked ? (
+                                  <span key={g.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border w-fit ${
+                                    crossFarm
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-gray-100 text-gray-600 border-gray-200'
+                                  }`}>
+                                    <MapPin size={10} />
+                                    {g.location_worked}
+                                    {crossFarm && <span className="text-blue-400 ml-0.5">↗</span>}
+                                  </span>
+                                ) : (
+                                  <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
+                                );
+                              })}
+                            </div>
+                          </td>
+                          <td className="py-3 px-5">
+                            <div className="flex flex-col gap-1">
+                              {group.map(g => g.task_type ? (
+                                <span key={g.id} className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg w-fit">
+                                  {g.task_type}
+                                </span>
+                              ) : (
+                                <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
+                              ))}
+                            </div>
                           </td>
                         </tr>
                       );

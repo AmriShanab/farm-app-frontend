@@ -425,17 +425,23 @@ export const getAttendance = async (date, farm) => {
     });
     if (!response.ok) throw new Error("Failed to fetch attendance");
     const data = unwrapApiData(await response.json()) || [];
+    // Each employee may have 0, 1, or 2+ segments for the day (a day can be
+    // split across more than one location, e.g. half at MR1 + half at MR2).
     return Array.isArray(data)
       ? data.map((r) => ({
           employeeId: r.employee_id ?? r.employeeId ?? null,
           name: r.name,
-          farm: r.farm,
+          farm: r.home_farm ?? r.farm,
           home_farm: r.home_farm ?? r.farm,
           wagePerDay: r.wage_per_day ?? r.wagePerDay ?? 0,
-          status: r.status,
-          locationWorked: r.location_worked ?? r.locationWorked ?? null,
-          taskType: r.task_type ?? r.taskType ?? null,
-          attendanceId: r.attendance_id ?? r.attendanceId ?? null,
+          segments: Array.isArray(r.segments)
+            ? r.segments.map((s) => ({
+                attendanceId: s.attendance_id ?? s.attendanceId ?? null,
+                status: s.status,
+                locationWorked: s.location_worked ?? s.locationWorked ?? null,
+                taskType: s.task_type ?? s.taskType ?? null,
+              }))
+            : [],
         }))
       : [];
   } catch (error) {
