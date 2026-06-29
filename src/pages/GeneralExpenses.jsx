@@ -8,7 +8,7 @@ import {
   getMaintenanceExpenses, createMaintenanceExpense, deleteMaintenanceExpense,
   getCEBBills, createCEBBill, deleteCEBBill,
   getFuelLogs, createFuelLog, deleteFuelLog,
-  getMachineryExpenses, createMachineryExpense, deleteMachineryExpense
+  getMachineryExpenses, createMachineryExpense, deleteMachineryExpense, getAttendance
 } from '../services/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -89,27 +89,46 @@ export default function GeneralExpenses() {
 // ─── UNIFIED TAB COMPONENT (Routing to explicit API functions) ─────────────
 function ExpenseCategoryTab({ category, farm, year }) {
   const [data, setData] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [autoWage, setAutoWage] = useState(0);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Generic form state covering all possible payload combinations
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0], farm: 'MR1', notes: '', description: '',
-    mainLabor: '', collectors: '', tractorDriver: '', foodExpenses: '',
-    categoryType: '', amount: '', chequeNo: '', chequeDate: '',
-    unitsUsed: '', billAmount: '', vehicle: '', liters: '', ratePerLiter: ''
+    date: new Date().toISOString().split('T')[0],
+    farm: 'MR1',
+    notes: '',
+    description: '',
+    mainLabor: '',
+    collectors: '',
+    tractorDriver: '',
+    foodExpenses: '',
+    categoryType: '',
+    amount: '',
+    chequeNo: '',
+    chequeDate: '',
+    unitsUsed: '',
+    billAmount: '',
+    vehicle: '',
+    liters: '',
+    ratePerLiter: ''
   });
 
-  // Explicitly call the exact GET function based on category
+  // -------------------------------
+  // FETCH CATEGORY DATA
+  // -------------------------------
   useEffect(() => {
     setIsLoading(true);
+
     let fetchPromise;
+
     if (category === 'harvest') fetchPromise = getHarvestExpenses(farm, year);
-    else if (category === 'maintenance') fetchPromise = getMaintenanceExpenses(farm); // Farm only per Postman
+    else if (category === 'maintenance') fetchPromise = getMaintenanceExpenses(farm);
     else if (category === 'ceb') fetchPromise = getCEBBills(farm, year);
-    else if (category === 'fuel') fetchPromise = getFuelLogs(farm); // Farm only per Postman
-    else if (category === 'machinery') fetchPromise = getMachineryExpenses(year); // Year only per Postman
+    else if (category === 'fuel') fetchPromise = getFuelLogs(farm);
+    else if (category === 'machinery') fetchPromise = getMachineryExpenses(year);
 
     fetchPromise
       .then(setData)
@@ -117,75 +136,193 @@ function ExpenseCategoryTab({ category, farm, year }) {
       .finally(() => setIsLoading(false));
   }, [category, farm, year]);
 
+  // -------------------------------
+  // FETCH ATTENDANCE (NEW)
+  // -------------------------------
+  useEffect(() => {
+    if (category !== 'harvest') return;
+    if (!form.date || !form.farm) return;
+
+    getAttendance(form.date, form.farm)
+      .then(setAttendance)
+      .catch(() => setAttendance([]));
+  }, [form.date, form.farm, category]);
+
+  // -------------------------------
+  // CALCULATE LABOUR COST
+  // -------------------------------
+  useEffect(() => {
+    if (category !== 'harvest') return;
+
+    let total = 0;
+
+    attendance.forEach((a) => {
+      if (a.status === 'absent') return;
+
+      const wage = Number(a.wagePerDay || 0);
+
+      // SINGLE MODE
+      if (a.mode === 'single') {
+        if (a.locationWorked === form.farm) {
+          if (a.status === 'full') total += wage;
+          if (a.status === 'half') total += wage / 2;
+        }
+      }
+
+      // SPLIT MODE
+      if (a.mode === 'split') {
+        if (a.splitA?.locationWorked === form.farm) {
+          total += wage / 2;
+        }
+        if (a.splitB?.locationWorked === form.farm) {
+          total += wage / 2;
+        }
+      }
+    });
+
+    setAutoWage(total);
+  }, [attendance, form.farm, category]);
+
+  // -------------------------------
+  // AUTO FILL MAIN LABOR
+  // -------------------------------
+  useEffect(() => {
+    if (category === 'harvest') {
+      setForm(prev => ({
+        ...prev,
+        mainLabor: autoWage
+      }));
+    }
+  }, [autoWage, category]);
+
+  // -------------------------------
+  // SAVE RECORD
+  // -------------------------------
   const handleSave = async () => {
     setIsSaving(true);
+
     try {
       let savedRecord;
 
-      // Explicitly map payload and call exact POST function
       if (category === 'harvest') {
         savedRecord = await createHarvestExpense({
-          date: form.date, farm: form.farm, notes: form.notes,
-          mainLabor: parseFloat(form.mainLabor || 0), collectors: parseFloat(form.collectors || 0),
-          tractorDriver: parseFloat(form.tractorDriver || 0), foodExpenses: parseFloat(form.foodExpenses || 0)
+          date: form.date,
+          farm: form.farm,
+          notes: form.notes,
+          mainLabor: parseFloat(form.mainLabor || autoWage || 0),
+          collectors: parseFloat(form.collectors || 0),
+          tractorDriver: parseFloat(form.tractorDriver || 0),
+          foodExpenses: parseFloat(form.foodExpenses || 0)
         });
-      } else if (category === 'maintenance') {
+      }
+
+      else if (category === 'maintenance') {
         savedRecord = await createMaintenanceExpense({
-          date: form.date, farm: form.farm, category: form.categoryType, description: form.description,
-          amount: parseFloat(form.amount || 0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
+          date: form.date,
+          farm: form.farm,
+          category: form.categoryType,
+          description: form.description,
+          amount: parseFloat(form.amount || 0),
+          chequeNo: form.chequeNo || "",
+          chequeDate: form.chequeDate || null
         });
-      } else if (category === 'ceb') {
+      }
+
+      else if (category === 'ceb') {
         savedRecord = await createCEBBill({
-          date: form.date, farm: form.farm, billAmount: parseFloat(form.billAmount || 0),
-          unitsUsed: parseFloat(form.unitsUsed || 0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
+          date: form.date,
+          farm: form.farm,
+          billAmount: parseFloat(form.billAmount || 0),
+          unitsUsed: parseFloat(form.unitsUsed || 0),
+          chequeNo: form.chequeNo || "",
+          chequeDate: form.chequeDate || null
         });
-      } else if (category === 'fuel') {
+      }
+
+      else if (category === 'fuel') {
         savedRecord = await createFuelLog({
-          date: form.date, farm: form.farm, vehicle: form.vehicle,
-          liters: parseFloat(form.liters || 0), ratePerLiter: parseFloat(form.ratePerLiter || 0),
-          totalCost: (parseFloat(form.liters || 0) * parseFloat(form.ratePerLiter || 0))
+          date: form.date,
+          farm: form.farm,
+          vehicle: form.vehicle,
+          liters: parseFloat(form.liters || 0),
+          ratePerLiter: parseFloat(form.ratePerLiter || 0),
+          totalCost: parseFloat(form.liters || 0) * parseFloat(form.ratePerLiter || 0)
         });
-      } else if (category === 'machinery') {
+      }
+
+      else if (category === 'machinery') {
         savedRecord = await createMachineryExpense({
-          date: form.date, farm: form.farm, type: form.categoryType, description: form.description,
-          amount: parseFloat(form.amount || 0), chequeNo: form.chequeNo || "", chequeDate: form.chequeDate || null
+          date: form.date,
+          farm: form.farm,
+          type: form.categoryType,
+          description: form.description,
+          amount: parseFloat(form.amount || 0),
+          chequeNo: form.chequeNo || "",
+          chequeDate: form.chequeDate || null
         });
       }
 
       setData([savedRecord, ...data]);
       setIsAdding(false);
 
-      // Reset form
       setForm({
-        date: new Date().toISOString().split('T')[0], farm: 'MR1', notes: '', description: '',
-        mainLabor: '', collectors: '', tractorDriver: '', foodExpenses: '',
-        categoryType: '', amount: '', chequeNo: '', chequeDate: '',
-        unitsUsed: '', billAmount: '', vehicle: '', liters: '', ratePerLiter: ''
+        date: new Date().toISOString().split('T')[0],
+        farm: 'MR1',
+        notes: '',
+        description: '',
+        mainLabor: '',
+        collectors: '',
+        tractorDriver: '',
+        foodExpenses: '',
+        categoryType: '',
+        amount: '',
+        chequeNo: '',
+        chequeDate: '',
+        unitsUsed: '',
+        billAmount: '',
+        vehicle: '',
+        liters: '',
+        ratePerLiter: ''
       });
-    } catch (err) { alert(`Failed to save ${category} record.`); }
-    finally { setIsSaving(false); }
-  };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this record?")) {
-      try {
-        if (category === 'harvest') await deleteHarvestExpense(id);
-        else if (category === 'maintenance') await deleteMaintenanceExpense(id);
-        else if (category === 'ceb') await deleteCEBBill(id);
-        else if (category === 'fuel') await deleteFuelLog(id);
-        else if (category === 'machinery') await deleteMachineryExpense(id);
-
-        setData(data.filter(item => item.id !== id));
-      } catch (err) { alert("Delete failed."); }
+    } catch (err) {
+      alert(`Failed to save ${category} record.`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  // -------------------------------
+  // DELETE RECORD
+  // -------------------------------
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure?")) return;
+
+    if (category === 'harvest') await deleteHarvestExpense(id);
+    else if (category === 'maintenance') await deleteMaintenanceExpense(id);
+    else if (category === 'ceb') await deleteCEBBill(id);
+    else if (category === 'fuel') await deleteFuelLog(id);
+    else if (category === 'machinery') await deleteMachineryExpense(id);
+
+    setData(data.filter(i => i.id !== id));
+  };
+
+  // -------------------------------
+  // TOTAL CALCULATION
+  // -------------------------------
   const calcTotal = () => {
     return data.reduce((acc, curr) => {
-      if (category === 'harvest') return acc + (parseFloat(curr.mainLabor || 0) + parseFloat(curr.collectors || 0) + parseFloat(curr.tractorDriver || 0) + parseFloat(curr.foodExpenses || 0));
-      if (category === 'ceb') return acc + parseFloat(curr.billAmount || 0);
-      if (category === 'fuel') return acc + parseFloat(curr.totalCost || 0);
-      return acc + parseFloat(curr.amount || 0);
+      if (category === 'harvest') {
+        return acc +
+          (Number(curr.mainLabor || 0) +
+           Number(curr.collectors || 0) +
+           Number(curr.tractorDriver || 0) +
+           Number(curr.foodExpenses || 0));
+      }
+
+      if (category === 'ceb') return acc + Number(curr.billAmount || 0);
+      if (category === 'fuel') return acc + Number(curr.totalCost || 0);
+      return acc + Number(curr.amount || 0);
     }, 0);
   };
 

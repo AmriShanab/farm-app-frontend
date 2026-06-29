@@ -190,19 +190,40 @@ export default function CoconutSales() {
         const expensePayload = {
           date: newRow.date,
           farm: farmFilter,
-          mainLabor: parseFloat(newRow.mainLabor) || 0,
+          main_labor: parseFloat(newRow.mainLabor) || 0,
           collectors: parseFloat(newRow.collectors) || 0,
-          tractorDriver: parseFloat(newRow.tractorDriver) || 0,
-          foodExpenses: parseFloat(newRow.foodExpenses) || 0,
-          notes: "Linked to Coconut Sale"
+          tractor_driver: parseFloat(newRow.tractorDriver) || 0,
+          food_expenses: parseFloat(newRow.foodExpenses) || 0,
+
+          // NEW FIELD
+          permanent_labor_cost: permanentLaborCost,
+
+          labor_source: selectedEmployees.length > 0 ? 'from_attendance' : 'manual',
+          labor_snapshot: JSON.stringify(selectedEmployees),
+
+          notes: "Harvest Day expenses"
         };
         await createHarvestExpense(expensePayload);
       }
 
       // 3. Mark harvest attendance if any employees were marked
       const attendanceRecords = Object.entries(harvestAtt)
+      const selectedEmployees = Object.entries(harvestAtt)
         .filter(([, status]) => status !== null)
-        .map(([empId, status]) => ({ employeeId: Number(empId), status }));
+        .map(([empId]) => {
+          const emp = employees.find(e => String(e.id) === String(empId));
+          return {
+            employeeId: Number(empId),
+            status,
+            wagePerDay: Number(emp?.wagePerDay || 0),
+            name: emp?.name || ''
+          };
+        });
+
+      const permanentLaborCost = selectedEmployees.reduce(
+        (sum, emp) => sum + (emp.wagePerDay || 0),
+        0
+      );
 
       const saleId = normalizeSaleRecord(savedRecord).id;
       if (attendanceRecords.length > 0 && saleId) {
@@ -224,7 +245,7 @@ export default function CoconutSales() {
       setHarvestAtt({});
       const parts = [
         'Sale saved.',
-        hasExpenses && 'Expenses logged.',
+        hasExpenses && `Expenses + Permanent labor cost (Rs. ${permanentLaborCost.toFixed(2)}) logged`,
         attendanceRecords.length > 0 && `${attendanceRecords.length} attendance record(s) marked.`,
       ].filter(Boolean);
       toast.success(parts.join(' '));

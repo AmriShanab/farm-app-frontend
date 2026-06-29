@@ -76,6 +76,14 @@ export default function DailyAttendance() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const toast = useToast();
+  const [isLocked, setIsLocked] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState('');
+
+  const checkIsPastDate = (date) => {
+    const today = new Date().toISOString().split('T')[0];
+    return date < today;
+  };
 
   const filteredEmployees = employees.filter(emp =>
     !search || emp.name.toLowerCase().includes(search.toLowerCase()) || (emp.role || '').toLowerCase().includes(search.toLowerCase())
@@ -88,7 +96,24 @@ export default function DailyAttendance() {
 
   const setEntry = (id, entry) => setEntries(prev => ({ ...prev, [id]: entry }));
 
+  const handlePinSubmit = () => {
+    const CORRECT_PIN = '1234'; // later move to backend
+
+    if (pin === CORRECT_PIN) {
+      setIsLocked(false);
+      setShowPinModal(false);
+      setPin('');
+      toast.success('Unlocked successfully');
+    } else {
+      toast.error('Invalid PIN');
+    }
+  };
+
   const handleStatusChange = (id, status) => {
+    if (isLocked) {
+      setShowPinModal(true);
+      return;
+    }
     const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
     const prev = entries[id];
     const prevLoc = prev?.mode === 'single' ? prev.locationWorked : null;
@@ -96,14 +121,16 @@ export default function DailyAttendance() {
     setEntry(id, {
       mode: 'single',
       status,
-      // Location is optional — leave it unset (defaults to the employee's
-      // home farm server-side) unless the user already picked one explicitly.
       locationWorked: status === 'absent' ? null : prevLoc,
       taskType: status === 'absent' ? null : (prev?.mode === 'single' ? prev.taskType : null),
     });
   };
 
   const handleLocationChange = (id, newLocation) => {
+    if (isLocked) {
+      setShowPinModal(true);
+      return;
+    }
     setEntries(prev => {
       const e = prev[id];
       if (!e || e.mode !== 'single' || e.status === 'absent') return prev;
@@ -120,6 +147,10 @@ export default function DailyAttendance() {
   };
 
   const handleToggleSplit = (id) => {
+    if (isLocked) {
+      setShowPinModal(true);
+      return;
+    }
     const emp = employees.find(e => String(e.employeeId || e.id) === String(id));
     const prev = entries[id];
 
@@ -143,6 +174,10 @@ export default function DailyAttendance() {
   };
 
   const handleSplitLocationChange = (id, which, newLocation) => {
+    if (isLocked) {
+      setShowPinModal(true);
+      return;
+    }
     setEntries(prev => {
       const e = prev[id];
       if (!e || e.mode !== 'split') return prev;
@@ -157,6 +192,10 @@ export default function DailyAttendance() {
   };
 
   const handleSplitTaskTypeChange = (id, which, newTaskType) => {
+    if (isLocked) {
+      setShowPinModal(true);
+      return;
+    }
     setEntries(prev => {
       const e = prev[id];
       if (!e || e.mode !== 'split') return prev;
@@ -203,13 +242,17 @@ export default function DailyAttendance() {
 
   useEffect(() => {
     let active = true;
+
     const load = async () => {
       if (!selectedDate) return;
+
       setIsLoading(true);
       setError(null);
+
       try {
         const data = await getAttendance(selectedDate);
         if (!active) return;
+
         const emps = data.map(d => ({
           id: String(d.employeeId),
           employeeId: d.employeeId,
@@ -218,38 +261,62 @@ export default function DailyAttendance() {
           farm: d.home_farm || d.farm,
           wagePerDay: d.wagePerDay,
         }));
+
         setEmployees(emps);
 
         const next = {};
+
         data.forEach(d => {
           const key = String(d.employeeId);
           const segs = d.segments || [];
-          if (segs.length === 0) return; // unmarked
+
+          if (segs.length === 0) return;
+
           if (segs.length === 1) {
             const s = segs[0];
             next[key] = {
               mode: 'single',
               status: s.status,
-              locationWorked: s.status === 'absent' ? null : (s.locationWorked || d.home_farm || d.farm),
+              locationWorked: s.status === 'absent'
+                ? null
+                : (s.locationWorked || d.home_farm || d.farm),
               taskType: s.taskType ?? null,
             };
           } else {
             next[key] = {
               mode: 'split',
-              splitA: { locationWorked: segs[0].locationWorked, taskType: segs[0].taskType ?? null },
-              splitB: { locationWorked: segs[1].locationWorked, taskType: segs[1].taskType ?? null },
+              splitA: {
+                locationWorked: segs[0].locationWorked,
+                taskType: segs[0].taskType ?? null,
+              },
+              splitB: {
+                locationWorked: segs[1].locationWorked,
+                taskType: segs[1].taskType ?? null,
+              },
             };
           }
         });
+
         setEntries(next);
+
+        // 🔒 NEW: LOCK LOGIC FOR PAST DATES
+        const today = new Date().toISOString().split('T')[0];
+        const isPastDate = selectedDate < today;
+
+        setIsLocked(isPastDate);
+
       } catch {
         if (active) setError('Failed to load attendance.');
       } finally {
         if (active) setIsLoading(false);
       }
     };
+
     load();
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, [selectedDate]);
 
   return (
@@ -312,9 +379,17 @@ export default function DailyAttendance() {
       </div>
 
       {/* ── GRID ATTENDANCE TABLE ── */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+      <div
+className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col ${isLocked ? 'opacity-70 select-none' : ''}`}
+      >
 
         {/* Toolbar */}
+        {isLocked && (
+          <div className="p-3 bg-red-50 border-b border-red-200 text-red-700 text-xs font-bold flex items-center gap-2">
+            <AlertCircle size={14} />
+            This is a locked historical record. Editing is restricted. Enter PIN to unlock.
+          </div>
+        )}
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/50">
           <div className="relative w-full sm:w-64">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -471,10 +546,10 @@ export default function DailyAttendance() {
                               onChange={(e) => handleLocationChange(emp.id, e.target.value || null)}
                               disabled={isAbsent}
                               className={`w-3/4 max-w-[150px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
-                                  ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
-                                  : entry?.locationWorked && entry.locationWorked !== emp.farm
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
-                                    : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
+                                ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                                : entry?.locationWorked && entry.locationWorked !== emp.farm
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
+                                  : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
                                 }`}
                             >
                               <option value="">{`Default (${emp.farm})`}</option>
@@ -489,10 +564,10 @@ export default function DailyAttendance() {
                               onChange={(e) => handleTaskTypeChange(emp.id, e.target.value)}
                               disabled={isAbsent}
                               className={`w-full max-w-[170px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
-                                  ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
-                                  : entry?.taskType
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-sm'
-                                    : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
+                                ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                                : entry?.taskType
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-sm'
+                                  : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
                                 }`}
                             >
                               <option value="">— None —</option>
@@ -542,10 +617,10 @@ export default function DailyAttendance() {
                           disabled={isAbsent}
                           title="Split this day's work across two locations (half + half)"
                           className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${isAbsent
-                              ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
-                              : isSplit
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                : 'bg-white text-gray-500 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                            ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                            : isSplit
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-gray-500 border-gray-200 hover:border-blue-400 hover:text-blue-600'
                             }`}
                         >
                           <SplitSquareHorizontal size={12} />
@@ -579,6 +654,37 @@ export default function DailyAttendance() {
         </div>
 
       </div>
+      {showPinModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded-xl shadow-lg w-80">
+            <h2 className="font-bold mb-3">Enter PIN to Unlock</h2>
+
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              className="w-full border p-2 rounded mb-3"
+              placeholder="Enter PIN"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowPinModal(false)}
+                className="px-3 py-1 text-sm bg-gray-200 rounded"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handlePinSubmit}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded"
+              >
+                Unlock
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
