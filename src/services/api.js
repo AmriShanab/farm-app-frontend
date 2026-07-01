@@ -136,6 +136,8 @@ const normalizeGeneralExpenseRecord = (record) => {
     normalized.chequeNo = normalized.cheque_no;
   if ("cheque_date" in normalized && !("chequeDate" in normalized))
     normalized.chequeDate = normalized.cheque_date;
+  if ("permanent_labor_cost" in normalized && !("permanentLaborCost" in normalized))
+    normalized.permanentLaborCost = normalized.permanent_labor_cost;
 
   return normalized;
 };
@@ -596,6 +598,7 @@ export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency
       ),
       name: row.name ?? row.employee_name ?? row.employeeName ?? "",
       role: row.role ?? row.job_role ?? "",
+      farm: row.farm ?? row.homeFarm ?? "",
 
       wagePerDay: Number(row.wage ?? row.base_wage ?? row.wage_per_day ?? 0),
 
@@ -606,6 +609,9 @@ export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency
       grossPay: Number(row.gross ?? row.grossPay ?? 0),
       advanceDeducted: Number(row.advanceDeducted ?? row.advanceDeducted ?? 0),
       netPay: Number(row.netPay ?? row.net_pay ?? 0),
+
+      harvestDays: Number(row.harvestDays ?? 0),
+      harvestLaborCost: Number(row.harvestLaborCost ?? 0),
     }));
   } catch (error) {
     console.error("API Error (getPayrollPreview):", error);

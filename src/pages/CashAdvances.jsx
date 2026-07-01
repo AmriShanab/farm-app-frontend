@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Plus, Search, Download,
   ChevronLeft, ChevronRight, SlidersHorizontal,
@@ -91,6 +91,18 @@ export default function CashAdvances() {
     (statusFilter === 'All' || adv.status === statusFilter) &&
     (!search || adv.name?.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const groupedAdvances = useMemo(() => {
+    const map = new Map();
+    filtered.forEach(adv => {
+      const key = adv.empId || adv.name;
+      if (!map.has(key)) map.set(key, { empId: adv.empId, name: adv.name, rows: [], total: 0 });
+      const g = map.get(key);
+      g.rows.push(adv);
+      g.total += Number(adv.amount) || 0;
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [filtered]);
 
   // KPIs
   const totalUnpaid = advances.filter(a => a.status === 'Unpaid').reduce((sum, a) => sum + (Number(a.amount)||0), 0);
@@ -438,94 +450,125 @@ export default function CashAdvances() {
                  </tr>
               )}
 
-              {!isLoading && filtered.map((adv, idx) => {
-                const isSel = selected.includes(adv.id);
-                return (
-                  <tr key={adv.id} className={`border-t border-gray-50 transition-colors ${isSel ? 'bg-green-50/40' : 'hover:bg-gray-50/40'}`}>
-                    <td className="p-4">
-                      <input type="checkbox" checked={isSel} onChange={() => toggleSelect(adv.id)} className="rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer" />
-                    </td>
+              {!isLoading && groupedAdvances.map(group => (
+                group.rows.map((adv, rowIdx) => {
+                  const isSel = selected.includes(adv.id);
+                  const isFirst = rowIdx === 0;
+                  return [
+                    isFirst && (
+                      <tr key={`grp-${group.empId}`} className="border-t-2 border-gray-200 bg-gray-50/70">
+                        <td className="pl-4 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={group.rows.every(r => selected.includes(r.id))}
+                            onChange={() => {
+                              const allIds = group.rows.map(r => r.id);
+                              const allSelected = allIds.every(id => selected.includes(id));
+                              setSelected(prev =>
+                                allSelected
+                                  ? prev.filter(id => !allIds.includes(id))
+                                  : [...new Set([...prev, ...allIds])]
+                              );
+                            }}
+                            className="rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer"
+                          />
+                        </td>
+                        <td colSpan={5} className="py-2.5 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-green-700 flex items-center justify-center text-white font-black text-[11px] flex-shrink-0">
+                              {(group.name || 'U').substring(0, 2).toUpperCase()}
+                            </div>
+                            <span className="font-black text-gray-900 text-sm">{group.name}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-[10px] font-bold">
+                              {group.rows.length} advance{group.rows.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-4 text-right">
+                          <span className="font-black text-green-800 text-sm">Rs. {fmt(group.total)}</span>
+                        </td>
+                      </tr>
+                    ),
+                    <tr key={adv.id} className={`border-t border-gray-50 transition-colors ${isSel ? 'bg-green-50/40' : 'hover:bg-gray-50/40'}`}>
+                      <td className="p-4">
+                        <input type="checkbox" checked={isSel} onChange={() => toggleSelect(adv.id)} className="rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer" />
+                      </td>
 
-                    <td className="p-4 font-bold text-gray-900">
-                      {adv.date || '—'}
-                    </td>
+                      <td className="p-4 font-bold text-gray-900 pl-8">
+                        {adv.date || '—'}
+                      </td>
 
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                         <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs border border-green-200">
-                           {(adv.name || 'U').substring(0, 2).toUpperCase()}
-                         </div>
-                         <span className="font-bold text-gray-900 text-[13px]">{adv.name}</span>
-                      </div>
-                    </td>
+                      <td className="p-4 text-gray-400 text-xs font-medium pl-2">
+                        <span className="text-gray-300 mr-1">└</span>{adv.name}
+                      </td>
 
-                    {/* NEW CELL RENDERING FOR CHEQUE DETAILS AND REMARKS */}
-                    <td className="p-4">
-                      <div className="flex flex-col max-w-[240px] truncate">
-                        {adv.chequeNo ? (
-                          <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 inline-block w-max mb-0.5">
-                            Chq: {adv.chequeNo} ({adv.chequeDate})
+                      <td className="p-4">
+                        <div className="flex flex-col max-w-[240px] truncate">
+                          {adv.chequeNo ? (
+                            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 inline-block w-max mb-0.5">
+                              Chq: {adv.chequeNo} ({adv.chequeDate})
+                            </span>
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wide mb-0.5">Liquid Cash Transfer</span>
+                          )}
+                          <span className="text-xs text-gray-500 italic font-medium truncate" title={adv.notes}>
+                            {adv.notes || 'No notes provided'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="p-4">
+                        {adv.status === 'Unpaid' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                            <AlertCircle size={10} /> Pending
                           </span>
                         ) : (
-                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wide mb-0.5">Liquid Cash Transfer</span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-green-50 text-green-700 border border-green-200">
+                            <CheckCircle2 size={10} /> Deducted
+                          </span>
                         )}
-                        <span className="text-xs text-gray-500 italic font-medium truncate" title={adv.notes}>
-                          {adv.notes || 'No notes provided'}
-                        </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="p-4">
-                      {adv.status === 'Unpaid' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
-                          <AlertCircle size={10} /> Pending
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-green-50 text-green-700 border border-green-200">
-                          <CheckCircle2 size={10} /> Deducted
-                        </span>
-                      )}
-                    </td>
+                      <td className="p-4 text-right">
+                        <span className="font-black text-gray-900 text-[13px]">Rs. {fmt(parseFloat(adv.amount))}</span>
+                      </td>
 
-                    <td className="p-4 text-right">
-                       <span className="font-black text-gray-900 text-[13px]">Rs. {fmt(window.parseFloat(adv.amount))}</span>
-                    </td>
-
-                    <td className="p-4 text-right">
-                       <div className="flex justify-end gap-1">
-                         {adv.status === 'Unpaid' && (
-                           <button 
-                             onClick={() => handleMarkDeducted(adv)} 
-                             title="Mark as Deducted"
-                             className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors flex items-center gap-1"
-                           >
-                             <CheckCircle2 size={15} />
-                           </button>
-                         )}
-                         <button 
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-1">
+                          {adv.status === 'Unpaid' && (
+                            <button
+                              onClick={() => handleMarkDeducted(adv)}
+                              title="Mark as Deducted"
+                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"
+                            >
+                              <CheckCircle2 size={15} />
+                            </button>
+                          )}
+                          <button
                             title="Edit Record"
-                            onClick={() => { 
-                              setEditAdvance(adv); 
-                              setEditRow({ 
-                                date: adv.date || '', 
-                                amount: String(adv.amount || ''), 
-                                status: adv.status || 'Unpaid', 
+                            onClick={() => {
+                              setEditAdvance(adv);
+                              setEditRow({
+                                date: adv.date || '',
+                                amount: String(adv.amount || ''),
+                                status: adv.status || 'Unpaid',
                                 notes: adv.notes || '',
                                 chequeNo: adv.chequeNo || '',
                                 chequeDate: adv.chequeDate || ''
-                              }); 
-                            }} 
+                              });
+                            }}
                             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                         >
+                          >
                             <Edit2 size={14} />
-                         </button>
-                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ];
+                })
+              ))}
 
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && groupedAdvances.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-12 text-center text-gray-400 font-bold">
                     No advances found matching your filter.
@@ -539,7 +582,7 @@ export default function CashAdvances() {
         {/* Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
           <span className="text-xs font-bold text-gray-500">
-            Showing <strong className="text-gray-900">{filtered.length}</strong> records
+            Showing <strong className="text-gray-900">{filtered.length}</strong> records across <strong className="text-gray-900">{groupedAdvances.length}</strong> employee{groupedAdvances.length !== 1 ? 's' : ''}
           </span>
           <div className="flex gap-1">
             <button className="p-1.5 rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50"><ChevronLeft size={14} /></button>

@@ -508,12 +508,17 @@ export default function RunPayroll() {
                   <tr key={empIdStr} className="border-b border-gray-50 hover:bg-gray-50/50">
                     <td style={tdStyle()}>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">
+                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs flex-shrink-0">
                           {emp.name.substring(0, 2).toUpperCase()}
                         </div>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-0.5">
                           <span className="font-bold text-gray-900">{emp.name}</span>
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{emp.role}</span>
+                          {emp.harvestDays > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 w-max">
+                              🌿 {emp.harvestDays} harvest day{emp.harvestDays !== 1 ? 's' : ''} · Rs. {fmt(emp.harvestLaborCost)} → Harvest Exp.
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>

@@ -3,7 +3,7 @@ import {
   Plus, Search, Download,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   TrendingUp, Sprout, Leaf, ArrowUpRight,
-  Check, X, Loader2, AlertCircle, Trash2, Edit2, Save
+  Check, X, Loader2, AlertCircle, Trash2, Edit2, Save, Eye
 } from 'lucide-react';
 
 // Import API services
@@ -70,6 +70,7 @@ export default function CoconutSales() {
   const [newRow, setNewRow] = useState(emptySaleForm());
   const [editSale, setEditSale] = useState(null);
   const [editRow, setEditRow] = useState(emptySaleForm());
+  const [viewSale, setViewSale] = useState(null);
   const toast = useToast();
 
   // --- Harvest Attendance States ---
@@ -358,7 +359,7 @@ export default function CoconutSales() {
       )}
 
       {/* ── PREMIUM KPI STAT CARDS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {[
           {
             title: 'Total Revenue',
@@ -378,15 +379,6 @@ export default function CoconutSales() {
             chartColor: '#A5D6A7',
             path: "M0,40 L0,20 C 30,35 50,15 70,25 C 85,30 95,10 100,10 L100,40 Z"
           },
-          {
-            title: 'Avg Rate / Nut',
-            amount: `Rs. ${avgRate}`,
-            badge: 'Market Avg',
-            sub: 'This Period',
-            icon: <ArrowUpRight size={14} />,
-            chartColor: '#A5D6A7',
-            path: "M0,40 L0,15 C 25,10 45,30 65,20 C 85,10 95,25 100,20 L100,40 Z"
-          }
         ].map((card, i) => {
           const gradId = `grad-coconut-${i}`;
           return (
@@ -586,8 +578,12 @@ export default function CoconutSales() {
               {!isLoading && filtered.map((sale, idx) => {
                 const isSel = selected.includes(sale.id);
                 return (
-                  <tr key={sale.id} className={`border-t border-gray-50 transition-colors ${isSel ? 'bg-green-50/40' : 'hover:bg-gray-50/40'}`}>
-                    <td className="p-4">
+                  <tr
+                    key={sale.id}
+                    onClick={() => setViewSale(sale)}
+                    className={`border-t border-gray-50 transition-colors cursor-pointer ${isSel ? 'bg-green-50/40' : 'hover:bg-gray-50/40'}`}
+                  >
+                    <td className="p-4" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={isSel} onChange={() => toggleSelect(sale.id)} className="rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-700 cursor-pointer" />
                     </td>
 
@@ -626,7 +622,7 @@ export default function CoconutSales() {
                       Rs. {fmt(sale.total || calcNet(sale))}
                     </td>
 
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
                         <button onClick={() => openEditSale(sale)} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"><Edit2 size={13} /></button>
                         <button onClick={() => handleDelete(sale.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={13} /></button>
@@ -655,6 +651,118 @@ export default function CoconutSales() {
           </div>
         </div>
       </div>
+
+      {/* ── DETAIL VIEW MODAL ── */}
+      {viewSale && (() => {
+        const s = viewSale;
+        const net1 = (parseFloat(s.qty1) || 0) - (parseFloat(s.free_qty1) || 0);
+        const sub1 = net1 * (parseFloat(s.rate1) || 0);
+        const net2 = (parseFloat(s.qty2) || 0) - (parseFloat(s.free_qty2) || 0);
+        const sub2 = net2 * (parseFloat(s.rate2) || 0);
+        const grandTotal = sub1 + sub2;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm" onClick={() => setViewSale(null)}>
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-green-700 to-green-800 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                    <Eye size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black">Harvest Sale Detail</h2>
+                    <p className="text-xs text-green-200 font-medium">{s.date} · {s.farm} Block · ID #{s.id}</p>
+                  </div>
+                </div>
+                <button onClick={() => setViewSale(null)} className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><X size={18} /></button>
+              </div>
+
+              <div className="p-6 space-y-4">
+
+                {/* 1st Quality */}
+                <div className="rounded-xl border border-green-100 bg-green-50/30 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-green-50 border-b border-green-100">
+                    <span className="text-xs font-black text-green-800 uppercase tracking-wider">1st Quality Grade</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100">
+                    <div className="px-4 py-3">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Paid Qty</p>
+                      <p className="text-lg font-black text-gray-900">{Number(s.qty1 || 0).toLocaleString()} nuts</p>
+                    </div>
+                    <div className="px-4 py-3">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Rate</p>
+                      <p className="text-lg font-black text-gray-900">Rs. {fmt(s.rate1)}</p>
+                    </div>
+                    {Number(s.free_qty1 || 0) > 0 && (
+                      <div className="px-4 py-3 col-span-2 border-t border-green-100 flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-blue-500 uppercase">Free coconuts</span>
+                        <span className="font-black text-blue-600">+{Number(s.free_qty1).toLocaleString()}</span>
+                        <span className="text-[10px] text-gray-400 ml-auto">Net qty: {net1.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="px-4 py-3 col-span-2 border-t border-green-100 flex justify-between items-center bg-green-50/50">
+                      <span className="text-xs font-bold text-gray-500">1st Grade Subtotal</span>
+                      <span className="text-base font-black text-green-700">Rs. {fmt(sub1)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2nd Quality */}
+                {(Number(s.qty2 || 0) > 0 || Number(s.rate2 || 0) > 0) && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50/30 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                      <span className="text-xs font-black text-gray-700 uppercase tracking-wider">2nd Quality Grade</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100">
+                      <div className="px-4 py-3">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Paid Qty</p>
+                        <p className="text-lg font-black text-gray-900">{Number(s.qty2 || 0).toLocaleString()} nuts</p>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Rate</p>
+                        <p className="text-lg font-black text-gray-900">Rs. {fmt(s.rate2)}</p>
+                      </div>
+                      {Number(s.free_qty2 || 0) > 0 && (
+                        <div className="px-4 py-3 col-span-2 border-t border-gray-100 flex items-center gap-3">
+                          <span className="text-[10px] font-bold text-blue-500 uppercase">Free coconuts</span>
+                          <span className="font-black text-blue-600">+{Number(s.free_qty2).toLocaleString()}</span>
+                          <span className="text-[10px] text-gray-400 ml-auto">Net qty: {net2.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="px-4 py-3 col-span-2 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <span className="text-xs font-bold text-gray-500">2nd Grade Subtotal</span>
+                        <span className="text-base font-black text-gray-700">Rs. {fmt(sub2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Grand Total */}
+                <div className="rounded-xl border-2 border-green-600 bg-green-600 px-5 py-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-green-100 uppercase tracking-wider">Total Invoice</p>
+                    <p className="text-[10px] text-green-200 mt-0.5">{net1 + net2 > 0 ? `${(net1 + net2).toLocaleString()} net nuts` : ''}</p>
+                  </div>
+                  <p className="text-2xl font-black text-white">Rs. {fmt(grandTotal)}</p>
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+                <button onClick={() => setViewSale(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">Close</button>
+                <button
+                  onClick={() => { setViewSale(null); openEditSale(s); }}
+                  className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-green-700"
+                >
+                  <Edit2 size={14} /> Edit Record
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── MODAL DIALOG OVERLAY: ENTITY SYSTEM UPDATE ── */}
       {editSale && (

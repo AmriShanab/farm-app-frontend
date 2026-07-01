@@ -149,51 +149,28 @@ function ExpenseCategoryTab({ category, farm, year }) {
   }, [form.date, form.farm, category]);
 
   // -------------------------------
-  // CALCULATE LABOUR COST
+  // CALCULATE PERMANENT LABOUR COST
   // -------------------------------
+  // Sums wages of registered employees who worked at form.farm on form.date.
+  // Each attendance record has a segments[] array (one entry per segment;
+  // half-day at a different farm = a separate segment with locationWorked set).
   useEffect(() => {
     if (category !== 'harvest') return;
 
     let total = 0;
 
     attendance.forEach((a) => {
-      if (a.status === 'absent') return;
-
       const wage = Number(a.wagePerDay || 0);
-
-      // SINGLE MODE
-      if (a.mode === 'single') {
-        if (a.locationWorked === form.farm) {
-          if (a.status === 'full') total += wage;
-          if (a.status === 'half') total += wage / 2;
-        }
-      }
-
-      // SPLIT MODE
-      if (a.mode === 'split') {
-        if (a.splitA?.locationWorked === form.farm) {
-          total += wage / 2;
-        }
-        if (a.splitB?.locationWorked === form.farm) {
-          total += wage / 2;
-        }
-      }
+      (a.segments || []).forEach((seg) => {
+        if (seg.status === 'absent') return;
+        if (seg.locationWorked !== form.farm) return;
+        if (seg.status === 'full') total += wage;
+        if (seg.status === 'half') total += wage / 2;
+      });
     });
 
     setAutoWage(total);
   }, [attendance, form.farm, category]);
-
-  // -------------------------------
-  // AUTO FILL MAIN LABOR
-  // -------------------------------
-  useEffect(() => {
-    if (category === 'harvest') {
-      setForm(prev => ({
-        ...prev,
-        mainLabor: autoWage
-      }));
-    }
-  }, [autoWage, category]);
 
   // -------------------------------
   // SAVE RECORD
@@ -209,10 +186,11 @@ function ExpenseCategoryTab({ category, farm, year }) {
           date: form.date,
           farm: form.farm,
           notes: form.notes,
-          mainLabor: parseFloat(form.mainLabor || autoWage || 0),
+          mainLabor: parseFloat(form.mainLabor || 0),
           collectors: parseFloat(form.collectors || 0),
           tractorDriver: parseFloat(form.tractorDriver || 0),
-          foodExpenses: parseFloat(form.foodExpenses || 0)
+          foodExpenses: parseFloat(form.foodExpenses || 0),
+          permanentLaborCost: autoWage,
         });
       }
 
@@ -317,7 +295,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
           (Number(curr.mainLabor || 0) +
            Number(curr.collectors || 0) +
            Number(curr.tractorDriver || 0) +
-           Number(curr.foodExpenses || 0));
+           Number(curr.foodExpenses || 0) +
+           Number(curr.permanentLaborCost || 0));
       }
 
       if (category === 'ceb') return acc + Number(curr.billAmount || 0);
@@ -358,7 +337,20 @@ function ExpenseCategoryTab({ category, farm, year }) {
             {category === 'harvest' && (
               <>
                 <div className="md:col-span-6"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Notes</label><input type="text" placeholder="e.g. May harvest" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500" /></div>
-                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Main Labor (Rs.)</label><input type="number" placeholder="0.00" value={form.mainLabor} onChange={e => setForm({ ...form, mainLabor: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
+
+                {/* Permanent labour cost — auto-calculated from attendance, read-only */}
+                <div className="md:col-span-6">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                    Permanent Labour Cost (Rs.)
+                    <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded uppercase tracking-wider">Auto</span>
+                  </label>
+                  <div className="w-full p-2.5 text-sm border border-amber-200 bg-amber-50 rounded-lg text-right font-black text-amber-800">
+                    {autoWage > 0 ? `Rs. ${Number(autoWage).toLocaleString('en-LK', { minimumFractionDigits: 2 })}` : <span className="text-gray-400 font-medium">No registered employees found for this date &amp; farm</span>}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">Calculated from attendance records. Added to harvest expense &amp; still paid via weekly payroll.</p>
+                </div>
+
+                <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Hired Labour (Rs.)</label><input type="number" placeholder="0.00" value={form.mainLabor} onChange={e => setForm({ ...form, mainLabor: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
                 <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Collectors (Rs.)</label><input type="number" placeholder="0.00" value={form.collectors} onChange={e => setForm({ ...form, collectors: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
                 <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Tractor Driver (Rs.)</label><input type="number" placeholder="0.00" value={form.tractorDriver} onChange={e => setForm({ ...form, tractorDriver: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
                 <div className="md:col-span-3"><label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Food Expenses (Rs.)</label><input type="number" placeholder="0.00" value={form.foodExpenses} onChange={e => setForm({ ...form, foodExpenses: e.target.value })} className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500" /></div>
@@ -454,7 +446,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   // Calculate row total dynamically
                   let rowTotal = parseFloat(row.amount || row.billAmount || row.totalCost || 0);
                   if (category === 'harvest') {
-                    rowTotal = parseFloat(row.mainLabor || 0) + parseFloat(row.collectors || 0) + parseFloat(row.tractorDriver || 0) + parseFloat(row.foodExpenses || 0);
+                    rowTotal = parseFloat(row.mainLabor || 0) + parseFloat(row.collectors || 0) + parseFloat(row.tractorDriver || 0) + parseFloat(row.foodExpenses || 0) + parseFloat(row.permanentLaborCost || 0);
                   }
 
                   return (
@@ -471,8 +463,11 @@ function ExpenseCategoryTab({ category, farm, year }) {
                         <>
                           <td className="p-4 text-gray-700 font-medium">{row.notes}</td>
                           <td className="p-4 text-right text-[11px] text-gray-500">
-                            <p>Main: Rs.{fmt(row.mainLabor)} | Collect: Rs.{fmt(row.collectors)}</p>
+                            <p>Hired Labour: Rs.{fmt(row.mainLabor)} | Collect: Rs.{fmt(row.collectors)}</p>
                             <p>Tractor: Rs.{fmt(row.tractorDriver)} | Food: Rs.{fmt(row.foodExpenses)}</p>
+                            {parseFloat(row.permanentLaborCost || 0) > 0 && (
+                              <p className="text-amber-600 font-bold mt-0.5">Perm. Labour: Rs.{fmt(row.permanentLaborCost)}</p>
+                            )}
                           </td>
                         </>
                       )}

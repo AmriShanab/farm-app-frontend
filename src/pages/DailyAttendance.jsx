@@ -539,22 +539,32 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                         </>
                       ) : (
                         <>
-                          {/* Location Worked Dropdown — optional, defaults to home farm if left unset */}
+                          {/* Location Worked Dropdown — optional for fixed-farm employees (defaults to
+                              home farm server-side), but REQUIRED for Floating employees who have
+                              no valid default location in attendance.location_worked. */}
                           <td className="py-3 px-2 text-center align-middle">
-                            <select
-                              value={entry?.locationWorked || ''}
-                              onChange={(e) => handleLocationChange(emp.id, e.target.value || null)}
-                              disabled={isAbsent}
-                              className={`w-3/4 max-w-[150px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
-                                ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
-                                : entry?.locationWorked && entry.locationWorked !== emp.farm
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
-                                  : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
-                                }`}
-                            >
-                              <option value="">{`Default (${emp.farm})`}</option>
-                              {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l === 'MR1' ? 'MR1 Block' : l === 'MR2' ? 'MR2 Block' : 'Poultry Farm'}</option>)}
-                            </select>
+                            {(() => {
+                              const isFloating = emp.farm === 'Floating';
+                              return (
+                                <select
+                                  value={entry?.locationWorked || ''}
+                                  onChange={(e) => handleLocationChange(emp.id, e.target.value || null)}
+                                  disabled={isAbsent}
+                                  className={`w-3/4 max-w-[150px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                                    ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
+                                    : entry?.locationWorked && entry.locationWorked !== emp.farm
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
+                                        : 'bg-white text-gray-400 border-gray-300 focus:border-green-500'
+                                    }`}
+                                >
+                                  {isFloating
+                                    ? <option value="">General (Both Farms)</option>
+                                    : <option value="">{`Default (${emp.farm})`}</option>
+                                  }
+                                  {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l === 'MR1' ? 'MR1 Block' : l === 'MR2' ? 'MR2 Block' : 'Poultry Farm'}</option>)}
+                                </select>
+                              );
+                            })()}
                           </td>
 
                           {/* Task Type Dropdown */}
