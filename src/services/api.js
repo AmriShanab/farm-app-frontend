@@ -610,6 +610,7 @@ export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency
 
       grossPay: Number(row.gross ?? row.grossPay ?? 0),
       advanceDeducted: Number(row.advanceDeducted ?? row.advanceDeducted ?? 0),
+      advanceDetails: Array.isArray(row.advanceDetails) ? row.advanceDetails : [],
       netPay: Number(row.netPay ?? row.net_pay ?? 0),
 
       harvestDays: Number(row.harvestDays ?? 0),
@@ -632,6 +633,39 @@ export const finalizePayroll = async (payload) => {
     return unwrapApiData(await response.json()) || {};
   } catch (error) {
     console.error("API Error (finalizePayroll):", error);
+    throw error;
+  }
+};
+
+export const getPayrollRunDetails = async (id) => {
+  try {
+    const response = await fetch(`${BASE_URL}/hr/payroll/history/${id}`, { method: "GET", headers: getHeaders() });
+    if (!response.ok) throw new Error("Failed to fetch payroll run details");
+    const payload = unwrapApiData(await response.json()) || {};
+    const payouts = Array.isArray(payload.payouts) ? payload.payouts : [];
+
+    return {
+      run: payload.run || {},
+      payouts: payouts.map((row) => ({
+        empId: String(row.empId ?? row.employee_id ?? row.employeeId ?? row.id ?? ""),
+        name: row.name ?? row.employee_name ?? row.employeeName ?? "",
+        role: row.role ?? row.job_role ?? "",
+        farm: row.employee_farm ?? row.farm ?? row.homeFarm ?? "",
+
+        wagePerDay: Number(row.wage ?? row.base_wage ?? row.wage_per_day ?? row.wagePerDay ?? 0),
+
+        fullDays: Number(row.fullDays ?? 0),
+        halfDays: Number(row.halfDays ?? 0),
+        absentDays: Number(row.absentDays ?? 0),
+
+        grossPay: Number(row.gross ?? row.grossPay ?? 0),
+        advanceDeducted: Number(row.advanceDeducted ?? 0),
+        advanceDetails: Array.isArray(row.advanceDetails) ? row.advanceDetails : [],
+        netPay: Number(row.netPay ?? row.net_pay ?? 0),
+      }))
+    };
+  } catch (error) {
+    console.error("API Error (getPayrollRunDetails):", error);
     throw error;
   }
 };
@@ -1007,35 +1041,35 @@ const mockOwnerData = [
   },
 ];
 
-const mockChequeData = [
-  {
-    id: 101,
-    date: "2026-05-24",
-    chequeNo: "CHQ-00400",
-    amount: "80000.00",
-    payee: "Sathosa Agri",
-    category: "Poultry Feed",
-    status: "Cleared",
-  },
-  {
-    id: 102,
-    date: "2026-05-28",
-    chequeNo: "CHQ-00301",
-    amount: "12500.00",
-    payee: "CEB",
-    category: "Utility Bill",
-    status: "Pending",
-  },
-  {
-    id: 103,
-    date: "2026-06-01",
-    chequeNo: "CHQ-00200",
-    amount: "8000.00",
-    payee: "SolarTech",
-    category: "Maintenance",
-    status: "Pending",
-  },
-];
+// const mockChequeData = [
+//   {
+//     id: 101,
+//     date: "2026-05-24",
+//     chequeNo: "CHQ-00400",
+//     amount: "80000.00",
+//     payee: "Sathosa Agri",
+//     category: "Poultry Feed",
+//     status: "Cleared",
+//   },
+//   {
+//     id: 102,
+//     date: "2026-05-28",
+//     chequeNo: "CHQ-00301",
+//     amount: "12500.00",
+//     payee: "CEB",
+//     category: "Utility Bill",
+//     status: "Pending",
+//   },
+//   {
+//     id: 103,
+//     date: "2026-06-01",
+//     chequeNo: "CHQ-00200",
+//     amount: "8000.00",
+//     payee: "SolarTech",
+//     category: "Maintenance",
+//     status: "Pending",
+//   },
+// ];
 
 // --- FINANCE ENDPOINTS ---
 

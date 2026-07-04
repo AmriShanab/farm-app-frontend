@@ -144,6 +144,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
     billAmount: "",
     meterId: "",
     vehicle: "",
+    machinery: "",
     liters: "",
     ratePerLiter: "",
   });
@@ -257,6 +258,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
           date: form.date,
           farm: form.farm,
           type: form.categoryType,
+          machinery: form.machinery || null,
           description: form.description,
           amount: parseFloat(form.amount || 0),
           chequeNo: form.chequeNo || "",
@@ -284,6 +286,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
         billAmount: "",
         meterId: "",
         vehicle: "",
+        machinery: "",
         liters: "",
         ratePerLiter: "",
       });
@@ -401,9 +404,9 @@ function ExpenseCategoryTab({ category, farm, year }) {
 
                 {/* Permanent labour cost — auto-calculated from attendance, read-only */}
                 <div className="md:col-span-6">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Permanent Labour Cost (Rs.)
-                    <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded uppercase tracking-wider">
+                  <label className="text-[11px] font-black text-gray-500 flex items-center flex-wrap uppercase tracking-wider mb-1 gap-2">
+                    Permanent Labour Cost on {form.date || "selected date"}
+                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded uppercase tracking-wider">
                       Auto
                     </span>
                   </label>
@@ -411,14 +414,15 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     {autoWage > 0 ? (
                       `Rs. ${Number(autoWage).toLocaleString("en-LK", { minimumFractionDigits: 2 })}`
                     ) : (
-                      <span className="text-gray-400 font-medium">
-                        No registered employees found for this date &amp; farm
+                      <span className="text-gray-400 font-medium text-xs">
+                        No permanent attendance logged for this date & farm
                       </span>
                     )}
                   </div>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Calculated from attendance records. Added to harvest expense
-                    &amp; still paid via weekly payroll.
+                    Auto-calculated cost specific to {form.date}'s attendance at{" "}
+                    {form.farm}. Assessed to harvest expense. (Workers are still
+                    paid via actual payroll).
                   </p>
                 </div>
 
@@ -501,6 +505,22 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     <option value="running">Running</option>
                   </select>
                 </div>
+                {category === "machinery" && (
+                  <div className="md:col-span-6">
+                    <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                      Machinery Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Tractor, Water Pump"
+                      value={form.machinery}
+                      onChange={(e) =>
+                        setForm({ ...form, machinery: e.target.value })
+                      }
+                      className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold"
+                    />
+                  </div>
+                )}
                 <div className="md:col-span-12">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
                     Description
@@ -852,6 +872,11 @@ function ExpenseCategoryTab({ category, farm, year }) {
                               <p className="font-bold text-gray-800">
                                 {row.description}
                               </p>
+                              {category === "machinery" && row.machinery && (
+                                <p className="text-[11px] font-semibold text-gray-500 mt-1">
+                                  Machinery: {row.machinery}
+                                </p>
+                              )}
                             </td>
                             <td className="p-4">
                               {row.chequeNo ? (
