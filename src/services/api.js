@@ -138,6 +138,8 @@ const normalizeGeneralExpenseRecord = (record) => {
     normalized.chequeDate = normalized.cheque_date;
   if ("permanent_labor_cost" in normalized && !("permanentLaborCost" in normalized))
     normalized.permanentLaborCost = normalized.permanent_labor_cost;
+  if ("meter_id" in normalized && !("meterId" in normalized))
+    normalized.meterId = normalized.meter_id;
 
   return normalized;
 };
