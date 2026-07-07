@@ -158,7 +158,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
       const wage = Number(a.wagePerDay || 0);
       (a.segments || []).forEach((seg) => {
         if (seg.status === "absent") return;
-        if (seg.locationWorked !== form.farm) return;
+        const actualLocation = seg.locationWorked || a.home_farm || a.farm;
+        if (actualLocation !== form.farm) return;
         if (seg.status === "full") autoWage += wage;
         if (seg.status === "half") autoWage += wage / 2;
       });
@@ -773,7 +774,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   {category === "harvest" && (
                     <>
                       <th className="p-4 text-left">Notes</th>
-                      <th className="p-4 text-right">Labor Breakdown (Rs.)</th>
+                      <th className="p-4 text-right">Oth. Breakdown (Rs.)</th>
+                      <th className="p-4 text-right">Perm. Labor (Rs.)</th>
                     </>
                   )}
                   {(category === "maintenance" || category === "machinery") && (
@@ -853,11 +855,9 @@ function ExpenseCategoryTab({ category, farm, year }) {
                                 Tractor: Rs.{fmt(row.tractorDriver)} | Food: Rs.
                                 {fmt(row.foodExpenses)}
                               </p>
-                              {parseFloat(row.permanentLaborCost || 0) > 0 && (
-                                <p className="text-amber-600 font-bold mt-0.5">
-                                  Perm. Labour: Rs.{fmt(row.permanentLaborCost)}
-                                </p>
-                              )}
+                            </td>
+                            <td className="p-4 text-right font-black text-amber-700 bg-amber-50/30">
+                              Rs.{fmt(row.permanentLaborCost || 0)}
                             </td>
                           </>
                         )}
