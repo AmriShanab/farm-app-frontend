@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Sprout,
   Leaf,
-  ArrowUpRight,
   Check,
   X,
   Loader2,
@@ -147,17 +146,18 @@ export default function CoconutSales() {
   useEffect(() => {
     if (!isAdding) return;
     let active = true;
-    setEmpLoading(true);
-    getEmployees(null, "active")
-      .then((data) => {
+    const fetchE = async () => {
+      setEmpLoading(true);
+      try {
+        const data = await getEmployees(null, "active");
         if (active) setEmployees(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
+      } catch {
         if (active) setEmployees([]);
-      })
-      .finally(() => {
+      } finally {
         if (active) setEmpLoading(false);
-      });
+      }
+    };
+    fetchE();
     return () => {
       active = false;
     };
@@ -177,7 +177,6 @@ export default function CoconutSales() {
       (Number(s.qty2 || 0) - Number(s.free_qty2 || 0)),
     0,
   );
-  const avgRate = totalNuts > 0 ? (totalRevenue / totalNuts).toFixed(0) : 0;
 
   const toggleSelect = (id) =>
     setSelected((sel) =>
@@ -835,7 +834,7 @@ export default function CoconutSales() {
               )}
 
               {!isLoading &&
-                filtered.map((sale, idx) => {
+                filtered.map((sale) => {
                   const isSel = selected.includes(sale.id);
                   return (
                     <tr
