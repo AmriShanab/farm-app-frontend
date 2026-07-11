@@ -53,6 +53,7 @@ export default function CashAdvances() {
           empId: String(adv.employee_id ?? adv.empId ?? ''),
           name: adv.employee_name ?? adv.name ?? '',
           amount: adv.amount,
+          repaidAmount: Number(adv.repaid_amount ?? adv.repaidAmount ?? 0),
           status: (adv.status || 'unpaid').charAt(0).toUpperCase() + (adv.status || 'unpaid').slice(1),
           notes: adv.notes || '',
           chequeNo: adv.cheque_no || adv.chequeNo || '',
@@ -105,7 +106,8 @@ export default function CashAdvances() {
   }, [filtered]);
 
   // KPIs
-  const totalUnpaid = advances.filter(a => a.status === 'Unpaid').reduce((sum, a) => sum + (Number(a.amount)||0), 0);
+  // Outstanding = issued minus whatever payroll has already recovered
+  const totalUnpaid = advances.filter(a => a.status === 'Unpaid').reduce((sum, a) => sum + Math.max(0, (Number(a.amount)||0) - (Number(a.repaidAmount)||0)), 0);
   const unpaidCount = advances.filter(a => a.status === 'Unpaid').length;
   const totalGivenAllTime = advances.reduce((sum, a) => sum + (Number(a.amount)||0), 0);
 
@@ -519,9 +521,15 @@ export default function CashAdvances() {
 
                       <td className="p-4">
                         {adv.status === 'Unpaid' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
-                            <AlertCircle size={10} /> Pending
-                          </span>
+                          adv.repaidAmount > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                              <AlertCircle size={10} /> Partial
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                              <AlertCircle size={10} /> Pending
+                            </span>
+                          )
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-green-50 text-green-700 border border-green-200">
                             <CheckCircle2 size={10} /> Deducted
@@ -531,6 +539,11 @@ export default function CashAdvances() {
 
                       <td className="p-4 text-right">
                         <span className="font-black text-gray-900 text-[13px]">Rs. {fmt(parseFloat(adv.amount))}</span>
+                        {adv.status === 'Unpaid' && adv.repaidAmount > 0 && (
+                          <span className="block text-[10px] font-bold text-blue-600 mt-0.5">
+                            Repaid Rs. {fmt(adv.repaidAmount)} · Due Rs. {fmt(Math.max(0, adv.amount - adv.repaidAmount))}
+                          </span>
+                        )}
                       </td>
 
                       <td className="p-4 text-right">

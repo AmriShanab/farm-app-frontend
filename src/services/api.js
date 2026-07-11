@@ -524,6 +524,7 @@ export const getAdvances = async (params = {}) => {
       date: r.date || r.created_at || "",
       amount:
         typeof r.amount === "string" ? parseFloat(r.amount) : (r.amount ?? 0),
+      repaidAmount: Number(r.repaid_amount ?? r.repaidAmount ?? 0),
       status:
         (r.status || "").toString().toLowerCase() === "deducted"
           ? "Deducted"
@@ -602,14 +603,19 @@ export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency
       role: row.role ?? row.job_role ?? "",
       farm: row.farm ?? row.homeFarm ?? "",
 
-      wagePerDay: Number(row.wage ?? row.base_wage ?? row.wage_per_day ?? 0),
+      wagePerDay: Number(
+        row.wagePerDay ?? row.wage ?? row.base_wage ?? row.wage_per_day ?? 0,
+      ),
 
       fullDays: Number(row.fullDays ?? 0),
       halfDays: Number(row.halfDays ?? 0),
       absentDays: Number(row.absentDays ?? 0),
 
       grossPay: Number(row.gross ?? row.grossPay ?? 0),
-      advanceDeducted: Number(row.advanceDeducted ?? row.advanceDeducted ?? 0),
+      advanceDeducted: Number(row.advanceDeducted ?? 0),
+      advanceOutstanding: Number(
+        row.advanceOutstanding ?? row.advanceDeducted ?? 0,
+      ),
       advanceDetails: Array.isArray(row.advanceDetails) ? row.advanceDetails : [],
       netPay: Number(row.netPay ?? row.net_pay ?? 0),
 

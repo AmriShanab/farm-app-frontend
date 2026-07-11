@@ -94,6 +94,8 @@ export default function RunPayroll() {
 
   const [breakdownEmp, setBreakdownEmp] = useState(null);
   const [historicalRun, setHistoricalRun] = useState(null);
+  const [finalizeEmp, setFinalizeEmp] = useState(null);
+  const [deductAmount, setDeductAmount] = useState(0);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -234,20 +236,33 @@ export default function RunPayroll() {
   );
   const totalNetPayout = payrollData.reduce((sum, emp) => sum + emp.netPay, 0);
 
-  const handleFinalizeSingle = async (emp) => {
+  const handleFinalizeSingle = (emp) => {
     const rawEmpId = emp.employeeId || emp.empId || emp.id;
-    const empIdStr = String(rawEmpId);
 
     if (!rawEmpId || isNaN(parseInt(rawEmpId, 10))) {
       toast.error(`Could not resolve a valid Employee ID for ${emp.name}`);
       return;
     }
 
-    if (
-      !confirm(
-        `Are you sure you want to lock and finalize salary payout for ${emp.name}?`,
-      )
-    ) {
+    // Default recovery: full outstanding, capped at gross (backend default)
+    setDeductAmount(Number(emp.advanceDeducted || 0));
+    setFinalizeEmp(emp);
+  };
+
+  const confirmFinalize = async () => {
+    const emp = finalizeEmp;
+    if (!emp) return;
+
+    const rawEmpId = emp.employeeId || emp.empId || emp.id;
+    const empIdStr = String(rawEmpId);
+    const gross = Number(emp.grossPay || 0);
+    const maxDeduct = Math.min(Number(emp.advanceOutstanding || 0), gross);
+    const deduct = Number(deductAmount) || 0;
+
+    if (deduct < 0 || deduct > maxDeduct + 0.01) {
+      toast.warn(
+        `Advance recovery must be between Rs. 0 and Rs. ${fmt(maxDeduct)}.`,
+      );
       return;
     }
 
@@ -256,11 +271,12 @@ export default function RunPayroll() {
       startDate,
       endDate,
       empId: parseInt(rawEmpId, 10),
-      grossPay: Number(emp.grossPay || 0),
-      advanceDeducted: Number(emp.advanceDeducted || 0),
-      netPay: Number(emp.netPay || 0),
+      grossPay: gross,
+      advanceDeducted: deduct,
+      netPay: Math.max(0, gross - deduct),
     };
 
+    setFinalizeEmp(null);
     setIndividualSaving((prev) => ({ ...prev, [empIdStr]: true }));
     try {
       await finalizePayroll(payload);
@@ -276,9 +292,24 @@ export default function RunPayroll() {
         return next;
       });
 
+      // Reflect the chosen recovery in the on-screen row until next refresh
+      setPayrollData((prev) =>
+        prev.map((row) =>
+          String(row.employeeId) === empIdStr
+            ? {
+                ...row,
+                advanceDeducted: deduct,
+                netPay: Math.max(0, gross - deduct),
+              }
+            : row,
+        ),
+      );
+
       toast.success(`Payroll successfully secured for ${emp.name}.`);
     } catch {
       toast.error(`System error finalizing record for ${emp.name}.`);
+    } finally {
+      setIndividualSaving((prev) => ({ ...prev, [empIdStr]: false }));
     }
   };
 
@@ -841,7 +872,13 @@ export default function RunPayroll() {
                     Staff
                   </th>
                   <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-gray-500 text-right">
-                    Net Distributed
+                    Gross
+                  </th>
+                  <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-gray-500 text-right">
+                    Advance
+                  </th>
+                  <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-gray-500 text-right">
+                    Cash Paid
                   </th>
                 </tr>
               </thead>
@@ -849,7 +886,7 @@ export default function RunPayroll() {
                 {historyRows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={3}
+                      colSpan={5}
                       className="py-8 px-4 text-xs text-gray-400 text-center"
                     >
                       No historical locks detected.
@@ -867,6 +904,14 @@ export default function RunPayroll() {
                       </td>
                       <td className="py-2.5 px-4 text-xs text-gray-700 text-center">
                         {row.employeeCount || "-"}
+                      </td>
+                      <td className="py-2.5 px-4 text-xs font-bold text-gray-700 text-right">
+                        Rs. {fmt(row.totalGross)}
+                      </td>
+                      <td className="py-2.5 px-4 text-xs font-bold text-orange-700 text-right">
+                        {row.totalDeductions > 0
+                          ? `Rs. ${fmt(row.totalDeductions)}`
+                          : "—"}
                       </td>
                       <td className="py-2.5 px-4 text-xs font-black text-gray-900 text-right">
                         Rs. {fmt(row.totalNet)}
@@ -1125,6 +1170,137 @@ export default function RunPayroll() {
           </div>
         </div>
       )}
+
+      {/* ── FINALIZE PAY MODAL ── */}
+      {finalizeEmp &&
+        (() => {
+          const gross = Number(finalizeEmp.grossPay || 0);
+          const outstanding = Number(finalizeEmp.advanceOutstanding || 0);
+          const maxDeduct = Math.min(outstanding, gross);
+          const deduct = Number(deductAmount) || 0;
+          const netCash = Math.max(0, gross - deduct);
+          const carryForward = Math.max(0, outstanding - deduct);
+
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={() => setFinalizeEmp(null)}
+              />
+              <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+                <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-black text-gray-900 mb-1">
+                      Finalize Pay — {finalizeEmp.name}
+                    </h3>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {startDate} → {endDate}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setFinalizeEmp(null)}
+                    className="p-1.5 rounded-full text-gray-400 hover:bg-white hover:text-gray-700 transition-all shadow-sm"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="p-5 grid gap-4 text-sm bg-white">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                      <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                        Gross Pay
+                      </span>
+                      <span className="font-bold text-gray-800">
+                        Rs. {fmt(gross)}
+                      </span>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                      <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                        Advances Outstanding
+                      </span>
+                      <span className="font-bold text-orange-700">
+                        Rs. {fmt(outstanding)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {finalizeEmp.advanceDetails?.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+                        Open Advances
+                      </div>
+                      <ul className="divide-y divide-gray-50 max-h-32 overflow-y-auto">
+                        {finalizeEmp.advanceDetails.map((adv) => (
+                          <li
+                            key={adv.id}
+                            className="p-2.5 px-4 flex justify-between items-center text-xs"
+                          >
+                            <span className="font-bold text-gray-600 text-[11px] bg-gray-100 px-2.5 py-1 rounded-md">
+                              {adv.date}
+                            </span>
+                            <span className="font-bold text-gray-800">
+                              Rs. {fmt(adv.amount)}
+                              {Number(adv.repaidAmount) > 0 && (
+                                <span className="text-[10px] text-gray-400 font-semibold ml-1.5">
+                                  (of {fmt(adv.originalAmount)})
+                                </span>
+                              )}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-black text-gray-600 uppercase tracking-wider">
+                      Advance to Recover Now (Rs.)
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={maxDeduct}
+                      step="0.01"
+                      value={deductAmount}
+                      onChange={(e) => setDeductAmount(e.target.value)}
+                      className="w-full bg-white border-2 border-amber-200 focus:border-amber-400 rounded-xl px-3 py-2.5 text-base font-black text-gray-900 outline-none"
+                    />
+                    <span className="text-[11px] font-semibold text-gray-400">
+                      Max recoverable this run: Rs. {fmt(maxDeduct)}
+                      {carryForward > 0 &&
+                        ` · Rs. ${fmt(carryForward)} will carry to the next run`}
+                    </span>
+                  </label>
+
+                  <div className="bg-gradient-to-r from-green-50 to-green-100/50 border border-green-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
+                    <span className="text-xs font-black text-green-900 uppercase tracking-wider">
+                      Cash to Pay
+                    </span>
+                    <span className="text-2xl font-black text-green-700 drop-shadow-sm">
+                      Rs. {fmt(netCash)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/60">
+                  <button
+                    onClick={() => setFinalizeEmp(null)}
+                    className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmFinalize}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-black shadow-md"
+                  >
+                    Lock &amp; Pay Rs. {fmt(netCash)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {/* ── PAYROLL BREAKDOWN MODAL ── */}
       {breakdownEmp && (
