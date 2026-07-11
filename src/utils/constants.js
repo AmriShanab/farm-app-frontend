@@ -1,12 +1,8 @@
 // Application Constants
 
-export const FARM_METERS = {
-  MR1: [
-    { id: "mr1-main", name: "Main Estate Meter" },
-    { id: "mr1-poultry", name: "Poultry Section Meter" },
-  ],
-  MR2: [
-    // Leave room for MR2 meters if needed in the future
-    { id: "mr2-main", name: "MR2 Main Meter" },
-  ],
-};
+// CEB electricity accounts. Bills are recorded per account number (not per
+// farm). The id is stored in ceb_bills.meter_id.
+export const CEB_ACCOUNTS = [
+  { id: "8316166704", name: "8316166704" },
+  { id: "8320043204", name: "8320043204" },
+];

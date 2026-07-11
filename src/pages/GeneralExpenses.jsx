@@ -31,7 +31,7 @@ import {
   deleteMachineryExpense,
   getAttendance,
 } from "../services/api";
-import { FARM_METERS } from "../utils/constants";
+import { CEB_ACCOUNTS } from "../utils/constants";
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-LK", {
@@ -176,7 +176,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
         let req;
         if (category === "harvest") req = getHarvestExpenses(farm, year);
         else if (category === "maintenance") req = getMaintenanceExpenses(farm);
-        else if (category === "ceb") req = getCEBBills(farm, year);
+        // CEB bills aren't farm-scoped — ignore the estate filter, list all.
+        else if (category === "ceb") req = getCEBBills("", year);
         else if (category === "fuel") req = getFuelLogs(farm);
         else if (category === "machinery") req = getMachineryExpenses(year);
 
@@ -237,7 +238,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
       } else if (category === "ceb") {
         savedRecord = await createCEBBill({
           date: form.date,
-          farm: form.farm,
           meter_id: form.meterId || null,
           billAmount: parseFloat(form.billAmount || 0),
           unitsUsed: parseFloat(form.unitsUsed || 0),
@@ -369,21 +369,23 @@ function ExpenseCategoryTab({ category, farm, year }) {
               />
             </div>
 
-            {/* Conditional Farm Select (Machinery has no farm in Postman payload requirement, but we'll include it for consistency or hide it based on strict spec) */}
-            <div className="md:col-span-3">
-              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                Estate Location
-              </label>
-              <select
-                value={form.farm}
-                onChange={(e) => setForm({ ...form, farm: e.target.value })}
-                className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
-                disabled={isSaving}
-              >
-                <option value="MR1">MR1 Farm</option>
-                <option value="MR2">MR2 Farm</option>
-              </select>
-            </div>
+            {/* Estate Location — not applicable to CEB bills (keyed by account) */}
+            {category !== "ceb" && (
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                  Estate Location
+                </label>
+                <select
+                  value={form.farm}
+                  onChange={(e) => setForm({ ...form, farm: e.target.value })}
+                  className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
+                  disabled={isSaving}
+                >
+                  <option value="MR1">MR1 Farm</option>
+                  <option value="MR2">MR2 Farm</option>
+                </select>
+              </div>
+            )}
 
             {/* Dynamic Fields based on Category */}
             {category === "harvest" && (
@@ -584,7 +586,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
               <>
                 <div className="md:col-span-6">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Meter Box
+                    Account Number
                   </label>
                   <select
                     value={form.meterId}
@@ -593,10 +595,10 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     }
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
                   >
-                    <option value="">-- Main Supply / None --</option>
-                    {(FARM_METERS[form.farm] || []).map((meter) => (
-                      <option key={meter.id} value={meter.id}>
-                        {meter.name}
+                    <option value="">-- Select Account --</option>
+                    {CEB_ACCOUNTS.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name}
                       </option>
                     ))}
                   </select>
@@ -833,11 +835,23 @@ function ExpenseCategoryTab({ category, farm, year }) {
                       >
                         <td className="p-4">
                           <p className="font-bold text-gray-900">{row.date}</p>
-                          <span
-                            className={`mt-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide flex items-center w-max gap-1 ${row.farm === "MR1" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"}`}
-                          >
-                            <MapPin size={10} /> {row.farm}
-                          </span>
+                          {category === "ceb" ? (
+                            row.meterId ? (
+                              <span className="mt-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide flex items-center w-max gap-1 bg-blue-100 text-blue-700">
+                                <Zap size={10} /> Acc. {row.meterId}
+                              </span>
+                            ) : (
+                              <span className="mt-1 text-[10px] font-bold text-gray-400 italic">
+                                No account
+                              </span>
+                            )
+                          ) : (
+                            <span
+                              className={`mt-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide flex items-center w-max gap-1 ${row.farm === "MR1" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"}`}
+                            >
+                              <MapPin size={10} /> {row.farm}
+                            </span>
+                          )}
                         </td>
 
                         {/* Dynamic Cells */}
@@ -905,11 +919,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
                               </p>
                               {row.meterId && (
                                 <p className="text-[10px] text-gray-500 mt-0.5">
-                                  {(
-                                    (FARM_METERS[row.farm] || []).find(
-                                      (m) => m.id === row.meterId,
-                                    ) || {}
-                                  ).name || row.meterId}
+                                  Acc. {row.meterId}
                                 </p>
                               )}
                             </td>
