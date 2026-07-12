@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Coins,
@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   LogOut,
   Menu,
-  Bell,
   ChevronDown,
   ChevronRight,
   Nut,
@@ -20,11 +19,13 @@ import {
   CalendarCheck,
   Calculator,
   ClipboardList,
-  Search,
   Sun,
-  User
-} from 'lucide-react';
-import { clearStoredAuth } from '../services/api';
+  Layers,
+  Wheat,
+  Egg,
+  PieChart,
+} from "lucide-react";
+import { clearStoredAuth } from "../services/api";
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -33,127 +34,78 @@ export default function Layout() {
 
   // State to track which sidebar menus are expanded
   const [expandedMenus, setExpandedMenus] = useState({
-    sales: location.pathname.includes('/sales') // Auto-expand if currently inside sales
+    sales: location.pathname.includes("/sales"), // Auto-expand if currently inside sales
   });
 
   useEffect(() => {
-    setIsSidebarOpen(false);
+    setTimeout(() => setIsSidebarOpen(false), 0);
   }, [location.pathname]);
 
   const toggleMenu = (key) => {
-    setExpandedMenus(prev => ({ ...prev, [key]: !prev[key] }));
+    setExpandedMenus((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
   const handleLogout = () => {
     clearStoredAuth();
-    navigate('/login', { replace: true });
+    navigate("/login", { replace: true });
   };
-
-  const getHeaderContent = () => {
-    const path = location.pathname;
-
-    if (path === '/') {
-      return {
-        title: 'Dashboard',
-        subtitle: 'Farm overview and quick status',
-        section: 'Overview',
-      };
-    }
-
-    if (path.includes('/sales/coconuts')) {
-      return { title: 'Coconut Estate', subtitle: 'Track estate sales and yield', section: 'Sales & Income' };
-    }
-
-    if (path.includes('/sales/cashews')) {
-      return { title: 'Cashew Nuts', subtitle: 'Monitor cashew income records', section: 'Sales & Income' };
-    }
-
-    if (path.includes('/sales/other')) {
-      return { title: 'Other Incomes', subtitle: 'Record miscellaneous income streams', section: 'Sales & Income' };
-    }
-
-    if (path.includes('/payroll/profiles')) {
-      return { title: 'Employees', subtitle: 'Manage staff profiles and records', section: 'HR & Payroll' };
-    }
-
-    if (path.includes('/payroll/attendance')) {
-      return { title: 'Daily Attendance', subtitle: 'Review workforce attendance logs', section: 'HR & Payroll' };
-    }
-
-    if (path.includes('/payroll/record')) {
-      return { title: 'Attendance Record', subtitle: 'View employee attendance history by date range', section: 'HR & Payroll' };
-    }
-
-    if (path.includes('/payroll/advances')) {
-      return { title: 'Cash Advances', subtitle: 'Track advance requests and balances', section: 'HR & Payroll' };
-    }
-
-    if (path.includes('/payroll/calculator')) {
-      return { title: 'Run Payroll', subtitle: 'Calculate payroll for the current cycle', section: 'HR & Payroll' };
-    }
-
-    if (path.includes('/expenses')) {
-      return { title: 'Expenses', subtitle: 'Manage operational spending', section: 'Operations' };
-    }
-
-    if (path.includes('/fertilizer')) {
-      return { title: 'Fertilizer', subtitle: 'Track fertilizer stock and usage', section: 'Operations' };
-    }
-
-    if (path.includes('/poultry')) {
-      return { title: 'Poultry Farm', subtitle: 'Monitor poultry operations', section: 'Operations' };
-    }
-
-    if (path.includes('/finances')) {
-      return { title: 'Finances', subtitle: 'View cash flow and balances', section: 'Accounts' };
-    }
-
-    if (path.includes('/assets')) {
-      return { title: 'Assets & Warranty', subtitle: 'Manage equipment and warranty status', section: 'Asset Control' };
-    }
-
-    return {
-      title: 'MR Farm',
-      subtitle: 'Estate & poultry operations',
-      section: 'Home',
-    };
-  };
-
-  const headerContent = getHeaderContent();
 
   // Updated Navigation Array with Sub-Items
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: "Dashboard", path: "/", icon: LayoutDashboard },
     {
-      name: 'Sales & Income',
-      key: 'sales',
+      name: "Sales & Income",
+      key: "sales",
       icon: Coins,
       subItems: [
-        { name: 'Coconut Estate', path: '/sales/coconuts', icon: Sprout },
-        { name: 'Cashew Nuts', path: '/sales/cashews', icon: Nut },
-        { name: 'Other Incomes', path: '/sales/other', icon: Wallet },
-      ]
+        { name: "Coconut Estate", path: "/sales/coconuts", icon: Sprout },
+        { name: "Cashew Nuts", path: "/sales/cashews", icon: Nut },
+        { name: "Other Incomes", path: "/sales/other", icon: Wallet },
+      ],
     },
     {
-      name: 'HR & Payroll',
-      key: 'payroll',
+      name: "HR & Payroll",
+      key: "payroll",
       icon: Users,
       subItems: [
-        { name: 'Employees', path: '/payroll/profiles', icon: UserPlus },
-        { name: 'Daily Attendance', path: '/payroll/attendance', icon: CalendarCheck },
-        { name: 'Attendance Record', path: '/payroll/record', icon: ClipboardList },
-        { name: 'Cash Advances', path: '/payroll/advances', icon: Wallet },
-        { name: 'Run Payroll', path: '/payroll/calculator', icon: Calculator },
-      ]
+        { name: "Employees", path: "/payroll/profiles", icon: UserPlus },
+        {
+          name: "Daily Attendance",
+          path: "/payroll/attendance",
+          icon: CalendarCheck,
+        },
+        {
+          name: "Attendance Record",
+          path: "/payroll/record",
+          icon: ClipboardList,
+        },
+        { name: "Cash Advances", path: "/payroll/advances", icon: Wallet },
+        { name: "Run Payroll", path: "/payroll/calculator", icon: Calculator },
+      ],
     },
-    { name: 'Expenses', path: '/expenses', icon: Tractor },
-    { name: 'Fertilizer', path: '/fertilizer', icon: Sprout },
-    { name: 'Poultry Farm', path: '/poultry', icon: Bird },
-    { name: 'Finances', path: '/finances', icon: Landmark },
-    { name: 'Assets & Warranty', path: '/assets', icon: ShieldCheck },
-    { name: 'Monthly Breakdown', path: '/breakdown', icon: Calculator },
+    { name: "Expenses", path: "/expenses", icon: Tractor },
+    { name: "Fertilizer", path: "/fertilizer", icon: Sprout },
+    {
+      name: "Poultry Farm",
+      key: "poultry",
+      icon: Bird,
+      subItems: [
+        { name: "Investors", path: "/poultry/investors", icon: Users },
+        { name: "Batches", path: "/poultry/batches", icon: Layers },
+        { name: "Feeds", path: "/poultry/feeds", icon: Wheat },
+        { name: "Poultry Sales", path: "/poultry/sales", icon: Egg },
+        {
+          name: "Profit Distribution",
+          path: "/poultry/profit",
+          icon: PieChart,
+        },
+      ],
+    },
+    { name: "Finances", path: "/finances", icon: Landmark },
+    { name: "Assets & Warranty", path: "/assets", icon: ShieldCheck },
+    { name: "Monthly Breakdown", path: "/breakdown", icon: Calculator },
   ];
 
   return (
@@ -168,56 +120,75 @@ export default function Layout() {
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-50 border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-50 border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-out lg:static lg:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+      >
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-md shadow-primary/30">
             <Tractor size={20} />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-text font-heading leading-tight">MR Farm</h1>
-            <p className="text-[11px] text-earth font-bold uppercase tracking-wider">Estate & Poultry</p>
+            <h1 className="text-lg font-bold text-text font-heading leading-tight">
+              MR Farm
+            </h1>
+            <p className="text-[11px] text-earth font-bold uppercase tracking-wider">
+              Estate & Poultry
+            </p>
           </div>
         </div>
 
         <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-
             // Render Items with Sub-Navigation
             if (item.subItems) {
-              const isActiveGroup = location.pathname.includes('/sales');
+              const isActiveGroup = location.pathname.includes(`/${item.key}`);
               return (
                 <div key={item.key} className="space-y-1">
                   <button
                     onClick={() => toggleMenu(item.key)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 ${isActiveGroup ? 'bg-primary/5 text-primary font-bold' : 'text-earth hover:bg-gray-100 hover:text-text'
-                      }`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                      isActiveGroup
+                        ? "bg-primary/5 text-primary font-bold"
+                        : "text-earth hover:bg-gray-100 hover:text-text"
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      <item.icon size={18} strokeWidth={isActiveGroup ? 2.5 : 2} />
+                      <item.icon
+                        size={18}
+                        strokeWidth={isActiveGroup ? 2.5 : 2}
+                      />
                       <span className="text-sm">{item.name}</span>
                     </div>
-                    {expandedMenus[item.key] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    {expandedMenus[item.key] ? (
+                      <ChevronDown size={16} />
+                    ) : (
+                      <ChevronRight size={16} />
+                    )}
                   </button>
 
                   {/* The Dropdown Sub-menu */}
                   {expandedMenus[item.key] && (
                     <div className="pl-9 pr-2 space-y-1 pt-1 pb-2">
-                      {item.subItems.map(sub => (
+                      {item.subItems.map((sub) => (
                         <NavLink
                           key={sub.name}
                           to={sub.path}
                           onClick={closeSidebar}
                           className={({ isActive }) =>
-                            `flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-sm ${isActive
-                              ? 'bg-primary-light/20 text-primary font-bold shadow-sm border border-primary/10'
-                              : 'text-earth hover:bg-gray-100 hover:text-text'
+                            `flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-sm ${
+                              isActive
+                                ? "bg-primary-light/20 text-primary font-bold shadow-sm border border-primary/10"
+                                : "text-earth hover:bg-gray-100 hover:text-text"
                             }`
                           }
                         >
                           {/* Corrected Sub-Item Icon Rendering */}
                           {({ isActive }) => (
                             <>
-                              <sub.icon size={14} strokeWidth={isActive ? 2.5 : 2} />
+                              <sub.icon
+                                size={14}
+                                strokeWidth={isActive ? 2.5 : 2}
+                              />
                               <span>{sub.name}</span>
                             </>
                           )}
@@ -236,9 +207,10 @@ export default function Layout() {
                 to={item.path}
                 onClick={closeSidebar}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${isActive
-                    ? 'bg-primary-light/20 text-primary font-bold shadow-sm border border-primary/10'
-                    : 'text-earth hover:bg-gray-100 hover:text-text'
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                    isActive
+                      ? "bg-primary-light/20 text-primary font-bold shadow-sm border border-primary/10"
+                      : "text-earth hover:bg-gray-100 hover:text-text"
                   }`
                 }
               >
@@ -257,13 +229,20 @@ export default function Layout() {
         {/* User Profile Footer */}
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center gap-3 px-4 py-3 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">PR</div>
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+              PR
+            </div>
             <div className="flex-1 overflow-hidden">
               <p className="text-sm font-bold text-text truncate">Proprietor</p>
-              <p className="text-[10px] uppercase text-earth font-bold">Admin Access</p>
+              <p className="text-[10px] uppercase text-earth font-bold">
+                Admin Access
+              </p>
             </div>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2.5 text-earth hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors w-full font-bold">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-2.5 text-earth hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors w-full font-bold"
+          >
             <LogOut size={16} />
             <span className="text-sm">Logout</span>
           </button>
@@ -272,7 +251,6 @@ export default function Layout() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white lg:ml-0">
-
         {/* Top Header */}
         <header className="h-16 border-b border-gray-100 flex items-center justify-between px-4 md:px-8 z-20 sticky top-0 bg-white/90 backdrop-blur-md">
           {/* ── LEFT SIDE: Hamburger, Greeting, & Search ── */}
@@ -289,15 +267,18 @@ export default function Layout() {
             <div className="hidden md:flex items-center gap-6 flex-1 max-w-2xl">
               {/* 1. Quick Greeting */}
               <div className="flex flex-col">
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Welcome Back</span>
-                <span className="text-sm font-bold text-gray-800">Admin User</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  Welcome Back
+                </span>
+                <span className="text-sm font-bold text-gray-800">
+                  Admin User
+                </span>
               </div>
 
               {/* Vertical Divider */}
               <div className="h-8 w-px bg-gray-200"></div>
 
               {/* 2. Global Search Bar */}
-           
             </div>
           </div>
 
@@ -306,7 +287,11 @@ export default function Layout() {
             {/* Dynamic Date & Weather/Status */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 shadow-sm">
               <Sun size={14} className="text-orange-400" />
-              {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              {new Date().toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
             </div>
 
             {/* Notification Bell */}

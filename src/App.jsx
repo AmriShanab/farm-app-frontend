@@ -1,24 +1,26 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import CoconutSales from './pages/CoconutSales'; // <-- We rename Sales.jsx to CoconutSales.jsx
-import CashewSales from './pages/CashewSales';
-import OtherIncomes from './pages/OtherIncomes';
-import Payroll from './pages/EmployeeProfiles';
-import EmployeeProfiles from './pages/EmployeeProfiles';
-import DailyAttendance from './pages/DailyAttendance';
-import AttendanceRecord from './pages/AttendanceRecord';
-import CashAdvances from './pages/CashAdvances';
-import RunPayroll from './pages/RunPayroll';
-import Operations from './pages/Operations';
-import PoultryManagement from './pages/Poultry';
-import FertilizerManagement from './pages/Fertilizer';
-import FinanceManagement from './pages/Finance';
-import AssetManagement from './pages/Assets';
-import GeneralExpenses from './pages/GeneralExpenses';
-import MonthlyBreakdown from './pages/MonthlyBreakdown';
-import { getStoredAuth } from './services/api';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./components/Layout";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import CoconutSales from "./pages/CoconutSales"; // <-- We rename Sales.jsx to CoconutSales.jsx
+import CashewSales from "./pages/CashewSales";
+import OtherIncomes from "./pages/OtherIncomes";
+import EmployeeProfiles from "./pages/EmployeeProfiles";
+import DailyAttendance from "./pages/DailyAttendance";
+import AttendanceRecord from "./pages/AttendanceRecord";
+import CashAdvances from "./pages/CashAdvances";
+import RunPayroll from "./pages/RunPayroll";
+import PoultryInvestors from "./pages/Poultry/Investors";
+import PoultryBatches from "./pages/Poultry/Batches";
+import PoultryFeeds from "./pages/Poultry/Feeds";
+import PoultrySales from "./pages/Poultry/Sales";
+import PoultryProfit from "./pages/Poultry/Profit";
+import FertilizerManagement from "./pages/Fertilizer";
+import FinanceManagement from "./pages/Finance";
+import AssetManagement from "./pages/Assets";
+import GeneralExpenses from "./pages/GeneralExpenses";
+import MonthlyBreakdown from "./pages/MonthlyBreakdown";
+import { getStoredAuth } from "./services/api";
 
 const ProtectedRoute = ({ children }) => {
   const auth = getStoredAuth();
@@ -53,7 +55,6 @@ function App() {
             <Route path="coconuts" element={<CoconutSales />} />
             <Route path="cashews" element={<CashewSales />} />
             <Route path="other" element={<OtherIncomes />} />
-            
           </Route>
 
           <Route path="payroll">
@@ -66,7 +67,14 @@ function App() {
           </Route>
           <Route path="expenses" element={<GeneralExpenses />} />
           <Route path="fertilizer" element={<FertilizerManagement />} />
-          <Route path="poultry" element={<PoultryManagement />} />
+          <Route path="poultry">
+            <Route index element={<Navigate to="investors" replace />} />
+            <Route path="investors" element={<PoultryInvestors />} />
+            <Route path="batches" element={<PoultryBatches />} />
+            <Route path="feeds" element={<PoultryFeeds />} />
+            <Route path="sales" element={<PoultrySales />} />
+            <Route path="profit" element={<PoultryProfit />} />
+          </Route>
           <Route path="finances" element={<FinanceManagement />} />
           <Route path="assets" element={<AssetManagement />} />
           <Route path="breakdown" element={<MonthlyBreakdown />} />
