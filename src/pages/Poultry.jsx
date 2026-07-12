@@ -891,6 +891,7 @@ function PoultrySalesTable({ data, setData, batches }) {
 
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split("T")[0],
+    buyerName: "",
     category: "chicks",
     quantity: "",
     rate: "",
@@ -922,6 +923,7 @@ function PoultrySalesTable({ data, setData, batches }) {
         date: newRow.date,
         batchId: parseInt(selectedBatchId),
         category: newRow.category,
+        buyerName: newRow.buyerName,
       };
 
       if (newRow.category === "chicks") {
@@ -940,6 +942,7 @@ function PoultrySalesTable({ data, setData, batches }) {
       setIsAdding(false);
       setNewRow({
         date: new Date().toISOString().split("T")[0],
+        buyerName: "",
         category: "chicks",
         quantity: "",
         rate: "",
@@ -1018,6 +1021,7 @@ function PoultrySalesTable({ data, setData, batches }) {
             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="p-4 text-left">Date</th>
+                <th className="p-4 text-left">Buyer</th>
                 <th className="p-4 text-left">Category</th>
                 <th className="p-4 text-right">Details</th>
                 <th className="p-4 text-right">Pricing</th>
@@ -1034,6 +1038,18 @@ function PoultrySalesTable({ data, setData, batches }) {
                       value={newRow.date}
                       onChange={(e) =>
                         setNewRow({ ...newRow, date: e.target.value })
+                      }
+                      className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                      disabled={isSaving}
+                    />
+                  </td>
+                  <td className="p-2 align-top pt-3">
+                    <input
+                      type="text"
+                      placeholder="Buyer Name"
+                      value={newRow.buyerName}
+                      onChange={(e) =>
+                        setNewRow({ ...newRow, buyerName: e.target.value })
                       }
                       className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
                       disabled={isSaving}
@@ -1166,6 +1182,9 @@ function PoultrySalesTable({ data, setData, batches }) {
                   >
                     <td className="p-4 font-bold text-gray-900 align-top">
                       {sale.date}
+                    </td>
+                    <td className="p-4 align-top text-gray-700">
+                      {sale.buyer_name || "-"}
                     </td>
                     <td className="p-4 align-top">
                       <span
