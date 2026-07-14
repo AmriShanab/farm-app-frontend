@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { 
-  ShieldCheck, Tractor, Plus, Loader2, Check, X, Trash2, 
+import {
+  ShieldCheck, Tractor, Plus, Loader2, Check, X, Trash2, Pencil,
   MapPin, AlertCircle, CircleDollarSign, Save
 } from 'lucide-react';
-import { 
-  getAssets, createAsset, deleteAsset 
+import {
+  getAssets, createAsset, updateAsset, deleteAsset
 } from '../services/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -35,11 +35,13 @@ export default function AssetManagement() {
   // Add Row States
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
-  const [newRow, setNewRow] = useState({
-    name: '', farm: 'MR1', purchaseDate: new Date().toISOString().split('T')[0], 
+  const [editingId, setEditingId] = useState(null);
+
+  const emptyRow = {
+    name: '', farm: 'MR1', purchaseDate: new Date().toISOString().split('T')[0],
     warrantyMonths: '12', purchaseCost: '', supplier: '', notes: ''
-  });
+  };
+  const [newRow, setNewRow] = useState(emptyRow);
 
   // Fetch Data
   useEffect(() => {
@@ -51,12 +53,32 @@ export default function AssetManagement() {
   }, [selectedFarm, selectedStatus]);
 
   // Handlers
+  const closePanel = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setNewRow(emptyRow);
+  };
+
+  const startEdit = (asset) => {
+    setEditingId(asset.id);
+    setNewRow({
+      name: asset.name || '',
+      farm: asset.farm || 'MR1',
+      purchaseDate: asset.purchaseDate || asset.purchase_date || new Date().toISOString().split('T')[0],
+      warrantyMonths: String(asset.warrantyMonths ?? asset.warranty_months ?? ''),
+      purchaseCost: asset.purchaseCost ?? asset.purchase_cost ?? '',
+      supplier: asset.supplier || '',
+      notes: asset.notes || '',
+    });
+    setIsAdding(true);
+  };
+
   const handleSave = async () => {
     if (!newRow.name || !newRow.purchaseCost || !newRow.purchaseDate) {
       alert("Please fill in the Asset Name, Cost, and Purchase Date.");
       return;
     }
-    
+
     setIsSaving(true);
     try {
       const payload = {
@@ -64,15 +86,16 @@ export default function AssetManagement() {
         warrantyMonths: parseInt(newRow.warrantyMonths) || 0,
         purchaseCost: parseFloat(newRow.purchaseCost)
       };
-      
-      const savedApp = await createAsset(payload);
-      setAssets([savedApp, ...assets]);
-      setIsAdding(false);
-      setNewRow({ 
-        name: '', farm: 'MR1', purchaseDate: new Date().toISOString().split('T')[0], 
-        warrantyMonths: '12', purchaseCost: '', supplier: '', notes: '' 
-      });
-    } catch (err) { alert("Failed to save asset."); } 
+
+      if (editingId) {
+        const updated = await updateAsset(editingId, payload);
+        setAssets(prev => prev.map(a => a.id === editingId ? { ...a, ...updated, ...payload, id: editingId } : a));
+      } else {
+        const savedApp = await createAsset(payload);
+        setAssets([savedApp, ...assets]);
+      }
+      closePanel();
+    } catch (err) { alert("Failed to save asset."); }
     finally { setIsSaving(false); }
   };
 
@@ -198,9 +221,10 @@ export default function AssetManagement() {
         <div className="bg-gradient-to-b from-green-50 to-white border border-green-200 rounded-xl p-6 shadow-md mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center mb-5 border-b border-green-100 pb-3">
             <h3 className="text-lg font-black text-green-900 flex items-center gap-2">
-              <Tractor size={18} className="text-green-600"/> Register New Asset
+              {editingId ? <Pencil size={18} className="text-green-600"/> : <Tractor size={18} className="text-green-600"/>}
+              {editingId ? 'Edit Asset' : 'Register New Asset'}
             </h3>
-            <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm border border-gray-200">
+            <button onClick={closePanel} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm border border-gray-200">
               <X size={18} />
             </button>
           </div>
@@ -246,12 +270,12 @@ export default function AssetManagement() {
 
           {/* Actions */}
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-            <button onClick={() => setIsAdding(false)} disabled={isSaving} className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
+            <button onClick={closePanel} disabled={isSaving} className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
               Cancel
             </button>
             <button onClick={handleSave} disabled={isSaving} className="px-6 py-2.5 bg-green-600 rounded-lg text-white text-sm font-bold shadow-md hover:bg-green-700 flex items-center gap-2 transition-colors disabled:opacity-70">
-              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
-              {isSaving ? 'Saving...' : 'Save Asset'}
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {isSaving ? 'Saving...' : (editingId ? 'Update Asset' : 'Save Asset')}
             </button>
           </div>
         </div>
@@ -328,7 +352,10 @@ export default function AssetManagement() {
                         </div>
                       </td>
                       <td className="p-4 text-right">
-                        <button onClick={() => handleDelete(asset.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"><Trash2 size={14} /></button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => startEdit(asset)} title="Edit" className="text-gray-400 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"><Pencil size={14} /></button>
+                          <button onClick={() => handleDelete(asset.id)} title="Delete" className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"><Trash2 size={14} /></button>
+                        </div>
                       </td>
                     </tr>
                   );

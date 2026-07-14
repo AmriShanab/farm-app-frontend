@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { 
-  Sprout, CalendarClock, Plus, Loader2, Check, X, Trash2, 
+import {
+  Sprout, CalendarClock, Plus, Loader2, Check, X, Trash2, Pencil,
   MapPin, CircleDollarSign, Scale, Users
 } from 'lucide-react';
-import { 
-  getFertilizers, getFertilizerDue, createFertilizer, deleteFertilizer 
+import {
+  getFertilizers, getFertilizerDue, createFertilizer, updateFertilizer, deleteFertilizer
 } from '../services/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,6 +27,12 @@ export default function FertilizerManagement() {
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split('T')[0],
     farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', laborCost: ''
+  });
+
+  // Inline Edit States
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({
+    date: '', farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', laborCost: ''
   });
 
   // Fetch Data
@@ -86,6 +92,49 @@ export default function FertilizerManagement() {
       } catch (err) {
         alert("Delete failed.");
       }
+    }
+  };
+
+  const startEdit = (app) => {
+    setIsAdding(false);
+    setEditingId(app.id);
+    setEditRow({
+      date: app.date || new Date().toISOString().split('T')[0],
+      farm: app.farm || 'MR1',
+      fertilizerName: app.fertilizerName || app.fertilizer_name || '',
+      unitCost: app.unitCost ?? app.unit_cost ?? '',
+      quantity: app.quantity ?? '',
+      laborCost: app.laborCost ?? app.labor_cost ?? '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditRow({ date: '', farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', laborCost: '' });
+  };
+
+  const handleUpdate = async (app) => {
+    if (!editRow.fertilizerName || !editRow.quantity || !editRow.unitCost) {
+      alert("Please fill in Fertilizer Name, Quantity, and Unit Cost.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        date: editRow.date,
+        farm: editRow.farm,
+        fertilizerName: editRow.fertilizerName,
+        unitCost: parseFloat(editRow.unitCost),
+        quantity: parseFloat(editRow.quantity),
+        laborCost: parseFloat(editRow.laborCost) || 0,
+      };
+      const updated = await updateFertilizer(app.id, payload);
+      setLedgerData(prev => prev.map(item => item.id === app.id ? { ...item, ...updated, ...payload, id: app.id } : item));
+      cancelEdit();
+    } catch (err) {
+      alert("Failed to update fertilizer application.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -261,6 +310,41 @@ export default function FertilizerManagement() {
                         const laborCost = parseFloat(app.laborCost || app.labor_cost || 0);
                         const totalCost = (qty * unitCost) + laborCost;
 
+                        if (editingId === app.id) {
+                          return (
+                            <tr key={app.id} className="bg-blue-50/30 border-t border-blue-100 align-top">
+                              <td className="p-3"><input type="date" value={editRow.date} onChange={e => setEditRow({...editRow, date: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
+                              <td className="p-3">
+                                <select value={editRow.farm} onChange={e => setEditRow({...editRow, farm: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none bg-white" disabled={isSaving}>
+                                  <option value="MR1">MR1</option>
+                                  <option value="MR2">MR2</option>
+                                </select>
+                              </td>
+                              <td className="p-3"><input type="text" value={editRow.fertilizerName} onChange={e => setEditRow({...editRow, fertilizerName: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
+                              <td className="p-3 text-right"><input type="number" value={editRow.quantity} onChange={e => setEditRow({...editRow, quantity: e.target.value})} className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto" disabled={isSaving} /></td>
+                              <td className="p-3 space-y-2 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-[10px] text-gray-400">Unit:</span>
+                                  <input type="number" value={editRow.unitCost} onChange={e => setEditRow({...editRow, unitCost: e.target.value})} className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right" disabled={isSaving} />
+                                </div>
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-[10px] text-gray-400">Labor:</span>
+                                  <input type="number" value={editRow.laborCost} onChange={e => setEditRow({...editRow, laborCost: e.target.value})} className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right" disabled={isSaving} />
+                                </div>
+                              </td>
+                              <td className="p-3 text-right pt-6 font-black text-gray-900">
+                                Rs. {fmt(((parseFloat(editRow.quantity)||0) * (parseFloat(editRow.unitCost)||0)) + (parseFloat(editRow.laborCost)||0))}
+                              </td>
+                              <td className="p-3 text-right pt-5">
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={cancelEdit} disabled={isSaving} className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"><X size={14}/></button>
+                                  <button onClick={() => handleUpdate(app)} disabled={isSaving} className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700">{isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}</button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
                         return (
                           <tr key={app.id} className="border-t border-gray-50 hover:bg-gray-50/50">
                             <td className="p-4 font-bold text-gray-900">{app.date}</td>
@@ -277,7 +361,10 @@ export default function FertilizerManagement() {
                             </td>
                             <td className="p-4 text-right font-black text-green-700">Rs. {fmt(totalCost)}</td>
                             <td className="p-4 text-right">
-                              <button onClick={() => handleDelete(app.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 size={14} /></button>
+                              <div className="flex items-center justify-end gap-1">
+                                <button onClick={() => startEdit(app)} title="Edit" className="text-gray-400 hover:text-blue-600 transition-colors p-1"><Pencil size={14} /></button>
+                                <button onClick={() => handleDelete(app.id)} title="Delete" className="text-gray-400 hover:text-red-500 transition-colors p-1"><Trash2 size={14} /></button>
+                              </div>
                             </td>
                           </tr>
                         );

@@ -1101,6 +1101,16 @@ export const createOwnerFinancial = async (data) => {
   return unwrapApiData(await response.json());
 };
 
+export const updateOwnerFinancial = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/finance/owner/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update owner financial record");
+  return unwrapApiData(await response.json());
+};
+
 export const deleteOwnerFinancial = async (id) => {
   if (USE_MOCK_DATA)
     return new Promise((res) => setTimeout(() => res(true), 400));
@@ -1264,6 +1274,15 @@ export const createHarvestExpense = async (data) => {
   if (!response.ok) throw new Error("Failed to create harvest expense");
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
+export const updateHarvestExpense = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/expenses/harvest/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update harvest expense");
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
+};
 export const deleteHarvestExpense = async (id) => {
   if (USE_MOCK_DATA)
     return new Promise((res) => setTimeout(() => res(true), 300));
@@ -1298,6 +1317,15 @@ export const createMaintenanceExpense = async (data) => {
     body: JSON.stringify(data),
   });
   if (!response.ok) throw new Error("Failed to create maintenance expense");
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
+};
+export const updateMaintenanceExpense = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/expenses/maintenance/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update maintenance expense");
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteMaintenanceExpense = async (id) => {
@@ -1336,6 +1364,15 @@ export const createCEBBill = async (data) => {
   if (!response.ok) throw new Error("Failed to create CEB bill");
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
+export const updateCEBBill = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/expenses/ceb/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update CEB bill");
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
+};
 export const deleteCEBBill = async (id) => {
   if (USE_MOCK_DATA)
     return new Promise((res) => setTimeout(() => res(true), 300));
@@ -1371,6 +1408,15 @@ export const createFuelLog = async (data) => {
   if (!response.ok) throw new Error("Failed to create fuel log");
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
+export const updateFuelLog = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/expenses/fuel/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update fuel log");
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
+};
 export const deleteFuelLog = async (id) => {
   if (USE_MOCK_DATA)
     return new Promise((res) => setTimeout(() => res(true), 300));
@@ -1404,6 +1450,15 @@ export const createMachineryExpense = async (data) => {
     body: JSON.stringify(data),
   });
   if (!response.ok) throw new Error("Failed to create machinery expense");
+  return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
+};
+export const updateMachineryExpense = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/expenses/machinery/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update machinery expense");
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteMachineryExpense = async (id) => {

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { 
-  Landmark, ReceiptText, Search, Plus, Loader2, Check, X, Trash2, 
+import {
+  Landmark, ReceiptText, Search, Plus, Loader2, Check, X, Trash2, Pencil,
   CreditCard, Wallet, FileText, ArrowRight
 } from 'lucide-react';
-import { 
-  getOwnerFinancials, createOwnerFinancial, deleteOwnerFinancial, searchCheques 
+import {
+  getOwnerFinancials, createOwnerFinancial, updateOwnerFinancial, deleteOwnerFinancial, searchCheques
 } from '../services/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -111,6 +111,11 @@ function OwnerFinancialsTab({ data, setData, isLoading, selectedYear, setSelecte
     type: 'leasing', description: '', amount: '', accountNo: '', referenceNo: ''
   });
 
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({
+    date: '', type: 'leasing', description: '', amount: '', accountNo: '', referenceNo: ''
+  });
+
   const totalLeasing = data.filter(d => d.type === 'leasing').reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
   const totalOther = data.filter(d => d.type !== 'leasing').reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
 
@@ -122,7 +127,37 @@ function OwnerFinancialsTab({ data, setData, isLoading, selectedYear, setSelecte
       setData([saved, ...data]);
       setIsAdding(false);
       setNewRow({ date: new Date().toISOString().split('T')[0], type: 'leasing', description: '', amount: '', accountNo: '', referenceNo: '' });
-    } catch (err) { alert("Error saving."); } 
+    } catch (err) { alert("Error saving."); }
+    finally { setIsSaving(false); }
+  };
+
+  const startEdit = (record) => {
+    setIsAdding(false);
+    setEditingId(record.id);
+    setEditRow({
+      date: record.date || new Date().toISOString().split('T')[0],
+      type: record.type || 'leasing',
+      description: record.description || '',
+      amount: record.amount ?? '',
+      accountNo: record.accountNo || record.account_no || '',
+      referenceNo: record.referenceNo || record.reference_no || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditRow({ date: '', type: 'leasing', description: '', amount: '', accountNo: '', referenceNo: '' });
+  };
+
+  const handleUpdate = async (record) => {
+    if (!editRow.description || !editRow.amount) return alert("Please fill details.");
+    setIsSaving(true);
+    try {
+      const payload = { ...editRow, amount: parseFloat(editRow.amount) };
+      const updated = await updateOwnerFinancial(record.id, payload);
+      setData(data.map(item => item.id === record.id ? { ...item, ...updated, ...payload, id: record.id } : item));
+      cancelEdit();
+    } catch (err) { alert("Error updating."); }
     finally { setIsSaving(false); }
   };
 
@@ -207,6 +242,27 @@ function OwnerFinancialsTab({ data, setData, isLoading, selectedYear, setSelecte
                   </tr>
                 )}
                 {data.map(record => (
+                  editingId === record.id ? (
+                    <tr key={record.id} className="bg-blue-50/30 border-b border-blue-100">
+                      <td className="p-2"><input type="date" value={editRow.date} onChange={e => setEditRow({...editRow, date: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
+                      <td className="p-2">
+                        <select value={editRow.type} onChange={e => setEditRow({...editRow, type: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none bg-white" disabled={isSaving}>
+                          <option value="leasing">Leasing</option>
+                          <option value="loan_repayment">Loan Repayment</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </td>
+                      <td className="p-2"><input type="text" value={editRow.description} onChange={e => setEditRow({...editRow, description: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
+                      <td className="p-2"><input type="text" value={editRow.accountNo} onChange={e => setEditRow({...editRow, accountNo: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
+                      <td className="p-2 text-right"><input type="number" value={editRow.amount} onChange={e => setEditRow({...editRow, amount: e.target.value})} className="w-32 p-2 text-xs border border-gray-300 rounded outline-none text-right" disabled={isSaving} /></td>
+                      <td className="p-2 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button onClick={cancelEdit} disabled={isSaving} className="p-1.5 bg-gray-200 rounded text-gray-600"><X size={14}/></button>
+                          <button onClick={() => handleUpdate(record)} disabled={isSaving} className="p-1.5 bg-green-600 rounded text-white shadow">{isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
                   <tr key={record.id} className="border-t border-gray-50 hover:bg-gray-50/50">
                     <td className="p-4 font-bold text-gray-900">{record.date}</td>
                     <td className="p-4">
@@ -217,8 +273,14 @@ function OwnerFinancialsTab({ data, setData, isLoading, selectedYear, setSelecte
                     <td className="p-4 font-bold text-gray-800">{record.description}</td>
                     <td className="p-4 text-xs text-gray-500 font-bold uppercase">{record.accountNo || 'N/A'}</td>
                     <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(record.amount)}</td>
-                    <td className="p-4 text-right"><button onClick={() => handleDelete(record.id)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={14} /></button></td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => startEdit(record)} title="Edit" className="text-gray-400 hover:text-blue-600 p-1"><Pencil size={14} /></button>
+                        <button onClick={() => handleDelete(record.id)} title="Delete" className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                      </div>
+                    </td>
                   </tr>
+                  )
                 ))}
               </tbody>
             </table>

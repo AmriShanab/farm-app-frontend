@@ -12,22 +12,28 @@ import {
   Settings,
   Calculator,
   Save,
+  Pencil,
 } from "lucide-react";
 import {
   getHarvestExpenses,
   createHarvestExpense,
+  updateHarvestExpense,
   deleteHarvestExpense,
   getMaintenanceExpenses,
   createMaintenanceExpense,
+  updateMaintenanceExpense,
   deleteMaintenanceExpense,
   getCEBBills,
   createCEBBill,
+  updateCEBBill,
   deleteCEBBill,
   getFuelLogs,
   createFuelLog,
+  updateFuelLog,
   deleteFuelLog,
   getMachineryExpenses,
   createMachineryExpense,
+  updateMachineryExpense,
   deleteMachineryExpense,
   getAttendance,
 } from "../services/api";
@@ -126,6 +132,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -206,91 +213,149 @@ function ExpenseCategoryTab({ category, farm, year }) {
   }, [form.date, form.farm, category]);
 
   // -------------------------------
-  // SAVE RECORD
+  // FORM RESET / OPEN / EDIT
+  // -------------------------------
+  const emptyForm = () => ({
+    date: new Date().toISOString().split("T")[0],
+    farm: "MR1",
+    notes: "",
+    description: "",
+    mainLabor: "",
+    collectors: "",
+    tractorDriver: "",
+    foodExpenses: "",
+    categoryType: "",
+    amount: "",
+    chequeNo: "",
+    chequeDate: "",
+    unitsUsed: "",
+    billAmount: "",
+    meterId: "",
+    vehicle: "",
+    machinery: "",
+    liters: "",
+    ratePerLiter: "",
+  });
+
+  const closePanel = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setForm(emptyForm());
+  };
+
+  // Populate the shared panel from an existing row and switch to edit mode.
+  const startEdit = (row) => {
+    setEditingId(row.id);
+    setForm({
+      ...emptyForm(),
+      date: row.date || new Date().toISOString().split("T")[0],
+      farm: row.farm || "MR1",
+      notes: row.notes ?? "",
+      description: row.description ?? "",
+      mainLabor: row.mainLabor ?? "",
+      collectors: row.collectors ?? "",
+      tractorDriver: row.tractorDriver ?? "",
+      foodExpenses: row.foodExpenses ?? "",
+      categoryType: row.category ?? row.type ?? "",
+      amount: row.amount ?? "",
+      chequeNo: row.chequeNo ?? "",
+      chequeDate: row.chequeDate ?? "",
+      unitsUsed: row.unitsUsed ?? "",
+      billAmount: row.billAmount ?? "",
+      meterId: row.meterId ?? "",
+      vehicle: row.vehicle ?? "",
+      machinery: row.machinery ?? "",
+      liters: row.liters ?? "",
+      ratePerLiter: row.ratePerLiter ?? "",
+    });
+    setIsAdding(true);
+  };
+
+  // -------------------------------
+  // SAVE RECORD (create or update)
   // -------------------------------
   const handleSave = async () => {
     setIsSaving(true);
 
+    // Build the category-specific payload + pick create/update fns
+    let payload;
+    let createFn;
+    let updateFn;
+
+    if (category === "harvest") {
+      payload = {
+        date: form.date,
+        farm: form.farm,
+        notes: form.notes,
+        mainLabor: parseFloat(form.mainLabor || 0),
+        collectors: parseFloat(form.collectors || 0),
+        tractorDriver: parseFloat(form.tractorDriver || 0),
+        foodExpenses: parseFloat(form.foodExpenses || 0),
+        permanentLaborCost: autoWage,
+      };
+      createFn = createHarvestExpense;
+      updateFn = updateHarvestExpense;
+    } else if (category === "maintenance") {
+      payload = {
+        date: form.date,
+        farm: form.farm,
+        category: form.categoryType,
+        description: form.description,
+        amount: parseFloat(form.amount || 0),
+        chequeNo: form.chequeNo || "",
+        chequeDate: form.chequeDate || null,
+      };
+      createFn = createMaintenanceExpense;
+      updateFn = updateMaintenanceExpense;
+    } else if (category === "ceb") {
+      payload = {
+        date: form.date,
+        meter_id: form.meterId || null,
+        billAmount: parseFloat(form.billAmount || 0),
+        unitsUsed: parseFloat(form.unitsUsed || 0),
+        chequeNo: form.chequeNo || "",
+        chequeDate: form.chequeDate || null,
+      };
+      createFn = createCEBBill;
+      updateFn = updateCEBBill;
+    } else if (category === "fuel") {
+      payload = {
+        date: form.date,
+        farm: form.farm,
+        vehicle: form.vehicle,
+        liters: parseFloat(form.liters || 0),
+        ratePerLiter: parseFloat(form.ratePerLiter || 0),
+        totalCost:
+          parseFloat(form.liters || 0) * parseFloat(form.ratePerLiter || 0),
+      };
+      createFn = createFuelLog;
+      updateFn = updateFuelLog;
+    } else if (category === "machinery") {
+      payload = {
+        date: form.date,
+        farm: form.farm,
+        type: form.categoryType,
+        machinery: form.machinery || null,
+        description: form.description,
+        amount: parseFloat(form.amount || 0),
+        chequeNo: form.chequeNo || "",
+        chequeDate: form.chequeDate || null,
+      };
+      createFn = createMachineryExpense;
+      updateFn = updateMachineryExpense;
+    }
+
     try {
-      let savedRecord;
-
-      if (category === "harvest") {
-        savedRecord = await createHarvestExpense({
-          date: form.date,
-          farm: form.farm,
-          notes: form.notes,
-          mainLabor: parseFloat(form.mainLabor || 0),
-          collectors: parseFloat(form.collectors || 0),
-          tractorDriver: parseFloat(form.tractorDriver || 0),
-          foodExpenses: parseFloat(form.foodExpenses || 0),
-          permanentLaborCost: autoWage,
-        });
-      } else if (category === "maintenance") {
-        savedRecord = await createMaintenanceExpense({
-          date: form.date,
-          farm: form.farm,
-          category: form.categoryType,
-          description: form.description,
-          amount: parseFloat(form.amount || 0),
-          chequeNo: form.chequeNo || "",
-          chequeDate: form.chequeDate || null,
-        });
-      } else if (category === "ceb") {
-        savedRecord = await createCEBBill({
-          date: form.date,
-          meter_id: form.meterId || null,
-          billAmount: parseFloat(form.billAmount || 0),
-          unitsUsed: parseFloat(form.unitsUsed || 0),
-          chequeNo: form.chequeNo || "",
-          chequeDate: form.chequeDate || null,
-        });
-      } else if (category === "fuel") {
-        savedRecord = await createFuelLog({
-          date: form.date,
-          farm: form.farm,
-          vehicle: form.vehicle,
-          liters: parseFloat(form.liters || 0),
-          ratePerLiter: parseFloat(form.ratePerLiter || 0),
-          totalCost:
-            parseFloat(form.liters || 0) * parseFloat(form.ratePerLiter || 0),
-        });
-      } else if (category === "machinery") {
-        savedRecord = await createMachineryExpense({
-          date: form.date,
-          farm: form.farm,
-          type: form.categoryType,
-          machinery: form.machinery || null,
-          description: form.description,
-          amount: parseFloat(form.amount || 0),
-          chequeNo: form.chequeNo || "",
-          chequeDate: form.chequeDate || null,
-        });
+      if (editingId) {
+        const updated = await updateFn(editingId, payload);
+        setData((prev) =>
+          prev.map((row) => (row.id === editingId ? { ...row, ...updated } : row)),
+        );
+      } else {
+        const savedRecord = await createFn(payload);
+        setData((prev) => [savedRecord, ...prev]);
       }
-
-      setData([savedRecord, ...data]);
-      setIsAdding(false);
-
-      setForm({
-        date: new Date().toISOString().split("T")[0],
-        farm: "MR1",
-        notes: "",
-        description: "",
-        mainLabor: "",
-        collectors: "",
-        tractorDriver: "",
-        foodExpenses: "",
-        categoryType: "",
-        amount: "",
-        chequeNo: "",
-        chequeDate: "",
-        unitsUsed: "",
-        billAmount: "",
-        meterId: "",
-        vehicle: "",
-        machinery: "",
-        liters: "",
-        ratePerLiter: "",
-      });
+      closePanel();
     } catch (err) {
       console.error(err);
       alert(`Failed to save ${category} record.`);
@@ -343,11 +408,15 @@ function ExpenseCategoryTab({ category, farm, year }) {
         <div className="bg-gradient-to-b from-green-50 to-white border border-green-200 rounded-xl p-6 shadow-md mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center mb-5 border-b border-green-100 pb-3">
             <h3 className="text-lg font-black text-green-900 capitalize flex items-center gap-2">
-              <Plus size={18} className="text-green-600" /> Add {category}{" "}
-              Expense
+              {editingId ? (
+                <Pencil size={18} className="text-green-600" />
+              ) : (
+                <Plus size={18} className="text-green-600" />
+              )}{" "}
+              {editingId ? "Edit" : "Add"} {category} Expense
             </h3>
             <button
-              onClick={() => setIsAdding(false)}
+              onClick={closePanel}
               className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm border border-gray-200"
             >
               <X size={18} />
@@ -712,7 +781,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
 
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
             <button
-              onClick={() => setIsAdding(false)}
+              onClick={closePanel}
               disabled={isSaving}
               className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
             >
@@ -728,7 +797,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
               ) : (
                 <Save size={16} />
               )}{" "}
-              Save Record
+              {editingId ? "Update Record" : "Save Record"}
             </button>
           </div>
         </div>
@@ -957,12 +1026,22 @@ function ExpenseCategoryTab({ category, farm, year }) {
                           Rs. {fmt(rowTotal)}
                         </td>
                         <td className="p-4 text-right">
-                          <button
-                            onClick={() => handleDelete(row.id)}
-                            className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => startEdit(row)}
+                              title="Edit record"
+                              className="text-gray-400 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(row.id)}
+                              title="Delete record"
+                              className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

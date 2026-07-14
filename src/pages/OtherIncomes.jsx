@@ -3,10 +3,10 @@ import {
   Plus, Search, Download, MoreHorizontal,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   TrendingUp, Wallet, Coins, Check, X, Award,
-  Loader2, AlertCircle, Trash2
+  Loader2, AlertCircle, Trash2, Pencil
 } from 'lucide-react';
 
-import { getOtherIncomes, createOtherIncome, deleteOtherIncome } from '../services/api';
+import { getOtherIncomes, createOtherIncome, updateOtherIncome, deleteOtherIncome } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 import { downloadCsv } from '../utils/csv';
 
@@ -29,6 +29,10 @@ export default function OtherIncomes() {
     description: '',
     amount: ''
   });
+
+  // --- Inline Edit State ---
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({ date: '', description: '', amount: '' });
   const toast = useToast();
 
   // --- Fetch Data ---
@@ -115,6 +119,50 @@ export default function OtherIncomes() {
   const cancelAdd = () => {
     setIsAdding(false);
     setNewRow({ date: new Date().toISOString().split('T')[0], description: '', amount: '' });
+  };
+
+  const startEdit = (sale) => {
+    setIsAdding(false);
+    setEditingId(sale.id);
+    setEditRow({
+      date: sale.date || new Date().toISOString().split('T')[0],
+      description: sale.description || '',
+      amount: sale.amount ?? '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditRow({ date: '', description: '', amount: '' });
+  };
+
+  const handleEditChange = (e) => {
+    setEditRow(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleUpdateRow = async (sale) => {
+    if (!editRow.description || editRow.amount === '') {
+      toast.warn("Please enter a description and an amount.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        date: editRow.date,
+        farm: sale.farm || "MR1",
+        category: sale.category || "Misc",
+        description: editRow.description,
+        amount: parseFloat(editRow.amount) || 0,
+      };
+      const updated = await updateOtherIncome(sale.id, payload);
+      setSales(prev => prev.map(s => s.id === sale.id ? { ...s, ...updated, ...payload, id: sale.id } : s));
+      cancelEdit();
+      toast.success("Record updated.");
+    } catch (err) {
+      toast.error("Failed to update record.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleExportCsv = () => {
@@ -351,36 +399,81 @@ export default function OtherIncomes() {
                         style={{ accentColor: '#16a34a', cursor: 'pointer' }} />
                     </td>
 
-                    {/* Date */}
-                    <td style={tdStyle()}>
-                      <span style={{ fontWeight: 800, color: '#0d1f0d', fontSize: '12.5px' }}>{sale.date}</span>
-                    </td>
+                    {editingId === sale.id ? (
+                      <>
+                        {/* Date (edit) */}
+                        <td style={tdStyle()}>
+                          <input type="date" name="date" value={editRow.date} onChange={handleEditChange} style={inputStyle} disabled={isSaving} />
+                        </td>
+                        {/* Description (edit) */}
+                        <td style={tdStyle()}>
+                          <input type="text" name="description" value={editRow.description} onChange={handleEditChange} style={{ ...inputStyle, width: '100%' }} disabled={isSaving} />
+                        </td>
+                        {/* Amount (edit) */}
+                        <td style={{ ...tdStyle(), textAlign: 'right', paddingRight: '20px' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Rs.</span>
+                            <input type="number" name="amount" value={editRow.amount} onChange={handleEditChange} style={{ ...inputStyle, width: '120px', textAlign: 'right' }} disabled={isSaving} />
+                          </div>
+                        </td>
+                        {/* Actions (edit) */}
+                        <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button onClick={cancelEdit} disabled={isSaving} style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#6b7280' }}>
+                              <X size={14} strokeWidth={3} />
+                            </button>
+                            <button onClick={() => handleUpdateRow(sale)} disabled={isSaving} style={{ background: '#16a34a', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#fff', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' }}>
+                              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        {/* Date */}
+                        <td style={tdStyle()}>
+                          <span style={{ fontWeight: 800, color: '#0d1f0d', fontSize: '12.5px' }}>{sale.date}</span>
+                        </td>
 
-                    {/* Description */}
-                    <td style={tdStyle()}>
-                      <span style={{ color: '#1f2937', fontWeight: 600 }}>{sale.description}</span>
-                    </td>
+                        {/* Description */}
+                        <td style={tdStyle()}>
+                          <span style={{ color: '#1f2937', fontWeight: 600 }}>{sale.description}</span>
+                        </td>
 
-                    {/* Total */}
-                    <td style={{ ...tdStyle(), textAlign: 'right', paddingRight: '20px' }}>
-                      <span style={{ fontWeight: 900, color: '#14532d', fontSize: '13px' }}>
-                        Rs. {fmt(parseFloat(sale.amount))}
-                      </span>
-                    </td>
+                        {/* Total */}
+                        <td style={{ ...tdStyle(), textAlign: 'right', paddingRight: '20px' }}>
+                          <span style={{ fontWeight: 900, color: '#14532d', fontSize: '13px' }}>
+                            Rs. {fmt(parseFloat(sale.amount))}
+                          </span>
+                        </td>
 
-                    {/* Actions */}
-                    <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
-                       <button onClick={() => handleDelete(sale.id)} style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          padding: '6px', borderRadius: '6px', color: '#9ca3af',
-                          transition: 'all 0.15s',
-                        }}
-                          onMouseOver={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
-                          onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                    </td>
+                        {/* Actions */}
+                        <td style={{ ...tdStyle('80px'), textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                            <button onClick={() => startEdit(sale)} style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              padding: '6px', borderRadius: '6px', color: '#9ca3af',
+                              transition: 'all 0.15s',
+                            }}
+                              onMouseOver={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.color = '#2563eb'; }}
+                              onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => handleDelete(sale.id)} style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              padding: '6px', borderRadius: '6px', color: '#9ca3af',
+                              transition: 'all 0.15s',
+                            }}
+                              onMouseOver={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                              onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af'; }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
