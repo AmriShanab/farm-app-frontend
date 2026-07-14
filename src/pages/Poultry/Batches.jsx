@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Layers, Plus, Loader2, X, Check } from "lucide-react";
+import { Layers, Plus, Loader2, X, Check, CalendarClock } from "lucide-react";
 import { getPoultryBatches, createPoultryBatch } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
 
@@ -8,6 +8,17 @@ const fmt = (n) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+// Inclusive day number since a batch started: start date itself is "Day 1".
+const batchDayNumber = (startDate) => {
+  if (!startDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const diff = Math.floor((today - start) / 86400000);
+  return diff < 0 ? null : diff + 1;
+};
 
 export default function PoultryBatches() {
   const [data, setData] = useState([]);
@@ -103,6 +114,7 @@ export default function PoultryBatches() {
               <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="p-4 text-left">Date</th>
+                  <th className="p-4 text-center">Age</th>
                   <th className="p-4 text-left">Batch Details</th>
                   <th className="p-4 text-left">Supplier</th>
                   <th className="p-4 text-right">Initial Count</th>
@@ -124,6 +136,9 @@ export default function PoultryBatches() {
                         className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
                         disabled={isSaving}
                       />
+                    </td>
+                    <td className="p-2 text-center text-[10px] text-gray-400 font-bold">
+                      —
                     </td>
                     <td className="p-2">
                       <input
@@ -213,7 +228,7 @@ export default function PoultryBatches() {
                 {data.length === 0 && !isAdding ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="p-6 text-center text-gray-400 font-bold"
                     >
                       No active batches found.
@@ -225,6 +240,7 @@ export default function PoultryBatches() {
                       batch.price_per_bird || batch.pricePerBird || 0,
                     );
                     const qty = parseInt(batch.quantity || 0, 10);
+                    const dayNo = batchDayNumber(batch.date);
                     return (
                       <tr
                         key={batch.id}
@@ -232,6 +248,18 @@ export default function PoultryBatches() {
                       >
                         <td className="p-4 font-bold text-gray-900">
                           {batch.date}
+                        </td>
+                        <td className="p-4 text-center">
+                          {dayNo != null ? (
+                            <span
+                              className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-md text-xs font-black"
+                              title={`Started ${batch.date}`}
+                            >
+                              <CalendarClock size={12} /> Day {dayNo}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs font-bold">—</span>
+                          )}
                         </td>
                         <td className="p-4">
                           <p className="font-bold text-gray-800">

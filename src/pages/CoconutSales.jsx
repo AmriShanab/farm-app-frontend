@@ -17,6 +17,7 @@ import {
   Edit2,
   Save,
   Eye,
+  CalendarClock,
 } from "lucide-react";
 
 // Import API services
@@ -57,6 +58,7 @@ const normalizeSaleRecord = (record, fallback = {}) => {
 
 const emptySaleForm = () => ({
   date: new Date().toISOString().split("T")[0],
+  next_harvest_date: "",
   farm: "MR1",
   qty1: "",
   rate1: "",
@@ -73,6 +75,7 @@ const emptySaleForm = () => ({
 
 const saleToForm = (sale) => ({
   date: sale?.date || new Date().toISOString().split("T")[0],
+  next_harvest_date: sale?.next_harvest_date ?? "",
   farm: sale?.farm || "MR1",
   qty1: sale?.qty1 ?? "",
   rate1: sale?.rate1 ?? "",
@@ -83,6 +86,16 @@ const saleToForm = (sale) => ({
   // Expenses aren't loaded into the edit form by default unless you fetch them,
   // so we leave them blank for existing records to prevent overwriting.
 });
+
+// Days until (or since) a target date. Positive = future, negative = overdue.
+const daysUntil = (dateStr) => {
+  if (!dateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
+};
 
 export default function CoconutSales() {
   const [farmFilter, setFarmFilter] = useState("MR1");
@@ -224,6 +237,7 @@ export default function CoconutSales() {
       // 1. Create the Sale
       const salePayload = {
         date: newRow.date,
+        next_harvest_date: newRow.next_harvest_date || null,
         farm: farmFilter, // Or newRow.farm depending on your UI layout
         qty1: parseFloat(newRow.qty1) || 0,
         rate1: parseFloat(newRow.rate1) || 0,
@@ -328,6 +342,7 @@ export default function CoconutSales() {
     try {
       const payload = {
         date: editRow.date,
+        next_harvest_date: editRow.next_harvest_date || null,
         farm: editRow.farm,
         qty1: parseFloat(editRow.qty1) || 0,
         rate1: parseFloat(editRow.rate1) || 0,
@@ -542,7 +557,21 @@ export default function CoconutSales() {
                 disabled={isSaving}
               />
             </div>
-            <div className="md:col-span-8"></div>
+            <div className="md:col-span-4">
+              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                Next Harvest Date
+                <span className="ml-1 text-gray-400 font-bold normal-case">(optional)</span>
+              </label>
+              <input
+                type="date"
+                name="next_harvest_date"
+                value={newRow.next_harvest_date}
+                onChange={handleRowChange}
+                className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500"
+                disabled={isSaving}
+              />
+            </div>
+            <div className="md:col-span-4"></div>
 
             {/* 1st Quality Section */}
             <div className="md:col-span-12 p-4 rounded-xl border border-green-100 bg-green-50/20 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -858,6 +887,30 @@ export default function CoconutSales() {
                         <span className="text-[10px] text-gray-400 font-bold uppercase">
                           {sale.farm ? `${sale.farm} Block` : "—"}
                         </span>
+                        {sale.next_harvest_date &&
+                          (() => {
+                            const d = daysUntil(sale.next_harvest_date);
+                            const tone =
+                              d < 0
+                                ? "bg-red-50 text-red-600 border-red-100"
+                                : d <= 7
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : "bg-green-50 text-green-700 border-green-100";
+                            const label =
+                              d < 0
+                                ? `Overdue ${Math.abs(d)}d`
+                                : d === 0
+                                  ? "Due today"
+                                  : `in ${d}d`;
+                            return (
+                              <span
+                                className={`mt-1 inline-flex items-center gap-1 border rounded px-1.5 py-0.5 text-[10px] font-black w-max ${tone}`}
+                                title={`Next harvest: ${sale.next_harvest_date}`}
+                              >
+                                <CalendarClock size={10} /> Next: {label}
+                              </span>
+                            );
+                          })()}
                       </td>
 
                       <td className="p-4 font-bold text-gray-900">
@@ -1011,6 +1064,44 @@ export default function CoconutSales() {
                 </div>
 
                 <div className="p-6 space-y-4">
+                  {/* Next Harvest */}
+                  {s.next_harvest_date &&
+                    (() => {
+                      const d = daysUntil(s.next_harvest_date);
+                      const tone =
+                        d < 0
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : d <= 7
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-green-200 bg-green-50 text-green-800";
+                      const label =
+                        d < 0
+                          ? `Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}`
+                          : d === 0
+                            ? "Due today"
+                            : `Due in ${d} day${d === 1 ? "" : "s"}`;
+                      return (
+                        <div
+                          className={`rounded-xl border px-4 py-3 flex items-center justify-between ${tone}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <CalendarClock size={16} />
+                            <span className="text-xs font-black uppercase tracking-wider">
+                              Next Harvest
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-black">
+                              {s.next_harvest_date}
+                            </p>
+                            <p className="text-[11px] font-bold opacity-80">
+                              {label}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                   {/* 1st Quality */}
                   <div className="rounded-xl border border-green-100 bg-green-50/30 overflow-hidden">
                     <div className="px-4 py-2.5 bg-green-50 border-b border-green-100">
@@ -1208,6 +1299,19 @@ export default function CoconutSales() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                    Next Harvest Date{" "}
+                    <span className="text-gray-400 font-bold normal-case">(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="next_harvest_date"
+                    value={editRow.next_harvest_date || ""}
+                    onChange={handleEditRowChange}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:border-green-500 focus:outline-none transition-all"
+                  />
                 </div>
               </div>
 
