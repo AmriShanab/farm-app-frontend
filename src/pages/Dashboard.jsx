@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
    TrendingUp, Wallet, Users, Sprout, ArrowRight,
-   AlertCircle, CheckCircle2, Banknote, Calendar, Loader2, ChevronRight
+   AlertCircle, CheckCircle2, Banknote, Calendar, Loader2, ChevronRight,
+   CalendarClock, Egg
 } from 'lucide-react';
 import { getHeaders } from '../services/api';
 
@@ -9,6 +10,25 @@ const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigit
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const asNumber = (value) => Number(value || 0);
 const dashboardFarm = 'MR1';
+
+const daysUntil = (dateStr) => {
+   if (!dateStr) return null;
+   const today = new Date();
+   today.setHours(0, 0, 0, 0);
+   const target = new Date(dateStr);
+   target.setHours(0, 0, 0, 0);
+   return Math.round((target - today) / 86400000);
+};
+
+const batchDayNumber = (startDate) => {
+   if (!startDate) return null;
+   const today = new Date();
+   today.setHours(0, 0, 0, 0);
+   const start = new Date(startDate);
+   start.setHours(0, 0, 0, 0);
+   const diff = Math.floor((today - start) / 86400000);
+   return diff < 0 ? null : diff + 1;
+};
 
 const incomeTypes = new Set(['coconut_sale', 'cashew_sale', 'other_income', 'poultry_sale']);
 
@@ -56,6 +76,7 @@ export default function Dashboard() {
    const [recentTransactions, setRecentTransactions] = useState([]);
    const [expenseEntries, setExpenseEntries] = useState([]);
    const [profitability, setProfitability] = useState({ months: [], totals: { income: 0, expenses: 0, profit: 0 } });
+   const [highlights, setHighlights] = useState({ nextHarvests: [], activeBatches: [] });
    const [currentMonth, setCurrentMonth] = useState('May 2026');
 
    // --- API INTEGRATION ---
@@ -72,17 +93,18 @@ export default function Dashboard() {
 
          try {
             // Fetch Summary KPIs and Recent Activity concurrently
-            const [summaryRes, recentRes, expensesRes, profitabilityRes] = await Promise.all([
+            const [summaryRes, recentRes, expensesRes, profitabilityRes, highlightsRes] = await Promise.all([
                fetch(
                   `${apiBaseUrl}/dashboard/summary?month=${currentMonthNumber}&year=${currentYearNumber}`,
                   { headers }
                ),
                fetch(`${apiBaseUrl}/dashboard/recent`, { headers }),
                fetch(`${apiBaseUrl}/dashboard/expenses?farm=${dashboardFarm}`, { headers }),
-               fetch(`${apiBaseUrl}/dashboard/profitability?year=${now.getFullYear()}`, { headers })
+               fetch(`${apiBaseUrl}/dashboard/profitability?year=${now.getFullYear()}`, { headers }),
+               fetch(`${apiBaseUrl}/dashboard/highlights`, { headers }),
             ]);
 
-            if (!summaryRes.ok || !recentRes.ok || !expensesRes.ok || !profitabilityRes.ok) {
+            if (!summaryRes.ok || !recentRes.ok || !expensesRes.ok || !profitabilityRes.ok || !highlightsRes.ok) {
                throw new Error('Failed to fetch dashboard data from server.');
             }
 
@@ -90,6 +112,7 @@ export default function Dashboard() {
             const recentData = await recentRes.json();
             const expensesData = await expensesRes.json();
             const profitabilityData = await profitabilityRes.json();
+            const highlightsData = await highlightsRes.json();
 
             const summaryPayload = summaryData?.data || summaryData;
             const period = summaryPayload?.period || {};
@@ -118,6 +141,12 @@ export default function Dashboard() {
             setProfitability({
                months: Array.isArray(profitabilityPayload?.months) ? profitabilityPayload.months : [],
                totals: profitabilityPayload?.totals || { income: 0, expenses: 0, profit: 0 },
+            });
+
+            const hlPayload = highlightsData?.data || highlightsData;
+            setHighlights({
+               nextHarvests: Array.isArray(hlPayload?.nextHarvests) ? hlPayload.nextHarvests : [],
+               activeBatches: Array.isArray(hlPayload?.activeBatches) ? hlPayload.activeBatches : [],
             });
 
          } catch (err) {
@@ -219,6 +248,94 @@ export default function Dashboard() {
                      <h3 className="text-2xl font-black relative z-10">Rs. {fmt(kpiData.payrollCost)}</h3>
                   </div>
                </div>
+
+               {/* ── OPERATIONAL HIGHLIGHTS ── */}
+               {(highlights.nextHarvests.length > 0 || highlights.activeBatches.length > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                     {/* Next Harvest Dates */}
+                     {highlights.nextHarvests.length > 0 && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                           <div className="p-4 border-b border-gray-100 bg-amber-50/50 flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                                 <Sprout size={16} className="text-amber-700" />
+                              </div>
+                              <h2 className="text-sm font-black text-gray-900">Next Harvest</h2>
+                           </div>
+                           <div className="p-4 space-y-3">
+                              {highlights.nextHarvests.map((h) => {
+                                 const days = daysUntil(h.next_harvest_date);
+                                 const isOverdue = days !== null && days < 0;
+                                 const isSoon = days !== null && days >= 0 && days <= 7;
+                                 const colorClass = isOverdue
+                                    ? 'bg-red-50 border-red-200 text-red-700'
+                                    : isSoon
+                                       ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                       : 'bg-green-50 border-green-200 text-green-700';
+                                 const badgeColor = isOverdue
+                                    ? 'bg-red-100 text-red-800'
+                                    : isSoon
+                                       ? 'bg-amber-100 text-amber-800'
+                                       : 'bg-green-100 text-green-800';
+                                 return (
+                                    <div key={h.farm} className={`rounded-xl border p-3 ${colorClass}`}>
+                                       <div className="flex items-center justify-between">
+                                          <div>
+                                             <p className="text-xs font-black uppercase tracking-wider opacity-70">{h.farm}</p>
+                                             <p className="text-sm font-bold mt-0.5">
+                                                {new Date(h.next_harvest_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                             </p>
+                                          </div>
+                                          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black ${badgeColor}`}>
+                                             {days === 0
+                                                ? 'Today'
+                                                : isOverdue
+                                                   ? `Overdue ${Math.abs(days)}d`
+                                                   : `In ${days}d`}
+                                          </span>
+                                       </div>
+                                    </div>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     )}
+
+                     {/* Active Poultry Batches */}
+                     {highlights.activeBatches.length > 0 && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                           <div className="p-4 border-b border-gray-100 bg-emerald-50/50 flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                 <Egg size={16} className="text-emerald-700" />
+                              </div>
+                              <h2 className="text-sm font-black text-gray-900">Active Flocks</h2>
+                           </div>
+                           <div className="p-4 space-y-3">
+                              {highlights.activeBatches.map((b) => {
+                                 const dayNo = batchDayNumber(b.date);
+                                 const qty = parseInt(b.quantity || 0, 10);
+                                 return (
+                                    <div key={b.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                       <div className="flex items-center justify-between">
+                                          <div>
+                                             <p className="text-sm font-bold text-gray-900">{b.notes || `Batch #${b.id}`}</p>
+                                             <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                                {qty.toLocaleString()} birds · {b.supplier || 'No supplier'}
+                                             </p>
+                                          </div>
+                                          {dayNo != null && (
+                                             <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-lg text-xs font-black">
+                                                <CalendarClock size={12} /> Day {dayNo}
+                                             </span>
+                                          )}
+                                       </div>
+                                    </div>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     )}
+                  </div>
+               )}
 
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
