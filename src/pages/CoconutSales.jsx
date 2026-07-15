@@ -994,6 +994,30 @@ export default function CoconutSales() {
                 </tr>
               )}
             </tbody>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                  <td className="p-4"></td>
+                  <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals</td>
+                  <td className="p-4 text-right">
+                    <span className="font-black text-gray-900">{filtered.reduce((s, r) => s + (Number(r.qty1 || 0) - Number(r.free_qty1 || 0)), 0).toLocaleString()}</span>
+                    {filtered.reduce((s, r) => s + Number(r.free_qty1 || 0), 0) > 0 && (
+                      <span className="ml-1 text-[10px] font-bold text-blue-600">+{filtered.reduce((s, r) => s + Number(r.free_qty1 || 0), 0)} free</span>
+                    )}
+                  </td>
+                  <td className="p-4 text-right">
+                    <span className="font-black text-gray-900">{filtered.reduce((s, r) => s + (Number(r.qty2 || 0) - Number(r.free_qty2 || 0)), 0).toLocaleString()}</span>
+                    {filtered.reduce((s, r) => s + Number(r.free_qty2 || 0), 0) > 0 && (
+                      <span className="ml-1 text-[10px] font-bold text-blue-600">+{filtered.reduce((s, r) => s + Number(r.free_qty2 || 0), 0)} free</span>
+                    )}
+                  </td>
+                  <td className="p-4 text-right font-black text-gray-900 text-base">
+                    Rs. {fmt(totalRevenue)}
+                  </td>
+                  <td className="p-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

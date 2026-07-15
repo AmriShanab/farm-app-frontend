@@ -814,6 +814,21 @@ export default function RunPayroll() {
                 );
               })}
             </tbody>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #e5e7eb', background: 'rgba(249,250,251,0.8)' }}>
+                  <td style={{ ...tdStyle(), fontWeight: 900, color: '#374151', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Totals</td>
+                  <td style={{ ...tdStyle(), textAlign: 'right' }}></td>
+                  <td style={{ ...tdStyle(), textAlign: 'right', fontWeight: 900, color: '#374151' }}>{filtered.reduce((s, e) => s + (e.fullDays || 0), 0)}</td>
+                  <td style={{ ...tdStyle(), textAlign: 'right', fontWeight: 900, color: '#374151' }}>{filtered.reduce((s, e) => s + (e.halfDays || 0), 0)}</td>
+                  <td style={{ ...tdStyle(), textAlign: 'right' }}></td>
+                  <td style={{ ...tdStyle(), textAlign: 'right', fontWeight: 900, color: '#374151' }}>Rs. {fmt(filtered.reduce((s, e) => s + (e.grossPay || 0), 0))}</td>
+                  <td style={{ ...tdStyle(), textAlign: 'right', fontWeight: 900, color: '#b45309' }}>Rs. {fmt(filtered.reduce((s, e) => s + (e.advanceDeducted || 0), 0))}</td>
+                  <td style={{ ...tdStyle(), textAlign: 'right', fontWeight: 900, color: '#166534' }}>Rs. {fmt(filtered.reduce((s, e) => s + (e.netPay || 0), 0))}</td>
+                  <td style={tdStyle()}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
@@ -920,6 +935,17 @@ export default function RunPayroll() {
                   ))
                 )}
               </tbody>
+              {historyRows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                    <td className="py-2.5 px-4 text-[10px] font-black text-gray-700 uppercase tracking-wider">Totals</td>
+                    <td className="py-2.5 px-4"></td>
+                    <td className="py-2.5 px-4 text-right text-xs font-black text-gray-900">Rs. {fmt(historyRows.reduce((s, r) => s + (parseFloat(r.totalGross) || 0), 0))}</td>
+                    <td className="py-2.5 px-4 text-right text-xs font-black text-orange-700">Rs. {fmt(historyRows.reduce((s, r) => s + (parseFloat(r.totalDeductions) || 0), 0))}</td>
+                    <td className="py-2.5 px-4 text-right text-xs font-black text-gray-900">Rs. {fmt(historyRows.reduce((s, r) => s + (parseFloat(r.totalNet) || 0), 0))}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
@@ -1010,6 +1036,15 @@ export default function RunPayroll() {
                   ))
                 )}
               </tbody>
+              {managerSalaries.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                    <td className="py-2.5 px-4 text-[10px] font-black text-gray-700 uppercase tracking-wider" colSpan={2}>Totals</td>
+                    <td className="py-2.5 px-4 text-right text-xs font-black text-gray-900">Rs. {fmt(managerSalaries.reduce((s, r) => s + (r.amount || 0), 0))}</td>
+                    <td className="py-2.5 px-4"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>

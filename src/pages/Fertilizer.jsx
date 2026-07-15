@@ -370,6 +370,20 @@ export default function FertilizerManagement() {
                         );
                       })}
                     </tbody>
+                    {ledgerData.length > 0 && (
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                          <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={3}>Totals</td>
+                          <td className="p-4 text-right font-black text-gray-900">{totalQuantity}</td>
+                          <td className="p-4 text-right text-xs">
+                            <p className="text-gray-700"><span className="font-bold text-gray-500 mr-1">Material:</span>Rs. {fmt(totalMaterialCost)}</p>
+                            <p className="text-gray-700"><span className="font-bold text-gray-500 mr-1">Labor:</span>Rs. {fmt(totalLaborCost)}</p>
+                          </td>
+                          <td className="p-4 text-right font-black text-green-700">Rs. {fmt(totalMaterialCost + totalLaborCost)}</td>
+                          <td className="p-4"></td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>

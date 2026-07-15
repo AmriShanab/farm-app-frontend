@@ -589,6 +589,20 @@ export default function CashAdvances() {
                 </tr>
               )}
             </tbody>
+            {!isLoading && filtered.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                  <td className="p-4"></td>
+                  <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={4}>
+                    Totals ({filtered.length} advances across {groupedAdvances.length} employee{groupedAdvances.length !== 1 ? 's' : ''})
+                  </td>
+                  <td className="p-4 text-right font-black text-gray-900 text-[13px]">
+                    Rs. {fmt(filtered.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0))}
+                  </td>
+                  <td className="p-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

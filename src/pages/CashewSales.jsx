@@ -693,6 +693,25 @@ export default function CashewSales() {
                 </tr>
               )}
             </tbody>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                  <td className="p-4"></td>
+                  <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={2}>Totals</td>
+                  <td className="p-4 text-right font-black text-gray-900">{fmt(totalKg)} Kg</td>
+                  <td className="p-4"></td>
+                  <td className="p-4">
+                    <span className="text-red-600 font-bold text-[11px]">
+                      −Rs. {fmt(filtered.reduce((s, r) => s + (parseFloat(r.laborCost ?? r.labor_cost) || 0), 0))}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right font-black text-gray-900 text-base">
+                    Rs. {fmt(totalRevenue)}
+                  </td>
+                  <td className="p-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

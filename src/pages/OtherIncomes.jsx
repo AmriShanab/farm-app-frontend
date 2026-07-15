@@ -486,6 +486,21 @@ export default function OtherIncomes() {
                 </tr>
               )}
             </tbody>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #e5e7eb', background: '#f9fafb' }}>
+                  <td style={{ padding: '14px 18px' }}></td>
+                  <td style={{ padding: '14px 18px' }}></td>
+                  <td style={{ padding: '14px 18px', fontWeight: 900, color: '#374151', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Total ({filtered.length} entries)
+                  </td>
+                  <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 900, color: '#166534', fontSize: '14px' }}>
+                    Rs. {fmt(totalRevenue)}
+                  </td>
+                  <td style={{ padding: '14px 18px' }}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

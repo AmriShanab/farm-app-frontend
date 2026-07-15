@@ -295,6 +295,23 @@ export default function PoultryBatches() {
                   })
                 )}
               </tbody>
+              {data.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                    <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={2}>Totals</td>
+                    <td className="p-4"></td>
+                    <td className="p-4"></td>
+                    <td className="p-4 text-right font-black text-gray-900">
+                      {data.reduce((sum, b) => sum + parseInt(b.quantity || 0, 10), 0).toLocaleString()} <span className="text-xs text-gray-500 font-bold">Birds</span>
+                    </td>
+                    <td className="p-4 text-right font-black text-green-700">
+                      Rs. {fmt(data.reduce((sum, b) => sum + (parseInt(b.quantity || 0, 10) * parseFloat(b.price_per_bird || b.pricePerBird || 0)), 0))}
+                    </td>
+                    <td className="p-4"></td>
+                    {isAdding && <td></td>}
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>

@@ -353,6 +353,26 @@ export default function PoultryFeeds() {
                     );
                   })}
                 </tbody>
+                {data.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                      <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals</td>
+                      <td className="p-4 text-xs text-gray-700 font-bold">
+                        {data.reduce((sum, l) => sum + parseFloat(l.quantity || 0), 0)} units
+                      </td>
+                      <td className="p-4 text-right font-black text-gray-900">
+                        Rs. {fmt(data.reduce((sum, l) => sum + (parseFloat(l.quantity || 0) * parseFloat(l.rate_per_unit || 0)), 0))}
+                      </td>
+                      <td className="p-4 text-right font-bold text-green-700">
+                        Rs. {fmt(data.reduce((sum, l) => sum + parseFloat(l.paid_amount || 0), 0))}
+                      </td>
+                      <td className="p-4 text-right font-black text-red-600">
+                        Rs. {fmt(data.reduce((sum, l) => sum + parseFloat(l.payable_balance || 0), 0))}
+                      </td>
+                      <td className="p-4"></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}

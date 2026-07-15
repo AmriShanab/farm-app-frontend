@@ -418,6 +418,17 @@ export default function PoultrySales() {
                     );
                   })}
                 </tbody>
+                {data.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                      <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={5}>Totals ({data.length} sales)</td>
+                      <td className="p-4 text-right font-black text-green-700">
+                        + Rs. {fmt(data.reduce((sum, s) => sum + (parseFloat(s.total_price || s.total_amount) || (parseFloat(s.quantity || 0) * parseFloat(s.rate || 0))), 0))}
+                      </td>
+                      <td className="p-4"></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}

@@ -283,6 +283,15 @@ function OwnerFinancialsTab({ data, setData, isLoading, selectedYear, setSelecte
                   )
                 ))}
               </tbody>
+              {data.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                    <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={4}>Totals ({data.length} entries)</td>
+                    <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(totalLeasing + totalOther)}</td>
+                    <td className="p-4"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -342,6 +351,15 @@ function ChequeTrackerTab({ data, isLoading, search, setSearch }) {
                 </tr>
               ))}
             </tbody>
+            {data.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                  <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={4}>Totals ({data.length} cheques)</td>
+                  <td className="p-4 text-right font-black text-green-700">Rs. {fmt(data.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0))}</td>
+                  <td className="p-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}

@@ -361,6 +361,18 @@ export default function AssetManagement() {
                   );
                 })}
               </tbody>
+              {assets.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                    <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals ({assets.length} assets)</td>
+                    <td className="p-4"></td>
+                    <td className="p-4"></td>
+                    <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(totalValue)}</td>
+                    <td className="p-4"></td>
+                    <td className="p-4"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

@@ -1048,6 +1048,54 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   })
                 )}
               </tbody>
+              {data.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                    <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals ({data.length})</td>
+
+                    {category === "harvest" && (
+                      <>
+                        <td className="p-4"></td>
+                        <td className="p-4 text-right text-[11px] text-gray-700">
+                          <p>Hired: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.mainLabor || 0), 0))} | Collect: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.collectors || 0), 0))}</p>
+                          <p>Tractor: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.tractorDriver || 0), 0))} | Food: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.foodExpenses || 0), 0))}</p>
+                        </td>
+                        <td className="p-4 text-right font-black text-amber-700">
+                          Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.permanentLaborCost || 0), 0))}
+                        </td>
+                      </>
+                    )}
+
+                    {(category === "maintenance" || category === "machinery") && (
+                      <>
+                        <td className="p-4"></td>
+                        <td className="p-4"></td>
+                      </>
+                    )}
+
+                    {category === "ceb" && (
+                      <>
+                        <td className="p-4 text-right font-black text-gray-700">
+                          {data.reduce((s, r) => s + parseFloat(r.unitsUsed || 0), 0).toLocaleString()} kWh
+                        </td>
+                        <td className="p-4"></td>
+                      </>
+                    )}
+
+                    {category === "fuel" && (
+                      <>
+                        <td className="p-4"></td>
+                        <td className="p-4 text-right font-bold text-gray-700">
+                          {fmt(data.reduce((s, r) => s + parseFloat(r.liters || 0), 0))}L
+                        </td>
+                      </>
+                    )}
+
+                    <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(calcTotal())}</td>
+                    <td className="p-4"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
