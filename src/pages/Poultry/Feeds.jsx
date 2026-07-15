@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Wheat, Plus, Loader2, X, Check, Trash2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Wheat, Plus, Loader2, X, Check, Trash2, Filter } from "lucide-react";
 import {
   getPoultryBatches,
   getPoultryFeed,
@@ -22,6 +22,7 @@ export default function PoultryFeeds() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
+  const [feedFilter, setFeedFilter] = useState("All");
   const toast = useToast();
 
   useEffect(() => {
@@ -101,6 +102,17 @@ export default function PoultryFeeds() {
     }
   };
 
+  const feedTypes = useMemo(() => {
+    const types = [...new Set(data.map((l) => l.feed_type || l.feedType).filter(Boolean))];
+    types.sort((a, b) => a.localeCompare(b));
+    return types;
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (feedFilter === "All") return data;
+    return data.filter((l) => (l.feed_type || l.feedType) === feedFilter);
+  }, [data, feedFilter]);
+
   const handleDelete = async (id) => {
     if (window.confirm("Delete this feed record?")) {
       try {
@@ -142,6 +154,7 @@ export default function PoultryFeeds() {
                   onChange={(e) => {
                     if (selectedBatchId !== e.target.value) {
                       setIsLoadingFeed(true);
+                      setFeedFilter("All");
                       setSelectedBatchId(e.target.value);
                     }
                   }}
@@ -151,6 +164,18 @@ export default function PoultryFeeds() {
                     <option key={b.id} value={b.id}>
                       Batch {b.notes || `#${b.id}`}
                     </option>
+                  ))}
+                </select>
+              )}
+              {feedTypes.length > 1 && (
+                <select
+                  value={feedFilter}
+                  onChange={(e) => setFeedFilter(e.target.value)}
+                  className="ml-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg px-3 py-1.5 outline-none cursor-pointer"
+                >
+                  <option value="All">All Feed Types</option>
+                  {feedTypes.map((ft) => (
+                    <option key={ft} value={ft}>{ft}</option>
                   ))}
                 </select>
               )}
@@ -299,7 +324,14 @@ export default function PoultryFeeds() {
                       </td>
                     </tr>
                   )}
-                  {data.map((log) => {
+                  {filtered.length === 0 && !isAdding && (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-400 font-bold">
+                        {feedFilter !== "All" ? `No records for "${feedFilter}".` : "No feed records found."}
+                      </td>
+                    </tr>
+                  )}
+                  {filtered.map((log) => {
                     const qty = parseFloat(log.quantity || 0);
                     const rate = parseFloat(log.rate_per_unit || 0);
                     const totalCost = qty * rate;
@@ -353,21 +385,23 @@ export default function PoultryFeeds() {
                     );
                   })}
                 </tbody>
-                {data.length > 0 && (
+                {filtered.length > 0 && (
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 bg-gray-50/80">
-                      <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals</td>
+                      <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">
+                        {feedFilter !== "All" ? feedFilter : "Totals"}
+                      </td>
                       <td className="p-4 text-xs text-gray-700 font-bold">
-                        {data.reduce((sum, l) => sum + parseFloat(l.quantity || 0), 0)} units
+                        {filtered.reduce((sum, l) => sum + parseFloat(l.quantity || 0), 0)} units
                       </td>
                       <td className="p-4 text-right font-black text-gray-900">
-                        Rs. {fmt(data.reduce((sum, l) => sum + (parseFloat(l.quantity || 0) * parseFloat(l.rate_per_unit || 0)), 0))}
+                        Rs. {fmt(filtered.reduce((sum, l) => sum + (parseFloat(l.quantity || 0) * parseFloat(l.rate_per_unit || 0)), 0))}
                       </td>
                       <td className="p-4 text-right font-bold text-green-700">
-                        Rs. {fmt(data.reduce((sum, l) => sum + parseFloat(l.paid_amount || 0), 0))}
+                        Rs. {fmt(filtered.reduce((sum, l) => sum + parseFloat(l.paid_amount || 0), 0))}
                       </td>
                       <td className="p-4 text-right font-black text-red-600">
-                        Rs. {fmt(data.reduce((sum, l) => sum + parseFloat(l.payable_balance || 0), 0))}
+                        Rs. {fmt(filtered.reduce((sum, l) => sum + parseFloat(l.payable_balance || 0), 0))}
                       </td>
                       <td className="p-4"></td>
                     </tr>
