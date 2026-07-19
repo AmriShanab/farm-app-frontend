@@ -95,7 +95,9 @@ export default function RunPayroll() {
   const [breakdownEmp, setBreakdownEmp] = useState(null);
   const [historicalRun, setHistoricalRun] = useState(null);
   const [finalizeEmp, setFinalizeEmp] = useState(null);
-  const [deductAmount, setDeductAmount] = useState(0);
+  // Per-advance recovery selection for the finalize dialog:
+  // { [advanceId]: { included: bool, amount: number } }
+  const [advanceAlloc, setAdvanceAlloc] = useState({});
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -244,10 +246,24 @@ export default function RunPayroll() {
       return;
     }
 
-    // Default recovery: full outstanding, capped at gross (backend default)
-    setDeductAmount(Number(emp.advanceDeducted || 0));
+    // Default: recover each open advance in date order, up to gross pay.
+    // The user can then uncheck advances or lower any amount for partial recovery.
+    const details = emp.advanceDetails || [];
+    let remaining = Number(emp.grossPay || 0);
+    const alloc = {};
+    details.forEach((adv) => {
+      const due = Number(adv.amount || 0);
+      const take = Math.max(0, Math.min(due, remaining));
+      alloc[adv.id] = { included: take > 0.009, amount: take };
+      remaining -= take;
+    });
+    setAdvanceAlloc(alloc);
     setFinalizeEmp(emp);
   };
+
+  // Patch one advance's selection in the finalize dialog.
+  const setAlloc = (id, patch) =>
+    setAdvanceAlloc((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
   const confirmFinalize = async () => {
     const emp = finalizeEmp;
@@ -256,12 +272,16 @@ export default function RunPayroll() {
     const rawEmpId = emp.employeeId || emp.empId || emp.id;
     const empIdStr = String(rawEmpId);
     const gross = Number(emp.grossPay || 0);
-    const maxDeduct = Math.min(Number(emp.advanceOutstanding || 0), gross);
-    const deduct = Number(deductAmount) || 0;
 
-    if (deduct < 0 || deduct > maxDeduct + 0.01) {
+    // Build explicit per-advance allocations from the dialog selection.
+    const allocations = Object.entries(advanceAlloc)
+      .filter(([, v]) => v.included && Number(v.amount) > 0)
+      .map(([id, v]) => ({ advanceId: Number(id), amount: Number(v.amount) }));
+    const deduct = allocations.reduce((s, a) => s + a.amount, 0);
+
+    if (deduct > gross + 0.01) {
       toast.warn(
-        `Advance recovery must be between Rs. 0 and Rs. ${fmt(maxDeduct)}.`,
+        `Advance recovery (Rs. ${fmt(deduct)}) cannot exceed gross pay (Rs. ${fmt(gross)}).`,
       );
       return;
     }
@@ -273,6 +293,7 @@ export default function RunPayroll() {
       empId: parseInt(rawEmpId, 10),
       grossPay: gross,
       advanceDeducted: deduct,
+      allocations,
       netPay: Math.max(0, gross - deduct),
     };
 
@@ -1220,10 +1241,14 @@ export default function RunPayroll() {
         (() => {
           const gross = Number(finalizeEmp.grossPay || 0);
           const outstanding = Number(finalizeEmp.advanceOutstanding || 0);
-          const maxDeduct = Math.min(outstanding, gross);
-          const deduct = Number(deductAmount) || 0;
+          const details = finalizeEmp.advanceDetails || [];
+          const deduct = details.reduce((s, adv) => {
+            const a = advanceAlloc[adv.id];
+            return s + (a?.included ? Number(a.amount) || 0 : 0);
+          }, 0);
           const netCash = Math.max(0, gross - deduct);
           const carryForward = Math.max(0, outstanding - deduct);
+          const overGross = deduct > gross + 0.01;
 
           return (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -1289,53 +1314,97 @@ export default function RunPayroll() {
                     </div>
                   </div>
 
-                  {finalizeEmp.advanceDetails?.length > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
-                        Open Advances
-                      </div>
-                      <ul className="divide-y divide-gray-50 max-h-32 overflow-y-auto">
-                        {finalizeEmp.advanceDetails.map((adv) => (
-                          <li
-                            key={adv.id}
-                            className="p-2.5 px-4 flex justify-between items-center text-xs"
-                          >
-                            <span className="font-bold text-gray-600 text-[11px] bg-gray-100 px-2.5 py-1 rounded-md">
-                              {adv.date}
-                            </span>
-                            <span className="font-bold text-gray-800">
-                              Rs. {fmt(adv.amount)}
-                              {Number(adv.repaidAmount) > 0 && (
-                                <span className="text-[10px] text-gray-400 font-semibold ml-1.5">
-                                  (of {fmt(adv.originalAmount)})
-                                </span>
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                  {/* Per-advance recovery: tick which advances to deduct and
+                      edit each amount for partial recovery. */}
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider flex justify-between">
+                      <span>Recover Advances</span>
+                      <span className="text-gray-400 normal-case font-bold">
+                        {details.length} open
+                      </span>
                     </div>
-                  )}
+                    {details.length === 0 ? (
+                      <div className="p-4 text-xs font-medium text-gray-400 italic text-center">
+                        No open advances for this employee.
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
+                        {details.map((adv) => {
+                          const a = advanceAlloc[adv.id] || {
+                            included: false,
+                            amount: 0,
+                          };
+                          const due = Number(adv.amount || 0);
+                          return (
+                            <li key={adv.id} className="p-3 px-4 flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={!!a.included}
+                                onChange={(e) =>
+                                  setAlloc(adv.id, {
+                                    included: e.target.checked,
+                                    amount: e.target.checked
+                                      ? a.amount || due
+                                      : a.amount,
+                                  })
+                                }
+                                className="accent-green-600 w-4 h-4 cursor-pointer flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-600 text-[11px] bg-gray-100 px-2 py-0.5 rounded-md">
+                                    {adv.date}
+                                  </span>
+                                  <span className="text-[11px] font-semibold text-gray-400">
+                                    balance Rs. {fmt(due)}
+                                    {Number(adv.repaidAmount) > 0 &&
+                                      ` (of ${fmt(adv.originalAmount)})`}
+                                  </span>
+                                </div>
+                              </div>
+                              <input
+                                type="number"
+                                min="0"
+                                max={due}
+                                step="0.01"
+                                disabled={!a.included}
+                                value={a.included ? a.amount : ""}
+                                onChange={(e) => {
+                                  const v = Math.max(
+                                    0,
+                                    Math.min(due, Number(e.target.value) || 0),
+                                  );
+                                  setAlloc(adv.id, { amount: v });
+                                }}
+                                className="w-24 bg-white border-2 border-amber-200 focus:border-amber-400 disabled:bg-gray-50 disabled:border-gray-100 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none text-right"
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {details.length > 0 && (
+                      <div className="px-4 py-2 bg-gray-50/60 border-t border-gray-100 flex justify-between text-xs font-black">
+                        <span className="text-gray-500 uppercase tracking-wider">
+                          Total Recovering
+                        </span>
+                        <span className={overGross ? "text-red-600" : "text-orange-700"}>
+                          Rs. {fmt(deduct)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
-                  <label className="grid gap-1.5">
-                    <span className="text-xs font-black text-gray-600 uppercase tracking-wider">
-                      Advance to Recover Now (Rs.)
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={maxDeduct}
-                      step="0.01"
-                      value={deductAmount}
-                      onChange={(e) => setDeductAmount(e.target.value)}
-                      className="w-full bg-white border-2 border-amber-200 focus:border-amber-400 rounded-xl px-3 py-2.5 text-base font-black text-gray-900 outline-none"
-                    />
-                    <span className="text-[11px] font-semibold text-gray-400">
-                      Max recoverable this run: Rs. {fmt(maxDeduct)}
-                      {carryForward > 0 &&
-                        ` · Rs. ${fmt(carryForward)} will carry to the next run`}
-                    </span>
-                  </label>
+                  {overGross && (
+                    <p className="text-[11px] font-bold text-red-600">
+                      Recovery exceeds gross pay. Lower an amount or uncheck an advance.
+                    </p>
+                  )}
+                  {carryForward > 0 && !overGross && (
+                    <p className="text-[11px] font-semibold text-gray-400">
+                      Rs. {fmt(carryForward)} will carry to the next run.
+                    </p>
+                  )}
 
                   <div className="bg-gradient-to-r from-green-50 to-green-100/50 border border-green-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
                     <span className="text-xs font-black text-green-900 uppercase tracking-wider">
@@ -1356,7 +1425,8 @@ export default function RunPayroll() {
                   </button>
                   <button
                     onClick={confirmFinalize}
-                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-black shadow-md"
+                    disabled={overGross}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-black shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Lock &amp; Pay Rs. {fmt(netCash)}
                   </button>

@@ -10,7 +10,6 @@ import DailyAttendance from "./pages/DailyAttendance";
 import AttendanceRecord from "./pages/AttendanceRecord";
 import CashAdvances from "./pages/CashAdvances";
 import RunPayroll from "./pages/RunPayroll";
-import SalaryReport from "./pages/SalaryReport";
 import PoultryInvestors from "./pages/Poultry/Investors";
 import PoultryBatches from "./pages/Poultry/Batches";
 import PoultryFeeds from "./pages/Poultry/Feeds";
@@ -68,7 +67,6 @@ function App() {
             <Route path="record" element={<AttendanceRecord />} />
             <Route path="advances" element={<CashAdvances />} />
             <Route path="calculator" element={<RunPayroll />} />
-            <Route path="salary-report" element={<SalaryReport />} />
           </Route>
           <Route path="expenses" element={<GeneralExpenses />} />
           <Route path="fertilizer" element={<FertilizerManagement />} />

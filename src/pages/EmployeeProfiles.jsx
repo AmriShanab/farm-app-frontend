@@ -3,10 +3,11 @@ import {
   Search, Download,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Users, UserPlus, MapPin, Briefcase, Check, X, Edit2, ArrowUpRight,
-  Loader2, AlertCircle, Trash2, Save, CalendarClock, Pause, Play
+  Loader2, AlertCircle, Trash2, Save, CalendarClock, Pause, Play,
+  Settings2, History
 } from 'lucide-react';
 
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getBasicRate } from '../services/api';
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getBasicRate, createBasicRate } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 import { downloadCsv } from '../utils/csv';
 
@@ -31,6 +32,11 @@ export default function EmployeeProfiles() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [basicRate, setBasicRate] = useState(1200);
+  const [rateHistory, setRateHistory] = useState([]);
+  const [isRateModalOpen, setIsRateModalOpen] = useState(false);
+  const [newRate, setNewRate] = useState('');
+  const [newEffectiveFrom, setNewEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [isSavingRate, setIsSavingRate] = useState(false);
 
   // --- UI States (UPDATED FOR NEW SCHEMA) ---
   const [isAdding, setIsAdding] = useState(false);
@@ -69,13 +75,34 @@ export default function EmployeeProfiles() {
   }, [farmFilter]);
 
   // Current Basic rate — drives the Basic/Allowance split preview.
-  useEffect(() => {
-    let isActive = true;
-    getBasicRate()
-      .then((r) => { if (isActive && r?.current) setBasicRate(r.current); })
-      .catch(() => {});
-    return () => { isActive = false; };
-  }, []);
+  const loadRate = async () => {
+    try {
+      const r = await getBasicRate();
+      if (r?.current) setBasicRate(r.current);
+      setRateHistory(Array.isArray(r?.history) ? r.history : []);
+    } catch { /* keep default */ }
+  };
+  useEffect(() => { loadRate(); }, []);
+
+  const handleSaveRate = async () => {
+    const rate = parseFloat(newRate);
+    if (!rate || rate <= 0) {
+      toast.warn('Enter a valid basic rate greater than 0.');
+      return;
+    }
+    setIsSavingRate(true);
+    try {
+      await createBasicRate({ basicPerDay: rate, effectiveFrom: newEffectiveFrom });
+      toast.success('Basic rate updated. Past payslips stay unchanged.');
+      setIsRateModalOpen(false);
+      setNewRate('');
+      await loadRate();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update basic rate.');
+    } finally {
+      setIsSavingRate(false);
+    }
+  };
 
   const filtered = employees.filter(emp =>
     (!search || emp.name.toLowerCase().includes(search.toLowerCase()) || emp.role.toLowerCase().includes(search.toLowerCase()))
@@ -276,6 +303,9 @@ export default function EmployeeProfiles() {
         </div>
 
         <div className="flex gap-2 items-center">
+          <button onClick={() => setIsRateModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
+            <Settings2 size={14} /> Basic Rate: Rs. {fmt(basicRate)}
+          </button>
           <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
             <Download size={14} /> Export List
           </button>
@@ -706,6 +736,62 @@ export default function EmployeeProfiles() {
                   {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Update Profile
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BASIC SALARY RATE MODAL ── */}
+      {isRateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsRateModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-gray-900">Basic Salary Rate</h3>
+                <p className="text-xs text-gray-500">
+                  Current: Rs. {fmt(basicRate)} / day. A new rate applies going forward — past payslips stay frozen.
+                </p>
+              </div>
+              <button onClick={() => setIsRateModalOpen(false)} className="p-2 rounded-lg text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+
+            <div className="p-5 grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  New Basic / Day (Rs.)
+                  <input type="number" value={newRate} onChange={(e) => setNewRate(e.target.value)} placeholder="e.g. 1500"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800 outline-none focus:border-green-500" />
+                </label>
+                <label className="grid gap-1 text-xs font-bold text-gray-600">
+                  Effective From
+                  <input type="date" value={newEffectiveFrom} min={new Date().toISOString().split('T')[0]} onChange={(e) => setNewEffectiveFrom(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800 outline-none focus:border-green-500" />
+                </label>
+              </div>
+
+              {rateHistory.length > 0 && (
+                <div className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100">
+                    <History size={12} /> Rate History
+                  </div>
+                  <ul className="divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                    {rateHistory.map((h) => (
+                      <li key={h.id} className="px-4 py-2 flex justify-between text-xs">
+                        <span className="font-bold text-gray-700">Rs. {fmt(h.basicPerDay)} / day</span>
+                        <span className="text-gray-400 font-semibold">from {h.effectiveFrom}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/60">
+              <button onClick={() => setIsRateModalOpen(false)} className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleSaveRate} disabled={isSavingRate} className="px-5 py-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-black shadow-md disabled:opacity-60 flex items-center gap-2">
+                {isSavingRate ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Rate
+              </button>
             </div>
           </div>
         </div>
