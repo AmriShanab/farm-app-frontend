@@ -140,6 +140,8 @@ const normalizeGeneralExpenseRecord = (record) => {
     normalized.permanentLaborCost = normalized.permanent_labor_cost;
   if ("meter_id" in normalized && !("meterId" in normalized))
     normalized.meterId = normalized.meter_id;
+  if ("fuel_type" in normalized && !("fuelType" in normalized))
+    normalized.fuelType = normalized.fuel_type;
 
   return normalized;
 };
@@ -334,11 +336,10 @@ export const deleteOtherIncome = async (id) => {
 
 export const getEmployees = async (farm, status = "active") => {
   try {
-    // If farm is "All", we omit the farm query param to get everyone
-    let url = `${BASE_URL}/hr/employees?status=${status}`;
-    if (farm && farm !== "All") {
-      url += `&farm=${farm}`;
-    }
+    const params = [];
+    if (status) params.push(`status=${status}`);
+    if (farm && farm !== "All") params.push(`farm=${farm}`);
+    let url = `${BASE_URL}/hr/employees${params.length ? '?' + params.join('&') : ''}`;
 
     const response = await fetch(url, { method: "GET", headers: getHeaders() });
     if (!response.ok) throw new Error("Failed to fetch employees");
@@ -435,6 +436,7 @@ export const getAttendance = async (date, farm) => {
       ? data.map((r) => ({
           employeeId: r.employee_id ?? r.employeeId ?? null,
           name: r.name,
+          role: r.role ?? null,
           farm: r.home_farm ?? r.farm,
           home_farm: r.home_farm ?? r.farm,
           wagePerDay: r.wage_per_day ?? r.wagePerDay ?? 0,
@@ -957,24 +959,153 @@ export const deletePoultrySale = async (id) => {
   return true;
 };
 
-// --- POULTRY: PROFIT DISTRIBUTION ENDPOINTS ---
+// --- POULTRY: MEDICINE ENDPOINTS ---
 
-export const getPoultryProfit = async (batchId, period) => {
+export const getPoultryMedicine = async (batchId) => {
+  const url = batchId
+    ? `${BASE_URL}/poultry/medicine?batchId=${batchId}`
+    : `${BASE_URL}/poultry/medicine`;
+  const response = await fetch(url, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const createPoultryMedicine = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to record medicine");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const updatePoultryMedicine = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update medicine");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultryMedicine = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete medicine record");
+  return true;
+};
+
+// --- POULTRY: MORTALITY ENDPOINTS ---
+
+export const getPoultryMortality = async (batchId, date) => {
+  let url = `${BASE_URL}/poultry/mortality`;
+  const params = [];
+  if (batchId) params.push(`batchId=${batchId}`);
+  if (date) params.push(`date=${date}`);
+  if (params.length) url += `?${params.join("&")}`;
+  const response = await fetch(url, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const savePoultryMortality = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/mortality`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to save mortality");
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const updatePoultryMortality = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/mortality/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update mortality");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultryMortality = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/mortality/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete mortality");
+  return unwrapApiData(await response.json()) || {};
+};
+
+// --- POULTRY: EXPENSES ENDPOINTS ---
+
+export const getPoultryExpenses = async (batchId) => {
+  let url = `${BASE_URL}/poultry/expenses`;
+  if (batchId) url += `?batchId=${batchId}`;
+  const response = await fetch(url, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const createPoultryExpense = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/expenses`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to create expense");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const updatePoultryExpense = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/expenses/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update expense");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultryExpense = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/expenses/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete expense");
+  return true;
+};
+
+// --- POULTRY: SETTLEMENT ENDPOINT ---
+
+export const getPoultrySettlement = async (batchId) => {
   const response = await fetch(
-    `${BASE_URL}/poultry/profit?batchId=${batchId}&period=${period}`,
+    `${BASE_URL}/poultry/settlement?batchId=${batchId}`,
     { headers: getHeaders() },
   );
   return unwrapApiData(await response.json());
 };
 
-export const distributePoultryProfit = async (data) => {
-  const response = await fetch(`${BASE_URL}/poultry/profit/distribute`, {
-    method: "POST",
+// --- POULTRY: INVESTOR DELETE ---
+
+export const deleteInvestor = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/investors/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete investor");
+  return true;
+};
+
+export const updateInvestor = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/investors/${id}`, {
+    method: "PUT",
     headers: getHeaders(),
     body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error("Failed to finalize profit distribution");
-  return unwrapApiData(await response.json());
+  if (!response.ok) throw new Error("Failed to update investor");
+  return unwrapApiData(await response.json()) || {};
 };
 
 // --- OPERATIONS: FERTILIZER ENDPOINTS ---
@@ -1384,10 +1515,10 @@ export const deleteCEBBill = async (id) => {
 };
 
 // 4. FUEL LOGS
-export const getFuelLogs = async (farm) => {
+export const getFuelLogs = async () => {
   if (USE_MOCK_DATA)
     return new Promise((res) => setTimeout(() => res([]), 300));
-  const response = await fetch(`${BASE_URL}/expenses/fuel?farm=${farm}`, {
+  const response = await fetch(`${BASE_URL}/expenses/fuel`, {
     headers: getHeaders(),
   });
   const payload = unwrapApiData(await response.json()) || [];
@@ -1421,6 +1552,39 @@ export const deleteFuelLog = async (id) => {
   if (USE_MOCK_DATA)
     return new Promise((res) => setTimeout(() => res(true), 300));
   const response = await fetch(`${BASE_URL}/expenses/fuel/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  return response.ok;
+};
+
+// 4b. VEHICLES
+export const getVehicles = async () => {
+  if (USE_MOCK_DATA)
+    return new Promise((res) => setTimeout(() => res([]), 300));
+  const response = await fetch(`${BASE_URL}/vehicles`, {
+    headers: getHeaders(),
+  });
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload : [];
+};
+export const createVehicle = async (data) => {
+  if (USE_MOCK_DATA)
+    return new Promise((res) =>
+      setTimeout(() => res({ id: Date.now(), ...data }), 500),
+    );
+  const response = await fetch(`${BASE_URL}/vehicles`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to create vehicle");
+  return unwrapApiData(await response.json());
+};
+export const deleteVehicle = async (id) => {
+  if (USE_MOCK_DATA)
+    return new Promise((res) => setTimeout(() => res(true), 300));
+  const response = await fetch(`${BASE_URL}/vehicles/${id}`, {
     method: "DELETE",
     headers: getHeaders(),
   });

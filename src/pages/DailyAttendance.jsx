@@ -299,10 +299,8 @@ export default function DailyAttendance() {
 
         setEntries(next);
 
-        // 🔒 NEW: LOCK LOGIC FOR PAST DATES
         const today = new Date().toISOString().split('T')[0];
         const isPastDate = selectedDate < today;
-
         setIsLocked(isPastDate);
 
       } catch {
@@ -380,14 +378,22 @@ export default function DailyAttendance() {
 
       {/* ── GRID ATTENDANCE TABLE ── */}
       <div
-className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col ${isLocked ? 'opacity-70 select-none' : ''}`}
+className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col"
       >
 
         {/* Toolbar */}
         {isLocked && (
-          <div className="p-3 bg-red-50 border-b border-red-200 text-red-700 text-xs font-bold flex items-center gap-2">
-            <AlertCircle size={14} />
-            This is a locked historical record. Editing is restricted. Enter PIN to unlock.
+          <div className="p-3 bg-red-50 border-b border-red-200 text-red-700 text-xs font-bold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={14} />
+              This is a locked historical record. Unlock to edit.
+            </div>
+            <button
+              onClick={() => setShowPinModal(true)}
+              className="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-colors"
+            >
+              Unlock
+            </button>
           </div>
         )}
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/50">
@@ -404,7 +410,7 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
 
           <button
             onClick={handleMarkAllPresent}
-            disabled={isLoading}
+            disabled={isLoading || isLocked}
             className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:border-green-500 hover:text-green-600 transition-colors shadow-sm w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Mark All Present
@@ -482,14 +488,16 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                               <select
                                 value={entry.splitA.locationWorked}
                                 onChange={(e) => handleSplitLocationChange(emp.id, 'A', e.target.value)}
-                                className="w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-blue-50 text-blue-700 border-blue-200"
+                                disabled={isLocked}
+                                className={`w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-blue-50 text-blue-700 border-blue-200 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                               >
                                 {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l} — Half</option>)}
                               </select>
                               <select
                                 value={entry.splitB.locationWorked}
                                 onChange={(e) => handleSplitLocationChange(emp.id, 'B', e.target.value)}
-                                className="w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-blue-50 text-blue-700 border-blue-200"
+                                disabled={isLocked}
+                                className={`w-3/4 max-w-[140px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-blue-50 text-blue-700 border-blue-200 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                               >
                                 {LOCATION_OPTIONS.map(l => <option key={l} value={l}>{l} — Half</option>)}
                               </select>
@@ -502,7 +510,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                               <select
                                 value={entry.splitA.taskType || ''}
                                 onChange={(e) => handleSplitTaskTypeChange(emp.id, 'A', e.target.value)}
-                                className="w-full max-w-[160px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-white text-gray-500 border-gray-300"
+                                disabled={isLocked}
+                                className={`w-full max-w-[160px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-white text-gray-500 border-gray-300 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                               >
                                 <option value="">— None —</option>
                                 {TASK_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -510,7 +519,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                               <select
                                 value={entry.splitB.taskType || ''}
                                 onChange={(e) => handleSplitTaskTypeChange(emp.id, 'B', e.target.value)}
-                                className="w-full max-w-[160px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-white text-gray-500 border-gray-300"
+                                disabled={isLocked}
+                                className={`w-full max-w-[160px] text-[11px] font-bold border rounded-lg px-2 py-1 outline-none cursor-pointer bg-white text-gray-500 border-gray-300 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                               >
                                 <option value="">— None —</option>
                                 {TASK_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -549,8 +559,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                                 <select
                                   value={entry?.locationWorked || ''}
                                   onChange={(e) => handleLocationChange(emp.id, e.target.value || null)}
-                                  disabled={isAbsent}
-                                  className={`w-3/4 max-w-[150px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                                  disabled={isLocked || isAbsent}
+                                  className={`w-3/4 max-w-[150px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isLocked || isAbsent
                                     ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
                                     : entry?.locationWorked && entry.locationWorked !== emp.farm
                                         ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
@@ -572,8 +582,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                             <select
                               value={entry?.taskType || ''}
                               onChange={(e) => handleTaskTypeChange(emp.id, e.target.value)}
-                              disabled={isAbsent}
-                              className={`w-full max-w-[170px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isAbsent
+                              disabled={isLocked || isAbsent}
+                              className={`w-full max-w-[170px] text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none transition-colors cursor-pointer ${isLocked || isAbsent
                                 ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
                                 : entry?.taskType
                                   ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-sm'
@@ -588,8 +598,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                           </td>
 
                           {/* Full Day Radio Button */}
-                          <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 'full')}>
-                            <div className="flex justify-center cursor-pointer p-2">
+                          <td className="py-3 px-2 text-center align-middle" onClick={() => !isLocked && handleStatusChange(emp.id, 'full')}>
+                            <div className={`flex justify-center p-2 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 'full' ? 'border-green-500 bg-green-500 shadow-sm shadow-green-500/30' : 'border-gray-200 bg-gray-50 hover:border-green-300'
                                 }`}>
                                 {status === 'full' && <Check size={14} color="white" strokeWidth={3} />}
@@ -598,8 +608,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                           </td>
 
                           {/* Half Day Radio Button */}
-                          <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 'half')}>
-                            <div className="flex justify-center cursor-pointer p-2">
+                          <td className="py-3 px-2 text-center align-middle" onClick={() => !isLocked && handleStatusChange(emp.id, 'half')}>
+                            <div className={`flex justify-center p-2 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 'half' ? 'border-amber-400 bg-amber-400 shadow-sm shadow-amber-400/30' : 'border-gray-200 bg-gray-50 hover:border-amber-300'
                                 }`}>
                                 {status === 'half' && <Minus size={14} color="white" strokeWidth={3} />}
@@ -608,8 +618,8 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                           </td>
 
                           {/* Absent Radio Button */}
-                          <td className="py-3 px-2 text-center align-middle" onClick={() => handleStatusChange(emp.id, 'absent')}>
-                            <div className="flex justify-center cursor-pointer p-2">
+                          <td className="py-3 px-2 text-center align-middle" onClick={() => !isLocked && handleStatusChange(emp.id, 'absent')}>
+                            <div className={`flex justify-center p-2 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${status === 'absent' ? 'border-red-500 bg-red-500 shadow-sm shadow-red-500/30' : 'border-gray-200 bg-gray-50 hover:border-red-300'
                                 }`}>
                                 {status === 'absent' && <X size={14} color="white" strokeWidth={3} />}
@@ -624,9 +634,9 @@ className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidde
                         <button
                           type="button"
                           onClick={() => handleToggleSplit(emp.id)}
-                          disabled={isAbsent}
+                          disabled={isLocked || isAbsent}
                           title="Split this day's work across two locations (half + half)"
-                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${isAbsent
+                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${isLocked || isAbsent
                             ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed opacity-60'
                             : isSplit
                               ? 'bg-blue-600 text-white border-blue-600 shadow-sm'

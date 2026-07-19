@@ -13,6 +13,8 @@ import {
   Calculator,
   Save,
   Pencil,
+  Check,
+  Car,
 } from "lucide-react";
 import {
   getHarvestExpenses,
@@ -36,6 +38,9 @@ import {
   updateMachineryExpense,
   deleteMachineryExpense,
   getAttendance,
+  getVehicles,
+  createVehicle,
+  deleteVehicle,
 } from "../services/api";
 import { CEB_ACCOUNTS } from "../utils/constants";
 
@@ -44,6 +49,8 @@ const fmt = (n) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+const FUEL_TYPES = ["Petrol", "Diesel", "Kerosene"];
 
 export default function GeneralExpenses() {
   const [activeTab, setActiveTab] = useState("harvest");
@@ -134,6 +141,12 @@ function ExpenseCategoryTab({ category, farm, year }) {
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
+  // Vehicle management state
+  const [vehicles, setVehicles] = useState([]);
+  const [newVehicleName, setNewVehicleName] = useState("");
+  const [isAddingVehicle, setIsAddingVehicle] = useState(false);
+  const [showVehicleManager, setShowVehicleManager] = useState(false);
+
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
     farm: "MR1",
@@ -154,6 +167,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
     machinery: "",
     liters: "",
     ratePerLiter: "",
+    fuelType: "",
   });
 
   // -------------------------------
@@ -183,9 +197,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
         let req;
         if (category === "harvest") req = getHarvestExpenses(farm, year);
         else if (category === "maintenance") req = getMaintenanceExpenses(farm);
-        // CEB bills aren't farm-scoped — ignore the estate filter, list all.
         else if (category === "ceb") req = getCEBBills("", year);
-        else if (category === "fuel") req = getFuelLogs(farm);
+        else if (category === "fuel") req = getFuelLogs();
         else if (category === "machinery") req = getMachineryExpenses(year);
 
         const res = await req;
@@ -201,7 +214,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
   }, [category, farm, year]);
 
   // -------------------------------
-  // FETCH ATTENDANCE (NEW)
+  // FETCH ATTENDANCE (harvest only)
   // -------------------------------
   useEffect(() => {
     if (category !== "harvest") return;
@@ -211,6 +224,40 @@ function ExpenseCategoryTab({ category, farm, year }) {
       .then(setAttendance)
       .catch(() => setAttendance([]));
   }, [form.date, form.farm, category]);
+
+  // -------------------------------
+  // FETCH VEHICLES (fuel tab)
+  // -------------------------------
+  useEffect(() => {
+    if (category !== "fuel") return;
+    getVehicles()
+      .then(setVehicles)
+      .catch(() => setVehicles([]));
+  }, [category]);
+
+  const handleAddVehicle = async () => {
+    if (!newVehicleName.trim()) return;
+    setIsAddingVehicle(true);
+    try {
+      const saved = await createVehicle({ name: newVehicleName.trim() });
+      setVehicles((prev) => [...prev, saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewVehicleName("");
+    } catch {
+      alert("Failed to add vehicle.");
+    } finally {
+      setIsAddingVehicle(false);
+    }
+  };
+
+  const handleDeleteVehicle = async (id) => {
+    if (!window.confirm("Remove this vehicle?")) return;
+    try {
+      await deleteVehicle(id);
+      setVehicles((prev) => prev.filter((v) => v.id !== id));
+    } catch {
+      alert("Failed to delete vehicle.");
+    }
+  };
 
   // -------------------------------
   // FORM RESET / OPEN / EDIT
@@ -235,15 +282,16 @@ function ExpenseCategoryTab({ category, farm, year }) {
     machinery: "",
     liters: "",
     ratePerLiter: "",
+    fuelType: "",
   });
 
   const closePanel = () => {
     setIsAdding(false);
     setEditingId(null);
     setForm(emptyForm());
+    setShowVehicleManager(false);
   };
 
-  // Populate the shared panel from an existing row and switch to edit mode.
   const startEdit = (row) => {
     setEditingId(row.id);
     setForm({
@@ -267,6 +315,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
       machinery: row.machinery ?? "",
       liters: row.liters ?? "",
       ratePerLiter: row.ratePerLiter ?? "",
+      fuelType: row.fuelType ?? row.fuel_type ?? "",
     });
     setIsAdding(true);
   };
@@ -277,7 +326,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
   const handleSave = async () => {
     setIsSaving(true);
 
-    // Build the category-specific payload + pick create/update fns
     let payload;
     let createFn;
     let updateFn;
@@ -321,8 +369,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
     } else if (category === "fuel") {
       payload = {
         date: form.date,
-        farm: form.farm,
         vehicle: form.vehicle,
+        fuelType: form.fuelType || null,
         liters: parseFloat(form.liters || 0),
         ratePerLiter: parseFloat(form.ratePerLiter || 0),
         totalCost:
@@ -401,6 +449,15 @@ function ExpenseCategoryTab({ category, farm, year }) {
     }, 0);
   };
 
+  const fuelTypeBadge = (type) => {
+    const colors = {
+      Petrol: "bg-orange-100 text-orange-700",
+      Diesel: "bg-blue-100 text-blue-700",
+      Kerosene: "bg-yellow-100 text-yellow-700",
+    };
+    return colors[type] || "bg-gray-100 text-gray-600";
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ── DEDICATED REGISTRATION PANEL (UX Redesign) ── */}
@@ -438,8 +495,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
               />
             </div>
 
-            {/* Estate Location — not applicable to CEB bills (keyed by account) */}
-            {category !== "ceb" && (
+            {/* Estate Location — not applicable to CEB bills or fuel logs */}
+            {category !== "ceb" && category !== "fuel" && (
               <div className="md:col-span-3">
                 <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
                   Estate Location
@@ -732,21 +789,111 @@ function ExpenseCategoryTab({ category, farm, year }) {
 
             {category === "fuel" && (
               <>
-                <div className="md:col-span-6">
+                <div className="md:col-span-3">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Vehicle / Equipment
+                    Fuel Type
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. TAFE Tractor"
+                  <select
+                    value={form.fuelType}
+                    onChange={(e) =>
+                      setForm({ ...form, fuelType: e.target.value })
+                    }
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
+                    disabled={isSaving}
+                  >
+                    <option value="">-- Select --</option>
+                    {FUEL_TYPES.map((ft) => (
+                      <option key={ft} value={ft}>
+                        {ft}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-6">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                    Vehicle / Equipment
+                    <button
+                      type="button"
+                      onClick={() => setShowVehicleManager(!showVehicleManager)}
+                      className="text-[9px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-black uppercase hover:bg-green-200 transition-colors"
+                    >
+                      {showVehicleManager ? "Hide" : "Manage"}
+                    </button>
+                  </label>
+                  <select
                     value={form.vehicle}
                     onChange={(e) =>
                       setForm({ ...form, vehicle: e.target.value })
                     }
-                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500"
-                  />
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
+                    disabled={isSaving}
+                  >
+                    <option value="">-- Select Vehicle --</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.name}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="md:col-span-6"></div> {/* Spacer */}
+
+                {showVehicleManager && (
+                  <div className="md:col-span-12 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Car size={14} className="text-gray-500" />
+                      <span className="text-xs font-black text-gray-600 uppercase tracking-wider">
+                        Vehicle List
+                      </span>
+                    </div>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        type="text"
+                        placeholder="e.g. TAFE Tractor, Kubota Harvester"
+                        value={newVehicleName}
+                        onChange={(e) => setNewVehicleName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAddVehicle()}
+                        className="flex-1 p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
+                        disabled={isAddingVehicle}
+                      />
+                      <button
+                        onClick={handleAddVehicle}
+                        disabled={isAddingVehicle || !newVehicleName.trim()}
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-green-700 disabled:opacity-50 transition-colors"
+                      >
+                        {isAddingVehicle ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Check size={12} />
+                        )}{" "}
+                        Add
+                      </button>
+                    </div>
+                    {vehicles.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">
+                        No vehicles added yet.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {vehicles.map((v) => (
+                          <span
+                            key={v.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 shadow-sm"
+                          >
+                            <Car size={10} className="text-gray-400" />
+                            {v.name}
+                            <button
+                              onClick={() => handleDeleteVehicle(v.id)}
+                              className="text-gray-300 hover:text-red-500 ml-1 transition-colors"
+                            >
+                              <X size={10} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="md:col-span-6">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
                     Liters
@@ -839,7 +986,9 @@ function ExpenseCategoryTab({ category, farm, year }) {
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th className="p-4 text-left">Date & Location</th>
+                  <th className="p-4 text-left">
+                    {category === "fuel" ? "Date" : "Date & Location"}
+                  </th>
 
                   {/* Dynamic Headers */}
                   {category === "harvest" && (
@@ -884,7 +1033,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   </tr>
                 ) : (
                   data.map((row) => {
-                    // Calculate row total dynamically
                     let rowTotal = parseFloat(
                       row.amount || row.billAmount || row.totalCost || 0,
                     );
@@ -914,6 +1062,14 @@ function ExpenseCategoryTab({ category, farm, year }) {
                                 No account
                               </span>
                             )
+                          ) : category === "fuel" ? (
+                            (row.fuelType || row.fuel_type) ? (
+                              <span
+                                className={`mt-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide flex items-center w-max gap-1 ${fuelTypeBadge(row.fuelType || row.fuel_type)}`}
+                              >
+                                <Fuel size={10} /> {row.fuelType || row.fuel_type}
+                              </span>
+                            ) : null
                           ) : (
                             <span
                               className={`mt-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide flex items-center w-max gap-1 ${row.farm === "MR1" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"}`}

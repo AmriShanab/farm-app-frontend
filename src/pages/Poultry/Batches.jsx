@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Layers, Plus, Loader2, X, Check, CalendarClock } from "lucide-react";
-import { getPoultryBatches, createPoultryBatch } from "../../services/api";
+import { Layers, Plus, Loader2, X, Check, CalendarClock, Skull, Pencil } from "lucide-react";
+import { getPoultryBatches, createPoultryBatch, updatePoultryBatch } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
 
 const fmt = (n) =>
@@ -34,6 +34,51 @@ export default function PoultryBatches() {
     quantity: "",
     pricePerBird: "",
   });
+
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({ date: "", supplier: "", notes: "", quantity: "", pricePerBird: "" });
+  const [isEditSaving, setIsEditSaving] = useState(false);
+
+  const startEditing = (batch) => {
+    setEditingId(batch.id);
+    setEditRow({
+      date: batch.date || "",
+      supplier: batch.supplier || "",
+      notes: batch.notes || "",
+      quantity: String(batch.quantity || ""),
+      pricePerBird: String(batch.price_per_bird || batch.pricePerBird || ""),
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditRow({ date: "", supplier: "", notes: "", quantity: "", pricePerBird: "" });
+  };
+
+  const handleEditSave = async () => {
+    if (!editRow.supplier || !editRow.quantity || !editRow.pricePerBird) {
+      toast.error("Fill required fields.");
+      return;
+    }
+    setIsEditSaving(true);
+    try {
+      const payload = {
+        date: editRow.date,
+        supplier: editRow.supplier,
+        notes: editRow.notes,
+        quantity: parseInt(editRow.quantity, 10),
+        pricePerBird: parseFloat(editRow.pricePerBird),
+      };
+      const updated = await updatePoultryBatch(editingId, payload);
+      setData(data.map((b) => (b.id === editingId ? updated : b)));
+      cancelEditing();
+      toast.success("Batch updated successfully.");
+    } catch {
+      toast.error("Failed to update batch.");
+    } finally {
+      setIsEditSaving(false);
+    }
+  };
 
   useEffect(() => {
     getPoultryBatches("active")
@@ -103,7 +148,7 @@ export default function PoultryBatches() {
             </h2>
             <button
               onClick={() => setIsAdding(true)}
-              disabled={isAdding}
+              disabled={isAdding || editingId !== null}
               className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:-translate-y-0.5 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:transform-none"
             >
               <Plus size={14} /> New Batch
@@ -118,9 +163,10 @@ export default function PoultryBatches() {
                   <th className="p-4 text-left">Batch Details</th>
                   <th className="p-4 text-left">Supplier</th>
                   <th className="p-4 text-right">Initial Count</th>
+                  <th className="p-4 text-right">Live Birds</th>
                   <th className="p-4 text-right">Cost Analysis</th>
                   <th className="p-4 text-center">Status</th>
-                  {isAdding && <th className="p-4 text-right">Actions</th>}
+                  {(isAdding || editingId !== null) && <th className="p-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -176,6 +222,7 @@ export default function PoultryBatches() {
                         disabled={isSaving}
                       />
                     </td>
+                    <td className="p-2 text-center text-[10px] text-gray-400 font-bold">—</td>
                     <td className="p-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-xs text-gray-500 font-bold">
@@ -241,16 +288,38 @@ export default function PoultryBatches() {
                     );
                     const qty = parseInt(batch.quantity || 0, 10);
                     const dayNo = batchDayNumber(batch.date);
+                    const isEditing = editingId === batch.id;
                     return (
                       <tr
                         key={batch.id}
-                        className="border-t border-gray-50 hover:bg-gray-50/50"
+                        className={`border-t border-gray-50 ${isEditing ? "bg-amber-50/30" : "hover:bg-gray-50/50"}`}
                       >
                         <td className="p-4 font-bold text-gray-900">
-                          {batch.date}
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              value={editRow.date}
+                              onChange={(e) => setEditRow({ ...editRow, date: e.target.value })}
+                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                              disabled={isEditSaving}
+                            />
+                          ) : (
+                            batch.date
+                          )}
                         </td>
                         <td className="p-4 text-center">
-                          {dayNo != null ? (
+                          {isEditing ? (
+                            dayNo != null ? (
+                              <span
+                                className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-md text-xs font-black"
+                                title={`Started ${batch.date}`}
+                              >
+                                <CalendarClock size={12} /> Day {dayNo}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs font-bold">—</span>
+                            )
+                          ) : dayNo != null ? (
                             <span
                               className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-md text-xs font-black"
                               title={`Started ${batch.date}`}
@@ -262,34 +331,149 @@ export default function PoultryBatches() {
                           )}
                         </td>
                         <td className="p-4">
-                          <p className="font-bold text-gray-800">
-                            {batch.notes}
-                          </p>
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wide">
-                            ID: #{batch.id}
-                          </p>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              placeholder="e.g. Batch 06-2026"
+                              value={editRow.notes}
+                              onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })}
+                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                              disabled={isEditSaving}
+                            />
+                          ) : (
+                            <>
+                              <p className="font-bold text-gray-800">
+                                {batch.notes}
+                              </p>
+                              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                                ID: #{batch.id}
+                              </p>
+                            </>
+                          )}
                         </td>
-                        <td className="p-4 text-gray-600">{batch.supplier}</td>
-                        <td className="p-4 text-right">
-                          <span className="font-black text-gray-900">
-                            {qty.toLocaleString()}
-                          </span>{" "}
-                          <span className="text-xs text-gray-500">Birds</span>
+                        <td className="p-4">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              placeholder="Supplier Name"
+                              value={editRow.supplier}
+                              onChange={(e) => setEditRow({ ...editRow, supplier: e.target.value })}
+                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                              disabled={isEditSaving}
+                            />
+                          ) : (
+                            <span className="text-gray-600">{batch.supplier}</span>
+                          )}
                         </td>
                         <td className="p-4 text-right">
-                          <p className="font-black text-green-700">
-                            Rs. {fmt(price * qty)}
-                          </p>
-                          <p className="text-[10px] text-gray-500 font-bold">
-                            @ Rs. {fmt(price)} / Bird
-                          </p>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              placeholder="Qty"
+                              value={editRow.quantity}
+                              onChange={(e) => setEditRow({ ...editRow, quantity: e.target.value })}
+                              className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto"
+                              disabled={isEditSaving}
+                            />
+                          ) : (
+                            <>
+                              <span className="font-black text-gray-900">
+                                {qty.toLocaleString()}
+                              </span>{" "}
+                              <span className="text-xs text-gray-500">Birds</span>
+                            </>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          {isEditing ? (
+                            parseInt(batch.total_deaths || 0) > 0 ? (
+                              <div>
+                                <span className="font-black text-gray-900">
+                                  {parseInt(batch.live_birds || qty).toLocaleString()}
+                                </span>{" "}
+                                <span className="text-xs text-gray-500">alive</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400 font-bold">No deaths</span>
+                            )
+                          ) : parseInt(batch.total_deaths || 0) > 0 ? (
+                            <div>
+                              <span className="font-black text-gray-900">
+                                {parseInt(batch.live_birds || qty).toLocaleString()}
+                              </span>{" "}
+                              <span className="text-xs text-gray-500">alive</span>
+                              <p className="text-[10px] text-red-500 font-bold flex items-center justify-end gap-1 mt-0.5">
+                                <Skull size={10} /> {parseInt(batch.total_deaths).toLocaleString()} deaths
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 font-bold">No deaths</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          {isEditing ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-xs text-gray-500 font-bold">Rs.</span>
+                              <input
+                                type="number"
+                                placeholder="Rate/Bird"
+                                value={editRow.pricePerBird}
+                                onChange={(e) => setEditRow({ ...editRow, pricePerBird: e.target.value })}
+                                className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right"
+                                disabled={isEditSaving}
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              <p className="font-black text-green-700">
+                                Rs. {fmt(price * qty)}
+                              </p>
+                              <p className="text-[10px] text-gray-500 font-bold">
+                                @ Rs. {fmt(price)} / Bird
+                              </p>
+                            </>
+                          )}
                         </td>
                         <td className="p-4 text-center">
                           <span className="bg-green-100 text-green-700 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
                             {batch.status}
                           </span>
                         </td>
-                        {isAdding && <td></td>}
+                        {(isAdding || editingId !== null) && (
+                          <td className="p-4 text-right">
+                            {isEditing ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={cancelEditing}
+                                  disabled={isEditSaving}
+                                  className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
+                                >
+                                  <X size={14} />
+                                </button>
+                                <button
+                                  onClick={handleEditSave}
+                                  disabled={isEditSaving}
+                                  className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700"
+                                >
+                                  {isEditSaving ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : (
+                                    <Check size={14} />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => startEditing(batch)}
+                                disabled={isAdding || (editingId !== null && editingId !== batch.id)}
+                                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Edit batch"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })
@@ -304,11 +488,14 @@ export default function PoultryBatches() {
                     <td className="p-4 text-right font-black text-gray-900">
                       {data.reduce((sum, b) => sum + parseInt(b.quantity || 0, 10), 0).toLocaleString()} <span className="text-xs text-gray-500 font-bold">Birds</span>
                     </td>
+                    <td className="p-4 text-right font-black text-gray-900">
+                      {data.reduce((sum, b) => sum + parseInt(b.live_birds || b.quantity || 0, 10), 0).toLocaleString()} <span className="text-xs text-gray-500 font-bold">alive</span>
+                    </td>
                     <td className="p-4 text-right font-black text-green-700">
                       Rs. {fmt(data.reduce((sum, b) => sum + (parseInt(b.quantity || 0, 10) * parseFloat(b.price_per_bird || b.pricePerBird || 0)), 0))}
                     </td>
                     <td className="p-4"></td>
-                    {isAdding && <td></td>}
+                    {(isAdding || editingId !== null) && <td></td>}
                   </tr>
                 </tfoot>
               )}

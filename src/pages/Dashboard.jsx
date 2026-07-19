@@ -313,6 +313,9 @@ export default function Dashboard() {
                               {highlights.activeBatches.map((b) => {
                                  const dayNo = batchDayNumber(b.date);
                                  const qty = parseInt(b.quantity || 0, 10);
+                                 const liveBirds = parseInt(b.live_birds ?? qty, 10);
+                                 const totalSold = parseInt(b.total_sold || 0, 10);
+                                 const totalDeaths = parseInt(b.total_deaths || 0, 10);
                                  return (
                                     <div key={b.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                                        <div className="flex items-center justify-between">
@@ -327,6 +330,20 @@ export default function Dashboard() {
                                                 <CalendarClock size={12} /> Day {dayNo}
                                              </span>
                                           )}
+                                       </div>
+                                       <div className="flex gap-2 mt-2">
+                                          <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5 text-center">
+                                             <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Live</p>
+                                             <p className="text-sm font-black text-emerald-800">{liveBirds.toLocaleString()}</p>
+                                          </div>
+                                          <div className="flex-1 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1.5 text-center">
+                                             <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Sold</p>
+                                             <p className="text-sm font-black text-blue-800">{totalSold.toLocaleString()}</p>
+                                          </div>
+                                          <div className="flex-1 bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5 text-center">
+                                             <p className="text-[10px] font-bold uppercase tracking-wider text-red-500">Deaths</p>
+                                             <p className="text-sm font-black text-red-700">{totalDeaths.toLocaleString()}</p>
+                                          </div>
                                        </div>
                                     </div>
                                  );

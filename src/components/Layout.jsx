@@ -23,7 +23,10 @@ import {
   Layers,
   Wheat,
   Egg,
-  PieChart,
+  Pill,
+  Receipt,
+  HandCoins,
+  Skull,
 } from "lucide-react";
 import { clearStoredAuth } from "../services/api";
 
@@ -92,15 +95,14 @@ export default function Layout() {
       key: "poultry",
       icon: Bird,
       subItems: [
-        { name: "Investors", path: "/poultry/investors", icon: Users },
         { name: "Batches", path: "/poultry/batches", icon: Layers },
         { name: "Feeds", path: "/poultry/feeds", icon: Wheat },
+        { name: "Medicine", path: "/poultry/medicine", icon: Pill },
         { name: "Poultry Sales", path: "/poultry/sales", icon: Egg },
-        {
-          name: "Profit Distribution",
-          path: "/poultry/profit",
-          icon: PieChart,
-        },
+        { name: "Expenses", path: "/poultry/expenses", icon: Receipt },
+        { name: "Mortality", path: "/poultry/mortality", icon: Skull },
+        { name: "Investors", path: "/poultry/investors", icon: Users },
+        { name: "Settlement", path: "/poultry/settlement", icon: HandCoins },
       ],
     },
     { name: "Finances", path: "/finances", icon: Landmark },

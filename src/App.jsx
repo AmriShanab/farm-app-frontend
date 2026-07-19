@@ -13,8 +13,11 @@ import RunPayroll from "./pages/RunPayroll";
 import PoultryInvestors from "./pages/Poultry/Investors";
 import PoultryBatches from "./pages/Poultry/Batches";
 import PoultryFeeds from "./pages/Poultry/Feeds";
+import PoultryMedicine from "./pages/Poultry/Medicine";
 import PoultrySales from "./pages/Poultry/Sales";
-import PoultryProfit from "./pages/Poultry/Profit";
+import PoultryExpenses from "./pages/Poultry/Expenses";
+import PoultryMortality from "./pages/Poultry/Mortality";
+import PoultrySettlement from "./pages/Poultry/Settlement";
 import FertilizerManagement from "./pages/Fertilizer";
 import FinanceManagement from "./pages/Finance";
 import AssetManagement from "./pages/Assets";
@@ -68,12 +71,15 @@ function App() {
           <Route path="expenses" element={<GeneralExpenses />} />
           <Route path="fertilizer" element={<FertilizerManagement />} />
           <Route path="poultry">
-            <Route index element={<Navigate to="investors" replace />} />
+            <Route index element={<Navigate to="batches" replace />} />
             <Route path="investors" element={<PoultryInvestors />} />
             <Route path="batches" element={<PoultryBatches />} />
             <Route path="feeds" element={<PoultryFeeds />} />
+            <Route path="medicine" element={<PoultryMedicine />} />
             <Route path="sales" element={<PoultrySales />} />
-            <Route path="profit" element={<PoultryProfit />} />
+            <Route path="expenses" element={<PoultryExpenses />} />
+            <Route path="mortality" element={<PoultryMortality />} />
+            <Route path="settlement" element={<PoultrySettlement />} />
           </Route>
           <Route path="finances" element={<FinanceManagement />} />
           <Route path="assets" element={<AssetManagement />} />

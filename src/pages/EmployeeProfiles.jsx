@@ -3,7 +3,7 @@ import {
   Search, Download,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Users, UserPlus, MapPin, Briefcase, Check, X, Edit2, ArrowUpRight,
-  Loader2, AlertCircle, Trash2, Save, CalendarClock
+  Loader2, AlertCircle, Trash2, Save, CalendarClock, Pause, Play
 } from 'lucide-react';
 
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../services/api';
@@ -43,7 +43,8 @@ export default function EmployeeProfiles() {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await getEmployees(farmFilter === 'All' ? null : farmFilter);
+        const all = await getEmployees(farmFilter === 'All' ? null : farmFilter, null);
+        const data = all.filter(e => e.status !== 'inactive');
         if (!isActive) return;
         setEmployees(data);
       } catch {
@@ -172,6 +173,27 @@ export default function EmployeeProfiles() {
       toast.error("Failed to save employee to database.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTogglePause = async (emp) => {
+    const newStatus = emp.status === 'paused' ? 'active' : 'paused';
+    const label = newStatus === 'paused' ? 'pause' : 'resume';
+    try {
+      const payload = {
+        name: emp.name,
+        role: emp.role,
+        farm: emp.farm,
+        type: emp.type,
+        payFrequency: emp.pay_frequency || emp.payFrequency || 'weekly',
+        wagePerDay: emp.wage_per_day || emp.wagePerDay || 0,
+        status: newStatus,
+      };
+      await updateEmployee(emp.id, payload);
+      setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: newStatus } : e));
+      toast.success(`Employee ${label}d.`);
+    } catch {
+      toast.error(`Failed to ${label} employee.`);
     }
   };
 
@@ -457,10 +479,15 @@ export default function EmployeeProfiles() {
 
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs border border-green-200">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border ${emp.status === 'paused' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
                           {emp.name.substring(0, 2).toUpperCase()}
                         </div>
-                        <span className="font-bold text-gray-900 text-[13px]">{emp.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold text-[13px] ${emp.status === 'paused' ? 'text-gray-400' : 'text-gray-900'}`}>{emp.name}</span>
+                          {emp.status === 'paused' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">Paused</span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -494,6 +521,13 @@ export default function EmployeeProfiles() {
 
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => handleTogglePause(emp)}
+                          title={emp.status === 'paused' ? 'Resume' : 'Pause'}
+                          className={`p-2 rounded-full transition-colors ${emp.status === 'paused' ? 'text-green-500 hover:text-green-700 hover:bg-green-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                        >
+                          {emp.status === 'paused' ? <Play size={13} /> : <Pause size={13} />}
+                        </button>
                         <button onClick={() => openEditEmployee(emp)} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"><Edit2 size={13} /></button>
                         <button onClick={() => handleDelete(emp.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={13} /></button>
                       </div>

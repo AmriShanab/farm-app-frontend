@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Egg, Plus, Loader2, X, Check, Trash2 } from "lucide-react";
+import { Egg, Plus, Loader2, X, Check, Trash2, Pencil } from "lucide-react";
 import {
   getPoultryBatches,
   getPoultrySales,
   createPoultrySale,
+  updatePoultrySale,
   deletePoultrySale,
 } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
@@ -56,6 +57,71 @@ export default function PoultrySales() {
     weightKilos: "",
     pricePerKg: "",
   });
+
+  const [editingId, setEditingId] = useState(null);
+  const [editRow, setEditRow] = useState({});
+
+  const startEdit = (sale) => {
+    setEditingId(sale.id);
+    setEditRow({
+      date: sale.date,
+      buyerName: sale.buyer_name || "",
+      category: sale.category,
+      chicksSold: sale.chicks_sold ?? "",
+      weightKilos: sale.weight_kilos ?? "",
+      pricePerKg: sale.price_per_kg ?? "",
+      quantity: sale.quantity ?? "",
+      rate: sale.rate ?? "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditRow({});
+  };
+
+  const handleEditSave = async () => {
+    if (editRow.category === "chicks") {
+      if (!editRow.chicksSold || !editRow.weightKilos || !editRow.pricePerKg) {
+        toast.error("Please fill chicks count, weight, and price.");
+        return;
+      }
+    } else {
+      if (!editRow.quantity || !editRow.rate) {
+        toast.error("Please fill quantity and rate.");
+        return;
+      }
+    }
+    setIsSaving(true);
+    try {
+      let payload = {
+        date: editRow.date,
+        batchId: parseInt(selectedBatchId),
+        category: editRow.category,
+        buyerName: editRow.buyerName,
+      };
+
+      if (editRow.category === "chicks") {
+        payload.chicksSold = parseInt(editRow.chicksSold);
+        payload.weightKilos = parseFloat(editRow.weightKilos);
+        payload.pricePerKg = parseFloat(editRow.pricePerKg);
+        payload.totalPrice = payload.weightKilos * payload.pricePerKg;
+      } else {
+        payload.quantity = parseFloat(editRow.quantity);
+        payload.rate = parseFloat(editRow.rate);
+        payload.totalPrice = payload.quantity * payload.rate;
+      }
+
+      const updated = await updatePoultrySale(editingId, payload);
+      setData(data.map((s) => (s.id === editingId ? updated : s)));
+      cancelEdit();
+      toast.success("Sale updated successfully.");
+    } catch {
+      toast.error("Failed to update sale.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const getCategoryLabel = (category) => {
     if (category === "manure") return "Manure";
@@ -171,7 +237,7 @@ export default function PoultrySales() {
             </div>
             <button
               onClick={() => setIsAdding(true)}
-              disabled={isAdding || batches.length === 0}
+              disabled={isAdding || editingId !== null || batches.length === 0}
               className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:-translate-y-0.5 transition-transform flex items-center gap-2 disabled:opacity-50"
             >
               <Plus size={14} /> Add Sale
@@ -348,6 +414,158 @@ export default function PoultrySales() {
                   {data.map((sale) => {
                     const qty = parseFloat(sale.quantity || 0);
                     const rate = parseFloat(sale.rate || 0);
+
+                    if (editingId === sale.id) {
+                      return (
+                        <tr key={sale.id} className="bg-amber-50/30 border-b border-amber-100">
+                          <td className="p-2 align-top pt-3">
+                            <input
+                              type="date"
+                              value={editRow.date}
+                              onChange={(e) =>
+                                setEditRow({ ...editRow, date: e.target.value })
+                              }
+                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                              disabled={isSaving}
+                            />
+                          </td>
+                          <td className="p-2 align-top pt-3">
+                            <input
+                              type="text"
+                              placeholder="Buyer Name"
+                              value={editRow.buyerName}
+                              onChange={(e) =>
+                                setEditRow({ ...editRow, buyerName: e.target.value })
+                              }
+                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                              disabled={isSaving}
+                            />
+                          </td>
+                          <td className="p-2 align-top pt-3">
+                            <select
+                              value={editRow.category}
+                              onChange={(e) =>
+                                setEditRow({ ...editRow, category: e.target.value })
+                              }
+                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none bg-white"
+                              disabled={isSaving}
+                            >
+                              <option value="chicks">Chicks</option>
+                              <option value="manure">Manure</option>
+                            </select>
+                          </td>
+                          <td className="p-2 text-right align-top pt-3">
+                            {editRow.category === "chicks" ? (
+                              <div className="flex flex-col gap-2 items-end">
+                                <input
+                                  type="number"
+                                  placeholder="Chicks"
+                                  value={editRow.chicksSold}
+                                  onChange={(e) =>
+                                    setEditRow({
+                                      ...editRow,
+                                      chicksSold: e.target.value,
+                                    })
+                                  }
+                                  className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right"
+                                  disabled={isSaving}
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Weight (Kg)"
+                                  value={editRow.weightKilos}
+                                  onChange={(e) =>
+                                    setEditRow({
+                                      ...editRow,
+                                      weightKilos: e.target.value,
+                                    })
+                                  }
+                                  className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right"
+                                  disabled={isSaving}
+                                />
+                              </div>
+                            ) : (
+                              <input
+                                type="number"
+                                placeholder="Qty"
+                                value={editRow.quantity}
+                                onChange={(e) =>
+                                  setEditRow({ ...editRow, quantity: e.target.value })
+                                }
+                                className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto"
+                                disabled={isSaving}
+                              />
+                            )}
+                          </td>
+                          <td className="p-2 text-right align-top pt-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-xs text-gray-500 font-bold">
+                                Rs.
+                              </span>
+                              {editRow.category === "chicks" ? (
+                                <input
+                                  type="number"
+                                  placeholder="Per Kg"
+                                  value={editRow.pricePerKg}
+                                  onChange={(e) =>
+                                    setEditRow({
+                                      ...editRow,
+                                      pricePerKg: e.target.value,
+                                    })
+                                  }
+                                  className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right"
+                                  disabled={isSaving}
+                                />
+                              ) : (
+                                <input
+                                  type="number"
+                                  placeholder="Rate"
+                                  value={editRow.rate}
+                                  onChange={(e) =>
+                                    setEditRow({ ...editRow, rate: e.target.value })
+                                  }
+                                  className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right"
+                                  disabled={isSaving}
+                                />
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-right font-black text-green-700 align-top pt-4">
+                            Rs.{" "}
+                            {fmt(
+                              editRow.category === "chicks"
+                                ? (parseFloat(editRow.weightKilos) || 0) *
+                                    (parseFloat(editRow.pricePerKg) || 0)
+                                : (parseFloat(editRow.quantity) || 0) *
+                                    (parseFloat(editRow.rate) || 0),
+                            )}
+                          </td>
+                          <td className="p-2 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={cancelEdit}
+                                disabled={isSaving}
+                                className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
+                              >
+                                <X size={14} />
+                              </button>
+                              <button
+                                onClick={handleEditSave}
+                                disabled={isSaving}
+                                className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700"
+                              >
+                                {isSaving ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <Check size={14} />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     return (
                       <tr
                         key={sale.id}
@@ -407,12 +625,22 @@ export default function PoultrySales() {
                           )}
                         </td>
                         <td className="p-4 text-right">
-                          <button
-                            onClick={() => handleDelete(sale.id)}
-                            className="text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => startEdit(sale)}
+                              disabled={isAdding || editingId !== null}
+                              className="text-gray-400 hover:text-amber-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(sale.id)}
+                              disabled={isAdding || editingId !== null}
+                              className="text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
