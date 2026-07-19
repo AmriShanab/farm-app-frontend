@@ -6,11 +6,20 @@ import {
   Loader2, AlertCircle, Trash2, Save, CalendarClock, Pause, Play
 } from 'lucide-react';
 
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '../services/api';
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getBasicRate } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 import { downloadCsv } from '../utils/csv';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Split an entered salary into Basic (capped at the basic rate) + Allowance.
+// Daily: basic = rate/day. Monthly (fixed): basic = rate × 30 /month.
+const splitSalary = (wage, type, basicRate) => {
+  const total = parseFloat(wage) || 0;
+  const basicCap = type === 'fixed' ? basicRate * 30 : basicRate;
+  const basic = Math.min(total, basicCap);
+  return { basic, allowance: Math.max(0, total - basic), unit: type === 'fixed' ? 'mo' : 'day' };
+};
 
 export default function EmployeeProfiles() {
   const [employees, setEmployees] = useState([]);
@@ -21,6 +30,7 @@ export default function EmployeeProfiles() {
   // API States
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [basicRate, setBasicRate] = useState(1200);
 
   // --- UI States (UPDATED FOR NEW SCHEMA) ---
   const [isAdding, setIsAdding] = useState(false);
@@ -57,6 +67,15 @@ export default function EmployeeProfiles() {
     load();
     return () => { isActive = false; };
   }, [farmFilter]);
+
+  // Current Basic rate — drives the Basic/Allowance split preview.
+  useEffect(() => {
+    let isActive = true;
+    getBasicRate()
+      .then((r) => { if (isActive && r?.current) setBasicRate(r.current); })
+      .catch(() => {});
+    return () => { isActive = false; };
+  }, []);
 
   const filtered = employees.filter(emp =>
     (!search || emp.name.toLowerCase().includes(search.toLowerCase()) || emp.role.toLowerCase().includes(search.toLowerCase()))
@@ -138,8 +157,8 @@ export default function EmployeeProfiles() {
       setEmployees(prev => prev.map(e => (e.id === editEmployee.id ? record : e)));
       closeEditEmployee();
       toast.success('Employee profile updated.');
-    } catch {
-      toast.error('Failed to update employee.');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update employee.');
       setIsSaving(false);
     }
   };
@@ -169,8 +188,8 @@ export default function EmployeeProfiles() {
       setIsAdding(false);
       setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' });
       toast.success('Employee added to directory.');
-    } catch {
-      toast.error("Failed to save employee to database.");
+    } catch (err) {
+      toast.error(err?.message || "Failed to save employee to database.");
     } finally {
       setIsSaving(false);
     }
@@ -222,6 +241,8 @@ export default function EmployeeProfiles() {
       { label: 'Wage Type', value: (row) => row.type || '' },
       { label: 'Pay Frequency', value: (row) => row.pay_frequency || row.payFrequency || 'weekly' },
       { label: 'Base Rate', value: (row) => Number(row.wage_per_day || row.wagePerDay || row.wage || 0).toFixed(2) },
+      { label: 'Basic', value: (row) => splitSalary(row.wage_per_day || row.wagePerDay || 0, row.type, basicRate).basic.toFixed(2) },
+      { label: 'Allowance', value: (row) => splitSalary(row.wage_per_day || row.wagePerDay || 0, row.type, basicRate).allowance.toFixed(2) },
     ], filtered);
   };
 
@@ -396,6 +417,16 @@ export default function EmployeeProfiles() {
             <div className="md:col-span-4">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">Base Wage / Salary (Rs.)</label>
               <input type="number" name="wage" placeholder="0.00" value={newRow.wage} onChange={handleRowChange} className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 font-bold" disabled={isSaving} />
+              {parseFloat(newRow.wage) > 0 && (() => {
+                const s = splitSalary(newRow.wage, newRow.type, basicRate);
+                return (
+                  <p className="mt-1.5 text-[11px] font-bold text-gray-500">
+                    Basic <span className="text-gray-800">Rs. {fmt(s.basic)}</span>
+                    {" · "}Allowance <span className="text-blue-700">Rs. {fmt(s.allowance)}</span>
+                    <span className="text-gray-400"> / {s.unit}</span>
+                  </p>
+                );
+              })()}
             </div>
           </div>
 
@@ -513,10 +544,20 @@ export default function EmployeeProfiles() {
                     </td>
 
                     <td className="p-4 text-right">
-                      <div className="flex flex-col items-end">
-                        <span className="text-gray-900 font-black text-[13px]">Rs. {fmt(parseFloat(wageValue))}</span>
-                        <span className="text-[10px] text-gray-400 font-bold uppercase">/ {wageTypeLabel === 'Daily' ? 'Day' : 'Month'}</span>
-                      </div>
+                      {(() => {
+                        const s = splitSalary(wageValue, emp.type, basicRate);
+                        return (
+                          <div className="flex flex-col items-end">
+                            <span className="text-gray-900 font-black text-[13px]">Rs. {fmt(parseFloat(wageValue))}</span>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase">/ {wageTypeLabel === 'Daily' ? 'Day' : 'Month'}</span>
+                            {parseFloat(wageValue) > 0 && (
+                              <span className="text-[10px] font-bold text-gray-400 mt-0.5">
+                                B: {fmt(s.basic)} · A: {fmt(s.allowance)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     <td className="p-4 text-right">
@@ -644,6 +685,16 @@ export default function EmployeeProfiles() {
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Updated Base Wage</p>
                   <p className="text-xl font-black text-gray-900">Rs. {fmt(parseFloat(editRow.wage) || 0)}</p>
+                  {parseFloat(editRow.wage) > 0 && (() => {
+                    const s = splitSalary(editRow.wage, editRow.type, basicRate);
+                    return (
+                      <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                        Basic <span className="text-gray-800">Rs. {fmt(s.basic)}</span>
+                        {" · "}Allowance <span className="text-blue-700">Rs. {fmt(s.allowance)}</span>
+                        <span className="text-gray-400"> / {s.unit}</span>
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
 

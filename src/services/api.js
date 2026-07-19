@@ -357,8 +357,11 @@ export const createEmployee = async (employeeData) => {
       headers: getHeaders(),
       body: JSON.stringify(employeeData),
     });
-    if (!response.ok) throw new Error("Failed to create employee");
-    return unwrapApiData(await response.json()) || {};
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || "Failed to create employee");
+    }
+    return unwrapApiData(payload) || {};
   } catch (error) {
     console.error("API Error (createEmployee):", error);
     throw error;
@@ -372,8 +375,11 @@ export const updateEmployee = async (id, employeeData) => {
       headers: getHeaders(),
       body: JSON.stringify(employeeData),
     });
-    if (!response.ok) throw new Error("Failed to update employee");
-    return unwrapApiData(await response.json()) || {};
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || "Failed to update employee");
+    }
+    return unwrapApiData(payload) || {};
   } catch (error) {
     console.error("API Error (updateEmployee):", error);
     throw error;
@@ -609,6 +615,10 @@ export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency
         row.wagePerDay ?? row.wage ?? row.base_wage ?? row.wage_per_day ?? 0,
       ),
 
+      basicRate: Number(row.basicRate ?? 0),
+      basicPay: Number(row.basicPay ?? 0),
+      allowancePay: Number(row.allowancePay ?? 0),
+
       fullDays: Number(row.fullDays ?? 0),
       halfDays: Number(row.halfDays ?? 0),
       absentDays: Number(row.absentDays ?? 0),
@@ -662,6 +672,9 @@ export const getPayrollRunDetails = async (id) => {
 
         wagePerDay: Number(row.wage ?? row.base_wage ?? row.wage_per_day ?? row.wagePerDay ?? 0),
 
+        basicPay: Number(row.basicPay ?? 0),
+        allowancePay: Number(row.allowancePay ?? 0),
+
         fullDays: Number(row.fullDays ?? 0),
         halfDays: Number(row.halfDays ?? 0),
         absentDays: Number(row.absentDays ?? 0),
@@ -707,6 +720,8 @@ export const getPayrollHistory = async ({ year, farm }) => {
         farm: row.farm ?? "",
         employeeCount: Number(row.employee_count ?? row.employeeCount ?? 0), // ← was missing employee_count
         totalGross: Number(row.total_gross ?? row.totalGross ?? 0),
+        totalBasic: Number(row.total_basic ?? row.totalBasic ?? 0),
+        totalAllowance: Number(row.total_allowance ?? row.totalAllowance ?? 0),
         totalDeductions: Number(
           row.total_deductions ?? row.totalDeductions ?? 0,
         ),
@@ -821,6 +836,97 @@ export const updateManagerSalary = async (id, payload) => {
     return unwrapApiData(await response.json()) || {};
   } catch (error) {
     console.error("API Error (updateManagerSalary):", error);
+    throw error;
+  }
+};
+
+// --- BASIC SALARY RATE (EPF/ETF split) ---
+
+export const getBasicRate = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/hr/basic-rate`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Failed to fetch basic rate");
+    const payload = unwrapApiData(await response.json()) || {};
+    return {
+      current: Number(payload.current ?? 0),
+      history: Array.isArray(payload.history)
+        ? payload.history.map((r) => ({
+            id: String(r.id ?? ""),
+            basicPerDay: Number(r.basic_per_day ?? r.basicPerDay ?? 0),
+            effectiveFrom: r.effective_from ?? r.effectiveFrom ?? "",
+            createdAt: r.created_at ?? r.createdAt ?? "",
+          }))
+        : [],
+    };
+  } catch (error) {
+    console.error("API Error (getBasicRate):", error);
+    throw error;
+  }
+};
+
+export const createBasicRate = async ({ basicPerDay, effectiveFrom }) => {
+  try {
+    const response = await fetch(`${BASE_URL}/hr/basic-rate`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ basicPerDay, effectiveFrom }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || "Failed to save basic rate");
+    }
+    return unwrapApiData(payload) || {};
+  } catch (error) {
+    console.error("API Error (createBasicRate):", error);
+    throw error;
+  }
+};
+
+// --- SALARY / EPF REPORT ---
+
+export const getSalaryReport = async ({ month, year, farm } = {}) => {
+  try {
+    const qs = [];
+    if (month) qs.push(`month=${encodeURIComponent(month)}`);
+    if (year) qs.push(`year=${encodeURIComponent(year)}`);
+    if (farm) qs.push(`farm=${encodeURIComponent(farm)}`);
+    const q = qs.length ? `?${qs.join("&")}` : "";
+
+    const response = await fetch(`${BASE_URL}/hr/salary-report${q}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Failed to fetch salary report");
+    const payload = unwrapApiData(await response.json()) || {};
+    return {
+      month: Number(payload.month ?? month ?? 0),
+      year: Number(payload.year ?? year ?? 0),
+      farm: payload.farm ?? farm ?? "all",
+      basicRate: Number(payload.basicRate ?? 0),
+      rows: Array.isArray(payload.rows)
+        ? payload.rows.map((r) => ({
+            empId: String(r.empId ?? ""),
+            name: r.name ?? "",
+            role: r.role ?? "",
+            farm: r.farm ?? "",
+            grossPay: Number(r.grossPay ?? 0),
+            basicPay: Number(r.basicPay ?? 0),
+            allowancePay: Number(r.allowancePay ?? 0),
+            netPay: Number(r.netPay ?? 0),
+          }))
+        : [],
+      totals: {
+        gross: Number(payload.totals?.gross ?? 0),
+        basic: Number(payload.totals?.basic ?? 0),
+        allowance: Number(payload.totals?.allowance ?? 0),
+        net: Number(payload.totals?.net ?? 0),
+      },
+    };
+  } catch (error) {
+    console.error("API Error (getSalaryReport):", error);
     throw error;
   }
 };

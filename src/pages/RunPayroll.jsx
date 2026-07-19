@@ -404,6 +404,8 @@ export default function RunPayroll() {
         { label: "Half Days", value: (row) => row.halfDays },
         { label: "Absent Days", value: (row) => row.absentDays },
         { label: "Gross Pay", value: (row) => row.grossPay.toFixed(2) },
+        { label: "Basic", value: (row) => (row.basicPay || 0).toFixed(2) },
+        { label: "Allowance", value: (row) => (row.allowancePay || 0).toFixed(2) },
         { label: "Advance", value: (row) => row.advanceDeducted.toFixed(2) },
         { label: "Net Pay", value: (row) => row.netPay.toFixed(2) },
       ],
@@ -753,7 +755,14 @@ export default function RunPayroll() {
                     </td>
 
                     <td style={{ ...tdStyle(), textAlign: "right" }}>
-                      Rs. {fmt(emp.grossPay)}
+                      <div className="font-bold text-gray-900">
+                        Rs. {fmt(emp.grossPay)}
+                      </div>
+                      {emp.grossPay > 0 && (
+                        <div className="text-[10px] font-semibold text-gray-400 mt-0.5">
+                          B: {fmt(emp.basicPay)} · A: {fmt(emp.allowancePay)}
+                        </div>
+                      )}
                     </td>
 
                     <td
@@ -1260,6 +1269,26 @@ export default function RunPayroll() {
                     </div>
                   </div>
 
+                  {/* Basic + Allowance split that will be recorded on the payslip */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                      <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                        Basic (EPF)
+                      </span>
+                      <span className="font-bold text-gray-800">
+                        Rs. {fmt(finalizeEmp.basicPay)}
+                      </span>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                      <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                        Allowance
+                      </span>
+                      <span className="font-bold text-blue-700">
+                        Rs. {fmt(finalizeEmp.allowancePay)}
+                      </span>
+                    </div>
+                  </div>
+
                   {finalizeEmp.advanceDetails?.length > 0 && (
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                       <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
@@ -1380,6 +1409,31 @@ export default function RunPayroll() {
                   <span className="font-bold text-green-700">
                     Rs. {fmt(breakdownEmp.grossPay)}
                   </span>
+                </div>
+              </div>
+
+              {/* Salary composition for EPF/ETF: Basic + Allowance = Gross */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+                  Salary Composition (EPF)
+                </div>
+                <div className="p-4 grid grid-cols-2 divide-x divide-gray-100 text-center">
+                  <div>
+                    <span className="block text-lg font-black text-gray-900">
+                      Rs. {fmt(breakdownEmp.basicPay)}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                      Basic Salary
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-lg font-black text-blue-700">
+                      Rs. {fmt(breakdownEmp.allowancePay)}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                      Allowance
+                    </span>
+                  </div>
                 </div>
               </div>
 

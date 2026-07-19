@@ -27,6 +27,7 @@ import {
   Receipt,
   HandCoins,
   Skull,
+  FileSpreadsheet,
 } from "lucide-react";
 import { clearStoredAuth } from "../services/api";
 
@@ -86,6 +87,7 @@ export default function Layout() {
         },
         { name: "Cash Advances", path: "/payroll/advances", icon: Wallet },
         { name: "Run Payroll", path: "/payroll/calculator", icon: Calculator },
+        { name: "Salary / EPF Report", path: "/payroll/salary-report", icon: FileSpreadsheet },
       ],
     },
     { name: "Expenses", path: "/expenses", icon: Tractor },
