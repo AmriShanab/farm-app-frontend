@@ -1539,6 +1539,7 @@ export default function RunPayroll() {
                 </div>
               </div>
 
+              {/* Advance deductions — per date, mirroring the Cash Advances screen */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider flex justify-between">
                   <span>Advance Deductions</span>
@@ -1552,31 +1553,67 @@ export default function RunPayroll() {
                     No advances deducted for this period.
                   </div>
                 ) : (
-                  <ul className="divide-y divide-gray-50 max-h-40 overflow-y-auto">
-                    {breakdownEmp.advanceDetails.map((adv) => (
-                      <li
-                        key={adv.id}
-                        className="p-3 flex justify-between items-center text-xs"
-                      >
-                        <span className="font-bold text-gray-600 text-[11px] bg-gray-100 px-2.5 py-1 rounded-md">
-                          {adv.date}
-                        </span>
-                        <span className="font-bold text-red-600">
-                          Rs. {fmt(adv.amount)}
-                        </span>
-                      </li>
-                    ))}
+                  <ul className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                    {breakdownEmp.advanceDetails.map((adv) => {
+                      const deducted = Number(adv.amount || 0);
+                      const original = Number(adv.originalAmount || 0);
+                      const isPartial = original > 0 && deducted + 0.01 < original;
+                      return (
+                        <li
+                          key={adv.id}
+                          className="p-3 px-4 flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-bold text-gray-600 text-[11px] bg-gray-100 px-2.5 py-1 rounded-md whitespace-nowrap">
+                              {adv.date}
+                            </span>
+                            {isPartial && (
+                              <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">
+                                Partial
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <span className="font-black text-red-600">
+                              −Rs. {fmt(deducted)}
+                            </span>
+                            {original > 0 && (
+                              <span className="block text-[10px] font-semibold text-gray-400">
+                                of Rs. {fmt(original)} advance
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
 
-              <div className="bg-gradient-to-r from-green-50 to-green-100/50 border border-green-200 rounded-xl p-4 flex justify-between items-center mt-2 shadow-sm">
-                <span className="text-xs font-black text-green-900 uppercase tracking-wider">
-                  Final Net Pay
-                </span>
-                <span className="text-2xl font-black text-green-700 drop-shadow-sm">
-                  Rs. {fmt(breakdownEmp.netPay)}
-                </span>
+              {/* Payment summary — what we owed, what we recovered, what we paid */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-bold text-gray-500">Gross Pay (to pay)</span>
+                    <span className="font-bold text-gray-800">
+                      Rs. {fmt(breakdownEmp.grossPay)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-bold text-gray-500">Advances Deducted</span>
+                    <span className="font-bold text-red-600">
+                      − Rs. {fmt(breakdownEmp.advanceDeducted)}
+                    </span>
+                  </div>
+                  <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between items-center">
+                    <span className="text-xs font-black text-green-900 uppercase tracking-wider">
+                      Net Cash Paid
+                    </span>
+                    <span className="text-2xl font-black text-green-700 drop-shadow-sm">
+                      Rs. {fmt(breakdownEmp.netPay)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
