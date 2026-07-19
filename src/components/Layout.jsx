@@ -105,7 +105,7 @@ export default function Layout() {
     },
     { name: "Finances", path: "/finances", icon: Landmark },
     { name: "Assets & Warranty", path: "/assets", icon: ShieldCheck },
-    { name: "Monthly Breakdown", path: "/breakdown", icon: Calculator },
+    { name: "Cycle Breakdown", path: "/breakdown", icon: Calculator },
   ];
 
   return (
