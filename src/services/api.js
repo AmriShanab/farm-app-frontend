@@ -404,12 +404,14 @@ export const markHarvestAttendanceBulk = async ({ date, farm, saleId, records })
   try {
     const body = {
       date,
+      mode: "merge",
       records: records.map((r) => ({
         empId: r.employeeId,
         status: r.status,
         locationWorked: farm,
-        is_harvest_day: 1,
-        linked_sale_id: saleId,
+        taskType: r.status === "absent" ? null : `${farm} Coconut Harvest`,
+        isHarvestDay: r.status === "absent" ? 0 : 1,
+        linkedSaleId: r.status === "absent" ? null : saleId,
       })),
     };
     const response = await fetch(`${BASE_URL}/hr/attendance/bulk`, {
@@ -417,8 +419,11 @@ export const markHarvestAttendanceBulk = async ({ date, farm, saleId, records })
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error("Failed to mark harvest attendance");
-    return unwrapApiData(await response.json()) || {};
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || "Failed to mark harvest attendance");
+    }
+    return unwrapApiData(payload) || {};
   } catch (error) {
     console.error("API Error (markHarvestAttendanceBulk):", error);
     throw error;
@@ -452,6 +457,8 @@ export const getAttendance = async (date, farm) => {
                 status: s.status,
                 locationWorked: s.location_worked ?? s.locationWorked ?? null,
                 taskType: s.task_type ?? s.taskType ?? null,
+                isHarvestDay: Number(s.is_harvest_day ?? s.isHarvestDay ?? 0),
+                linkedSaleId: s.linked_sale_id ?? s.linkedSaleId ?? null,
               }))
             : [],
         }))

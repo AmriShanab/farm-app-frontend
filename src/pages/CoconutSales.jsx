@@ -233,6 +233,8 @@ export default function CoconutSales() {
     }
 
     setIsSaving(true);
+    let savedSaleRecord = null;
+    let savedSalePayload = null;
     try {
       // 1. Create the Sale
       const salePayload = {
@@ -248,25 +250,53 @@ export default function CoconutSales() {
       };
 
       const savedRecord = await createCoconutSale(salePayload);
+      savedSaleRecord = savedRecord;
+      savedSalePayload = salePayload;
 
       // Calculate Attendance and Labor Costs FIRST
-      const attendanceRecords = Object.entries(harvestAtt);
-      const selectedEmployees = Object.entries(harvestAtt)
+      const attendanceRecords = Object.entries(harvestAtt)
         .filter(([, status]) => status !== null)
-        .map(([empId]) => {
+        .map(([empId, status]) => {
           const emp = employees.find((e) => String(e.id) === String(empId));
           return {
             employeeId: Number(empId),
             status,
-            wagePerDay: Number(emp?.wagePerDay || 0),
+            wagePerDay: Number(emp?.wagePerDay ?? emp?.wage_per_day ?? 0),
             name: emp?.name || "",
           };
         });
+      const selectedEmployees = attendanceRecords;
 
       const permanentLaborCost = selectedEmployees.reduce(
-        (sum, emp) => sum + (emp.wagePerDay || 0),
+        (sum, emp) => {
+          const fraction = emp.status === "full" ? 1 : emp.status === "half" ? 0.5 : 0;
+          return sum + (emp.wagePerDay || 0) * fraction;
+        },
         0,
       );
+
+      // Mark attendance before creating the separate expense record. If the
+      // attendance conflicts with an existing day, roll the new sale back so
+      // the user cannot be left with a sale that silently missed attendance.
+      const saleId = normalizeSaleRecord(savedRecord).id;
+      if (selectedEmployees.length > 0 && saleId) {
+        try {
+          await markHarvestAttendanceBulk({
+            date: newRow.date,
+            farm: farmFilter,
+            saleId,
+            records: selectedEmployees,
+          });
+        } catch (attendanceError) {
+          await deleteCoconutSale(saleId);
+          savedSaleRecord = null;
+          savedSalePayload = null;
+          throw new Error(
+            attendanceError?.message || "Attendance could not be marked, so the sale was not saved.",
+            { cause: attendanceError },
+          );
+        }
+      }
 
       // 2. Check if any expenses were entered, if so, create the expense record
       const hasExpenses =
@@ -297,17 +327,6 @@ export default function CoconutSales() {
         await createHarvestExpense(expensePayload);
       }
 
-      // 3. Mark harvest attendance if any employees were marked
-      const saleId = normalizeSaleRecord(savedRecord).id;
-      if (attendanceRecords.length > 0 && saleId) {
-        await markHarvestAttendanceBulk({
-          date: newRow.date,
-          farm: farmFilter,
-          saleId,
-          records: attendanceRecords,
-        });
-      }
-
       // 4. Update the local UI state
       const completeRecord = normalizeSaleRecord(savedRecord, salePayload);
       completeRecord.total = calcNet(salePayload);
@@ -324,8 +343,24 @@ export default function CoconutSales() {
           `${attendanceRecords.length} attendance record(s) marked.`,
       ].filter(Boolean);
       toast.success(parts.join(" "));
-    } catch {
-      toast.error("Failed to save records to database.");
+    } catch (saveError) {
+      if (savedSaleRecord && savedSalePayload) {
+        // The sale and attendance are already durable. Keep the ledger in sync
+        // and make it clear that only a related record (normally expenses) failed.
+        const completeRecord = normalizeSaleRecord(savedSaleRecord, savedSalePayload);
+        completeRecord.total = calcNet(savedSalePayload);
+        setSales((prev) =>
+          prev.some((sale) => sale.id === completeRecord.id)
+            ? prev
+            : [completeRecord, ...prev],
+        );
+        setIsAdding(false);
+        setNewRow(emptySaleForm());
+        setHarvestAtt({});
+        toast.warn(`Sale saved, but a related record failed: ${saveError.message}`);
+      } else {
+        toast.error(saveError?.message || "Failed to save records to database.");
+      }
     } finally {
       setIsSaving(false);
     }
