@@ -334,6 +334,30 @@ export default function RunPayroll() {
     }
   };
 
+  const handleViewSettledSlip = async (emp) => {
+    const empFarm = emp.farm || emp.homeFarm || "";
+    const matchingRun = historyRows.find(
+      (r) =>
+        r.startDate === startDate &&
+        r.endDate === endDate &&
+        r.farm === empFarm,
+    );
+    if (matchingRun) {
+      try {
+        const details = await getPayrollRunDetails(matchingRun.id);
+        const empIdStr = String(emp.employeeId || emp.empId || emp.id);
+        const payout = details.payouts?.find((p) => String(p.empId) === empIdStr);
+        if (payout) {
+          setBreakdownEmp(payout);
+          return;
+        }
+      } catch {
+        // fall through to preview data
+      }
+    }
+    setBreakdownEmp(emp);
+  };
+
   const handleViewHistoricalRun = async (runRow) => {
     try {
       const details = await getPayrollRunDetails(runRow.id);
@@ -816,7 +840,7 @@ export default function RunPayroll() {
                             <CheckCircle2 size={12} /> Settled
                           </span>
                           <button
-                            onClick={() => setBreakdownEmp(emp)}
+                            onClick={() => handleViewSettledSlip(emp)}
                             className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-sm flex items-center gap-1"
                           >
                             <FileCheck size={12} /> Slip
