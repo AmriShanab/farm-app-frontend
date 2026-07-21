@@ -376,7 +376,14 @@ export default function PoultryMedicine() {
 
                     return (
                       <tr key={row.id} className="border-t border-gray-50 hover:bg-gray-50/50">
-                        <td className="p-4 font-bold text-gray-900">{row.date}</td>
+                        <td className="p-4 font-bold text-gray-900">
+                          {row.date}
+                          {row.day_count != null && (
+                            <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
+                              Day {row.day_count}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-4">
                           <p className="font-bold text-gray-800">{row.medicine_name}</p>
                           <p className="text-xs text-gray-500">{qty} units @ Rs. {fmt(rate)}</p>

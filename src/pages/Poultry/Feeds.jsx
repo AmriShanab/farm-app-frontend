@@ -474,6 +474,11 @@ export default function PoultryFeeds() {
                       >
                         <td className="p-4 font-bold text-gray-900">
                           {log.date}
+                          {log.day_count != null && (
+                            <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
+                              Day {log.day_count}
+                            </span>
+                          )}
                         </td>
                         <td className="p-4">
                           <p className="font-bold text-gray-800">

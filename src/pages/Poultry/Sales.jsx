@@ -573,6 +573,11 @@ export default function PoultrySales() {
                       >
                         <td className="p-4 font-bold text-gray-900 align-top">
                           {sale.date}
+                          {sale.day_count != null && (
+                            <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
+                              Day {sale.day_count}
+                            </span>
+                          )}
                         </td>
                         <td className="p-4 align-top text-gray-700">
                           {sale.buyer_name || "-"}

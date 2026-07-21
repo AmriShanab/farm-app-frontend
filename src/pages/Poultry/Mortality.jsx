@@ -248,6 +248,11 @@ export default function PoultryMortality() {
                       <>
                         <td className="py-3 px-5 text-sm font-bold text-gray-700">
                           {new Date(rec.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                          {rec.day_count != null && (
+                            <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
+                              Day {rec.day_count}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <input
@@ -288,6 +293,11 @@ export default function PoultryMortality() {
                       <>
                         <td className="py-3 px-5 text-sm font-bold text-gray-800">
                           {new Date(rec.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                          {rec.day_count != null && (
+                            <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
+                              Day {rec.day_count}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-black ${parseInt(rec.count) > 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>
