@@ -10,6 +10,7 @@ import {
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getBasicRate, createBasicRate } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 import { downloadCsv } from '../utils/csv';
+import EmployeeHistoryModal from '../components/EmployeeHistoryModal';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -46,6 +47,7 @@ export default function EmployeeProfiles() {
   });
 
   const [editEmployee, setEditEmployee] = useState(null);
+  const [historyEmp, setHistoryEmp] = useState(null);
   const [editRow, setEditRow] = useState({ 
     name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' 
   });
@@ -593,6 +595,13 @@ export default function EmployeeProfiles() {
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-1">
                         <button
+                          onClick={() => setHistoryEmp(emp)}
+                          title="View history"
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                        >
+                          <History size={13} />
+                        </button>
+                        <button
                           onClick={() => handleTogglePause(emp)}
                           title={emp.status === 'paused' ? 'Resume' : 'Pause'}
                           className={`p-2 rounded-full transition-colors ${emp.status === 'paused' ? 'text-green-500 hover:text-green-700 hover:bg-green-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}
@@ -795,6 +804,10 @@ export default function EmployeeProfiles() {
             </div>
           </div>
         </div>
+      )}
+
+      {historyEmp && (
+        <EmployeeHistoryModal employee={historyEmp} onClose={() => setHistoryEmp(null)} />
       )}
     </div>
   );

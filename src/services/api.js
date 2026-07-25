@@ -500,6 +500,25 @@ export const getAttendanceHistory = async (employeeId, startDate, endDate) => {
   }
 };
 
+// Full per-employee history (attendance + advances + payroll) in a date window.
+export const getEmployeeHistory = async (id, { from, to } = {}) => {
+  try {
+    const params = [];
+    if (from) params.push(`from=${encodeURIComponent(from)}`);
+    if (to) params.push(`to=${encodeURIComponent(to)}`);
+    const q = params.length ? `?${params.join("&")}` : "";
+    const response = await fetch(`${BASE_URL}/hr/employees/${id}/history${q}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error("Failed to fetch employee history");
+    return unwrapApiData(await response.json()) || {};
+  } catch (error) {
+    console.error("API Error (getEmployeeHistory):", error);
+    throw error;
+  }
+};
+
 export const updateAttendance = async (attendanceId, data) => {
   try {
     const response = await fetch(`${BASE_URL}/hr/attendance/${attendanceId}`, {
