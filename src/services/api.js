@@ -1111,6 +1111,69 @@ export const deletePoultryMedicine = async (id) => {
   return true;
 };
 
+// --- POULTRY: FEED & MEDICINE USAGE / STOCK ---
+
+const parseApiError = async (response, fallback) => {
+  try {
+    const payload = await response.json();
+    return payload?.error?.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+export const getPoultryFeedStock = async (batchId) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed/stock?batchId=${batchId}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const getPoultryFeedUsage = async (batchId) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed/usage?batchId=${batchId}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const createPoultryFeedUsage = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed/usage`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error(await parseApiError(response, "Failed to record feed usage"));
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultryFeedUsage = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/feed/usage/${id}`, { method: "DELETE", headers: getHeaders() });
+  if (!response.ok) throw new Error("Failed to delete feed usage record");
+  return true;
+};
+
+export const getPoultryMedicineStock = async (batchId) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine/stock?batchId=${batchId}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const getPoultryMedicineUsage = async (batchId) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine/usage?batchId=${batchId}`, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const createPoultryMedicineUsage = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine/usage`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error(await parseApiError(response, "Failed to record medicine usage"));
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultryMedicineUsage = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/medicine/usage/${id}`, { method: "DELETE", headers: getHeaders() });
+  if (!response.ok) throw new Error("Failed to delete medicine usage record");
+  return true;
+};
+
 // --- POULTRY: MORTALITY ENDPOINTS ---
 
 export const getPoultryMortality = async (batchId, date) => {

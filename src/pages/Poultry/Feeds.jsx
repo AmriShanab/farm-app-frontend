@@ -8,6 +8,7 @@ import {
   updatePoultryFeed,
 } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
+import UsagePanel from "./UsagePanel";
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-LK", {
@@ -34,6 +35,7 @@ export default function PoultryFeeds() {
   });
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
   const [feedFilter, setFeedFilter] = useState("All");
+  const [tab, setTab] = useState("purchases");
   const toast = useToast();
 
   useEffect(() => {
@@ -187,6 +189,24 @@ export default function PoultryFeeds() {
           </p>
         </div>
       ) : (
+        <>
+          <div className="mb-5 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+            {[
+              { k: "purchases", label: "Purchases" },
+              { k: "usage", label: "Usage & Stock" },
+            ].map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setTab(t.k)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${tab === t.k ? "bg-green-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {tab === "usage" ? (
+            <UsagePanel kind="feed" batchId={selectedBatchId} />
+          ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
             <div className="flex items-center gap-3">
@@ -553,6 +573,8 @@ export default function PoultryFeeds() {
             </div>
           )}
         </div>
+          )}
+        </>
       )}
     </div>
   );
