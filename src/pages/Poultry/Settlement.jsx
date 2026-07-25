@@ -37,7 +37,22 @@ export default function PoultrySettlement() {
   }, [selectedBatchId]);
 
   const net = settlement?.netReceived ?? 0;
-  const totalCosts = (settlement?.feed?.totalCost || 0) + (settlement?.medicine?.totalCost || 0) + (settlement?.expenses?.totalCost || 0) + (settlement?.batchCost || 0);
+  const totalCosts = settlement?.totalCosts ?? ((settlement?.feed?.totalCost || 0) + (settlement?.medicine?.totalCost || 0) + (settlement?.expenses?.totalCost || 0) + (settlement?.batchCost || 0));
+  const totalIncome = settlement?.totalSales ?? 0;
+  const profit = settlement?.profit ?? (totalIncome - totalCosts);
+  const isProfit = profit >= 0;
+
+  // Expense lines for the ledger (right side). Additional expenses only shown if any.
+  const expenseLines = settlement
+    ? [
+        { key: "batch", label: "Batch Purchase", amount: settlement.batchCost || 0, Icon: Egg, color: "text-blue-600" },
+        { key: "feed", label: "Feed", amount: settlement.feed?.totalCost || 0, Icon: Wheat, color: "text-amber-600" },
+        { key: "medicine", label: "Medicine", amount: settlement.medicine?.totalCost || 0, Icon: Pill, color: "text-purple-600" },
+        ...((settlement.expenses?.totalCost || 0) > 0
+          ? [{ key: "other", label: "Additional Expenses", amount: settlement.expenses.totalCost, Icon: FileText, color: "text-orange-600" }]
+          : []),
+      ]
+    : [];
 
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito']">
@@ -100,85 +115,101 @@ export default function PoultrySettlement() {
                   <p className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Supplier Payable</p>
                   <h3 className="text-2xl font-black text-red-600">Rs. {fmt(settlement.totalPayables)}</h3>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Feed: {fmt(settlement.feed?.totalPayable)} | Med: {fmt(settlement.medicine?.totalPayable)}
+                    Batch: {fmt(settlement.batchPayable)} | Feed: {fmt(settlement.feed?.totalPayable)} | Med: {fmt(settlement.medicine?.totalPayable)}
                   </p>
                 </div>
 
-                <div className={`border rounded-xl p-5 shadow-sm ${net >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                <div className={`border rounded-xl p-5 shadow-sm ${isProfit ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${net >= 0 ? "text-green-700" : "text-red-700"}`}>
-                        Supplier Net {net >= 0 ? "Receivable" : "Deficit"}
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${isProfit ? "text-green-700" : "text-red-700"}`}>
+                        {isProfit ? "Net Profit" : "Net Loss"}
                       </p>
-                      <h3 className={`text-2xl font-black ${net >= 0 ? "text-green-800" : "text-red-800"}`}>
-                        {net < 0 ? "-" : ""}Rs. {fmt(Math.abs(net))}
+                      <h3 className={`text-2xl font-black ${isProfit ? "text-green-800" : "text-red-800"}`}>
+                        {!isProfit ? "-" : ""}Rs. {fmt(Math.abs(profit))}
                       </h3>
+                      <p className="text-[10px] text-gray-400 mt-1">Income − all costs</p>
                     </div>
-                    {net >= 0 ? <TrendingUp size={24} className="text-green-600" /> : <TrendingDown size={24} className="text-red-600" />}
+                    {isProfit ? <TrendingUp size={24} className="text-green-600" /> : <TrendingDown size={24} className="text-red-600" />}
                   </div>
                 </div>
               </div>
 
-              {/* ── INCOME: Sales Breakdown ── */}
+              {/* ── LEDGER: Income (left) vs Expenses (right) ── */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-green-50/50 flex items-center gap-2">
-                  <ShoppingBag size={16} className="text-green-600" />
-                  <h2 className="font-bold text-gray-800">Sales Breakdown</h2>
+                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
+                  <FileText size={16} className="text-gray-600" />
+                  <h2 className="font-bold text-gray-800">Batch Ledger</h2>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
-                      <tr>
-                        <th className="p-4 text-left">Date</th>
-                        <th className="p-4 text-left">Category</th>
-                        <th className="p-4 text-left">Buyer</th>
-                        <th className="p-4 text-right">Birds / Qty</th>
-                        <th className="p-4 text-right">Weight (kg)</th>
-                        <th className="p-4 text-right">Rate</th>
-                        <th className="p-4 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(!settlement.salesRows || settlement.salesRows.length === 0) ? (
-                        <tr><td colSpan={7} className="p-8 text-center text-gray-400 font-bold">No sales recorded.</td></tr>
-                      ) : settlement.salesRows.map((s) => (
-                        <tr key={s.id} className="border-t border-gray-50 hover:bg-gray-50/50">
-                          <td className="p-4 font-bold text-gray-900">{s.date}</td>
-                          <td className="p-4">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                              s.category === 'chicks' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                              s.category === 'meat' ? 'bg-red-50 text-red-700 border border-red-200' :
-                              s.category === 'eggs' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                              'bg-gray-100 text-gray-600 border border-gray-200'
-                            }`}>
-                              {catLabel(s.category)}
-                            </span>
-                          </td>
-                          <td className="p-4 font-bold text-gray-700">{s.buyer_name || '—'}</td>
-                          <td className="p-4 text-right font-bold text-gray-800">
-                            {s.category === 'chicks' ? (parseInt(s.chicks_sold || 0).toLocaleString() + ' birds') : (parseFloat(s.quantity || 0).toLocaleString())}
-                          </td>
-                          <td className="p-4 text-right font-bold text-gray-600">
-                            {parseFloat(s.weight_kilos || 0) > 0 ? parseFloat(s.weight_kilos).toLocaleString() : '—'}
-                          </td>
-                          <td className="p-4 text-right font-bold text-gray-600">
-                            {s.category === 'chicks'
-                              ? (parseFloat(s.rate || 0) > 0 ? `Rs. ${fmt(s.rate)}/bird` : '—')
-                              : (parseFloat(s.price_per_kg || 0) > 0 ? `Rs. ${fmt(s.price_per_kg)}/kg` : '—')}
-                          </td>
-                          <td className="p-4 text-right font-black text-green-700">Rs. {fmt(s.total_price)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    {settlement.salesRows?.length > 0 && (
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200 bg-gray-50/80">
-                          <td colSpan={6} className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Total Revenue</td>
-                          <td className="p-4 text-right font-black text-green-700">Rs. {fmt(settlement.totalSales)}</td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
+                <div className="grid grid-cols-1 lg:grid-cols-2 lg:divide-x divide-gray-100">
+                  {/* INCOME side */}
+                  <div className="flex flex-col">
+                    <div className="px-4 py-2.5 bg-green-50/60 border-b border-gray-100 flex items-center gap-2">
+                      <ShoppingBag size={14} className="text-green-600" />
+                      <h3 className="font-black text-green-800 text-xs uppercase tracking-wider">Income</h3>
+                    </div>
+                    <div className="flex-1 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {(!settlement.salesRows || settlement.salesRows.length === 0) ? (
+                            <tr><td className="p-6 text-center text-gray-400 font-bold">No sales recorded.</td></tr>
+                          ) : settlement.salesRows.map((s) => (
+                            <tr key={s.id} className="border-b border-gray-50">
+                              <td className="py-2.5 px-4">
+                                <div className="font-bold text-gray-800">{catLabel(s.category)}</div>
+                                <div className="text-[11px] text-gray-400">
+                                  {s.date}{s.buyer_name ? ` · ${s.buyer_name}` : ''}
+                                  {s.category === 'chicks' && parseInt(s.chicks_sold || 0, 10) > 0 ? ` · ${parseInt(s.chicks_sold, 10).toLocaleString()} birds` : ''}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4 text-right font-black text-green-700 whitespace-nowrap">Rs. {fmt(s.total_price)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mt-auto px-4 py-3 bg-green-50/40 border-t-2 border-green-100 flex justify-between items-center">
+                      <span className="font-black text-green-800 text-xs uppercase tracking-wider">Total Income</span>
+                      <span className="font-black text-green-700 text-lg whitespace-nowrap">Rs. {fmt(totalIncome)}</span>
+                    </div>
+                  </div>
+
+                  {/* EXPENSES side */}
+                  <div className="flex flex-col border-t lg:border-t-0 border-gray-100">
+                    <div className="px-4 py-2.5 bg-red-50/50 border-b border-gray-100 flex items-center gap-2">
+                      <FileText size={14} className="text-red-500" />
+                      <h3 className="font-black text-red-700 text-xs uppercase tracking-wider">Expenses</h3>
+                    </div>
+                    <div className="flex-1 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {expenseLines.map(({ key, label, amount, Icon, color }) => (
+                            <tr key={key} className="border-b border-gray-50">
+                              <td className="py-2.5 px-4">
+                                <div className="font-bold text-gray-800 flex items-center gap-2">
+                                  <Icon size={14} className={color} /> {label}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">Rs. {fmt(amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mt-auto px-4 py-3 bg-red-50/30 border-t-2 border-red-100 flex justify-between items-center">
+                      <span className="font-black text-red-700 text-xs uppercase tracking-wider">Total Expenses</span>
+                      <span className="font-black text-gray-900 text-lg whitespace-nowrap">Rs. {fmt(totalCosts)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profit / Loss bar spanning both sides */}
+                <div className={`px-5 py-4 flex justify-between items-center ${isProfit ? 'bg-green-600' : 'bg-red-600'}`}>
+                  <span className="font-black text-white text-sm uppercase tracking-wider flex items-center gap-2">
+                    {isProfit ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+                    {isProfit ? 'Profit' : 'Loss'}
+                  </span>
+                  <span className="font-black text-white text-2xl whitespace-nowrap">{!isProfit ? '- ' : ''}Rs. {fmt(Math.abs(profit))}</span>
                 </div>
               </div>
 
@@ -186,7 +217,7 @@ export default function PoultrySettlement() {
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
                   <FileText size={16} className="text-gray-600" />
-                  <h2 className="font-bold text-gray-800">Cost Breakdown</h2>
+                  <h2 className="font-bold text-gray-800">Supplier Account</h2>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -204,8 +235,8 @@ export default function PoultrySettlement() {
                           <Egg size={14} className="text-blue-600" /> Batch Purchase
                         </td>
                         <td className="p-4 text-right font-bold">Rs. {fmt(settlement.batchCost)}</td>
-                        <td className="p-4 text-right font-bold text-gray-400">—</td>
-                        <td className="p-4 text-right font-bold text-gray-400">—</td>
+                        <td className="p-4 text-right font-bold text-green-700">Rs. {fmt(settlement.batchPaid)}</td>
+                        <td className="p-4 text-right font-black text-red-600">Rs. {fmt(settlement.batchPayable)}</td>
                       </tr>
                       <tr className="border-t border-gray-50 hover:bg-gray-50/50">
                         <td className="p-4 font-bold text-gray-900 flex items-center gap-2">
@@ -239,7 +270,7 @@ export default function PoultrySettlement() {
                         <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Total Costs</td>
                         <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(totalCosts)}</td>
                         <td className="p-4 text-right font-black text-green-700">
-                          Rs. {fmt((settlement.feed?.totalPaid || 0) + (settlement.medicine?.totalPaid || 0))}
+                          Rs. {fmt((settlement.batchPaid || 0) + (settlement.feed?.totalPaid || 0) + (settlement.medicine?.totalPaid || 0))}
                         </td>
                         <td className="p-4 text-right font-black text-red-600">Rs. {fmt(settlement.totalPayables)}</td>
                       </tr>

@@ -743,7 +743,7 @@ export default function CoconutSales() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 mb-1">
-                    Tractor Driver
+                    Tractor
                   </label>
                   <input
                     type="number"
