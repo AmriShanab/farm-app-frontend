@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   Plus,
   Search,
-  Download,
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
@@ -26,7 +25,6 @@ import {
   deleteCashewSale,
 } from "../services/api";
 import { useToast } from "../components/ToastProvider";
-import { downloadCsv } from "../utils/csv";
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-LK", {
@@ -255,27 +253,6 @@ export default function CashewSales() {
     });
   };
 
-  const handleExportCsv = () => {
-    downloadCsv(
-      `cashew-sales-${yearFilter}.csv`,
-      [
-        { label: "Date", value: (row) => row.date || "" },
-        { label: "Farm", value: (row) => row.farm || "MR1" },
-        { label: "Kg", value: (row) => row.kg ?? 0 },
-        { label: "Rate", value: (row) => row.rate ?? 0 },
-        {
-          label: "Labor Cost",
-          value: (row) => row.laborCost ?? row.labor_cost ?? 0,
-        },
-        {
-          label: "Total",
-          value: (row) => Number(row.total || calcNet(row)).toFixed(2),
-        },
-      ],
-      filtered,
-    );
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito'] pb-10">
       {/* ── PAGE HEADER ── */}
@@ -295,12 +272,6 @@ export default function CashewSales() {
         </div>
 
         <div className="flex gap-2 items-center">
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
-          >
-            <Download size={14} /> Export CSV
-          </button>
           <button
             onClick={() => setIsAdding(true)}
             disabled={isAdding || isLoading}

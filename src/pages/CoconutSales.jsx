@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   Plus,
   Search,
-  Download,
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
@@ -31,7 +30,6 @@ import {
   markHarvestAttendanceBulk,
 } from "../services/api";
 import { useToast } from "../components/ToastProvider";
-import { downloadCsv } from "../utils/csv";
 import HarvestLaborPanel from "../components/HarvestLaborPanel";
 
 const fmt = (n) =>
@@ -419,27 +417,6 @@ export default function CoconutSales() {
     }
   };
 
-  const handleExportCsv = () => {
-    downloadCsv(
-      `coconut-sales-${farmFilter}.csv`,
-      [
-        { label: "Date", value: (row) => row.date || "" },
-        { label: "Farm", value: (row) => row.farm || farmFilter || "" },
-        { label: "Qty 1", value: (row) => row.qty1 ?? 0 },
-        { label: "Rate 1", value: (row) => row.rate1 ?? 0 },
-        { label: "Discount 1", value: (row) => row.free_qty1 ?? 0 },
-        { label: "Qty 2", value: (row) => row.qty2 ?? 0 },
-        { label: "Rate 2", value: (row) => row.rate2 ?? 0 },
-        { label: "Discount 2", value: (row) => row.free_qty2 ?? 0 },
-        {
-          label: "Total",
-          value: (row) => Number(row.total || calcNet(row)).toFixed(2),
-        },
-      ],
-      filtered,
-    );
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito'] pb-10">
       {/* ── PAGE HEADER ── */}
@@ -459,12 +436,6 @@ export default function CoconutSales() {
         </div>
 
         <div className="flex gap-2 items-center">
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
-          >
-            <Download size={14} /> Export CSV
-          </button>
           <button
             onClick={() => setIsAdding(true)}
             disabled={isAdding || isLoading}

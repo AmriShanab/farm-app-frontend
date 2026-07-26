@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -27,13 +27,17 @@ import {
   Receipt,
   HandCoins,
   Skull,
+  Download,
 } from "lucide-react";
 import { clearStoredAuth } from "../services/api";
+import { downloadTablesCsv } from "../utils/csv";
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const pageContentRef = useRef(null);
+  const [hasExportableData, setHasExportableData] = useState(false);
 
   // State to track which sidebar menus are expanded
   const [expandedMenus, setExpandedMenus] = useState({
@@ -42,6 +46,23 @@ export default function Layout() {
 
   useEffect(() => {
     setTimeout(() => setIsSidebarOpen(false), 0);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const content = pageContentRef.current;
+    if (!content) return undefined;
+
+    const updateAvailability = () => {
+      const hasVisibleTable = Array.from(content.querySelectorAll("table")).some(
+        (table) => table.getClientRects().length > 0,
+      );
+      setHasExportableData(hasVisibleTable);
+    };
+
+    updateAvailability();
+    const observer = new MutationObserver(updateAvailability);
+    observer.observe(content, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [location.pathname]);
 
   const toggleMenu = (key) => {
@@ -53,6 +74,12 @@ export default function Layout() {
   const handleLogout = () => {
     clearStoredAuth();
     navigate("/login", { replace: true });
+  };
+
+  const handlePageExport = () => {
+    const pageName =
+      location.pathname.split("/").filter(Boolean).join("-") || "dashboard";
+    downloadTablesCsv(`${pageName}-${new Date().toISOString().slice(0, 10)}.csv`, pageContentRef.current);
   };
 
   // Updated Navigation Array with Sub-Items
@@ -286,6 +313,17 @@ export default function Layout() {
 
           {/* ── RIGHT SIDE: Date, Notifications, Profile ── */}
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handlePageExport}
+              disabled={!hasExportableData}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              title={hasExportableData ? "Export the visible page data as CSV" : "No table data to export"}
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
+
             {/* Dynamic Date & Weather/Status */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 shadow-sm">
               <Sun size={14} className="text-orange-400" />
@@ -310,7 +348,7 @@ export default function Layout() {
         </header>
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-4">
+        <main ref={pageContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 pt-4">
           <Outlet />
         </main>
       </div>

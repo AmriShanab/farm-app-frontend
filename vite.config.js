@@ -4,13 +4,10 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  // Dev-only API proxy target. Defaults to production; override locally via
-  // VITE_DEV_API_TARGET in .env.local (e.g. http://127.0.0.1:8000 for a local backend).
-  const apiTarget = env.VITE_DEV_API_TARGET || 'http://localhost'
-  // Path prefix the backend lives under. Apache/XAMPP serves it at
-  // /mrfarm/backend/api/public (default). For the built-in PHP server rooted at
-  // that public dir, set VITE_DEV_API_PREFIX= (empty) in .env.local.
-  const apiPrefix = env.VITE_DEV_API_PREFIX ?? '/mrfarm/backend/api/public'
+  // Local development uses the live API by default. These can still be
+  // overridden in .env.local when working against a local backend.
+  const apiTarget = env.VITE_DEV_API_TARGET || 'https://mrfarm-api.skbahmd.dev'
+  const apiPrefix = env.VITE_DEV_API_PREFIX ?? ''
 
   return {
     plugins: [react()],
@@ -20,7 +17,7 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: true,
           followRedirects: true,
-          secure: false,
+          secure: true,
           rewrite: (path) => `${apiPrefix}${path}`,
         },
       },

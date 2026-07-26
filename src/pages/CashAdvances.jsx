@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Plus, Search, Download,
+  Plus, Search,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Wallet, Banknote, AlertCircle, Check, X,
   User, CheckCircle2, Edit2, Loader2, Save
@@ -8,7 +8,6 @@ import {
 
 import { useToast } from '../components/ToastProvider';
 import { getAdvances, createAdvance, getEmployees, updateAdvance } from '../services/api';
-import { downloadCsv } from '../utils/csv';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -221,17 +220,6 @@ export default function CashAdvances() {
     setNewRow({ date: new Date().toISOString().split('T')[0], empId: '', amount: '', notes: '', chequeNo: '', chequeDate: '' });
   };
 
-  const handleExportCsv = () => {
-    downloadCsv('cash-advances.csv', [
-      { label: 'Date', value: (row) => row.date || '' },
-      { label: 'Employee', value: (row) => row.name || '' },
-      { label: 'Status', value: (row) => row.status || '' },
-      { label: 'Amount', value: (row) => Number(row.amount || 0).toFixed(2) },
-      { label: 'Cheque No', value: (row) => row.chequeNo || 'Cash' },
-      { label: 'Notes', value: (row) => row.notes || '' },
-    ], filtered);
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito'] pb-10">
       
@@ -252,9 +240,6 @@ export default function CashAdvances() {
         </div>
 
         <div className="flex gap-2 items-center">
-          <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-            <Download size={14} /> Export List
-          </button>
           <button
             onClick={() => setIsAdding(true)}
             disabled={isAdding || isLoading}

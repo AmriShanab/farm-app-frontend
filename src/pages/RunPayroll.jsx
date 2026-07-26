@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Calculator,
-  Download,
   Search,
   SlidersHorizontal,
   Wallet,
@@ -27,7 +26,6 @@ import {
   getPayrollRunDetails,
   updateManagerSalary,
 } from "../services/api";
-import { downloadCsv } from "../utils/csv";
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-LK", {
@@ -436,28 +434,6 @@ export default function RunPayroll() {
     }
   };
 
-  const handleExportCsv = () => {
-    downloadCsv(
-      `payroll-all-${startDate}-to-${endDate}.csv`,
-      [
-        { label: "Employee", value: (row) => row.name },
-        {
-          label: "Wage / Day",
-          value: (row) => row.wagePerDay?.toFixed(2) || "0.00",
-        },
-        { label: "Full Days", value: (row) => row.fullDays },
-        { label: "Half Days", value: (row) => row.halfDays },
-        { label: "Absent Days", value: (row) => row.absentDays },
-        { label: "Gross Pay", value: (row) => row.grossPay.toFixed(2) },
-        { label: "Basic", value: (row) => (row.basicPay || 0).toFixed(2) },
-        { label: "Allowance", value: (row) => (row.allowancePay || 0).toFixed(2) },
-        { label: "Advance", value: (row) => row.advanceDeducted.toFixed(2) },
-        { label: "Net Pay", value: (row) => row.netPay.toFixed(2) },
-      ],
-      filtered,
-    );
-  };
-
   return (
     <div
       style={{
@@ -519,12 +495,6 @@ export default function RunPayroll() {
               className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
             />
           </div>
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:text-green-700 transition-colors"
-          >
-            <Download size={14} /> Export Sheets
-          </button>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Plus, Search, Download, MoreHorizontal,
+  Plus, Search, MoreHorizontal,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   TrendingUp, Wallet, Coins, Check, X, Award,
   Loader2, AlertCircle, Trash2, Pencil
@@ -8,7 +8,6 @@ import {
 
 import { getOtherIncomes, createOtherIncome, updateOtherIncome, deleteOtherIncome } from '../services/api';
 import { useToast } from '../components/ToastProvider';
-import { downloadCsv } from '../utils/csv';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -165,14 +164,6 @@ export default function OtherIncomes() {
     }
   };
 
-  const handleExportCsv = () => {
-    downloadCsv('other-incomes.csv', [
-      { label: 'Date', value: (row) => row.date || '' },
-      { label: 'Description', value: (row) => row.description || '' },
-      { label: 'Amount', value: (row) => Number(row.amount || 0).toFixed(2) },
-    ], filtered);
-  };
-
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
 
@@ -193,16 +184,6 @@ export default function OtherIncomes() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button onClick={handleExportCsv} style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '9px 16px', background: '#fff',
-            border: '1.5px solid #e5e7eb', borderRadius: '10px',
-            fontSize: '12px', fontWeight: 700, color: '#374151',
-            cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <Download size={14} /> Export CSV
-          </button>
           <button
             onClick={() => setIsAdding(true)}
             disabled={isAdding || isLoading}

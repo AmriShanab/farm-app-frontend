@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Search, Download,
+  Search,
   ChevronLeft, ChevronRight, SlidersHorizontal,
   Users, UserPlus, MapPin, Briefcase, Check, X, Edit2, ArrowUpRight,
   Loader2, AlertCircle, Trash2, Save, CalendarClock, Pause, Play,
@@ -9,7 +9,6 @@ import {
 
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getBasicRate, createBasicRate } from '../services/api';
 import { useToast } from '../components/ToastProvider';
-import { downloadCsv } from '../utils/csv';
 import EmployeeHistoryModal from '../components/EmployeeHistoryModal';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -262,19 +261,6 @@ export default function EmployeeProfiles() {
     setNewRow({ name: '', role: '', farm: 'MR1', type: 'daily', payFrequency: 'weekly', wage: '' });
   };
 
-  const handleExportCsv = () => {
-    downloadCsv('employee-profiles.csv', [
-      { label: 'Name', value: (row) => row.name || '' },
-      { label: 'Role', value: (row) => row.role || '' },
-      { label: 'Farm Base', value: (row) => row.farm || '' },
-      { label: 'Wage Type', value: (row) => row.type || '' },
-      { label: 'Pay Frequency', value: (row) => row.pay_frequency || row.payFrequency || 'weekly' },
-      { label: 'Base Rate', value: (row) => Number(row.wage_per_day || row.wagePerDay || row.wage || 0).toFixed(2) },
-      { label: 'Basic', value: (row) => splitSalary(row.wage_per_day || row.wagePerDay || 0, row.type, basicRate).basic.toFixed(2) },
-      { label: 'Allowance', value: (row) => splitSalary(row.wage_per_day || row.wagePerDay || 0, row.type, basicRate).allowance.toFixed(2) },
-    ], filtered);
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto font-['Nunito'] pb-10">
       
@@ -307,9 +293,6 @@ export default function EmployeeProfiles() {
         <div className="flex gap-2 items-center">
           <button onClick={() => setIsRateModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
             <Settings2 size={14} /> Basic Rate: Rs. {fmt(basicRate)}
-          </button>
-          <button onClick={handleExportCsv} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-            <Download size={14} /> Export List
           </button>
           <button
             onClick={() => setIsAdding(true)}

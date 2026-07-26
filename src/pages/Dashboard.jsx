@@ -10,6 +10,17 @@ const fmt = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigit
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const asNumber = (value) => Number(value || 0);
 const dashboardFarm = 'MR1';
+const retryableGatewayStatuses = new Set([502, 503, 504]);
+
+const fetchDashboardResource = async (url, options) => {
+   let response = await fetch(url, options);
+
+   if (retryableGatewayStatuses.has(response.status)) {
+      response = await fetch(url, options);
+   }
+
+   return response;
+};
 
 const daysUntil = (dateStr) => {
    if (!dateStr) return null;
@@ -94,14 +105,14 @@ export default function Dashboard() {
          try {
             // Fetch Summary KPIs and Recent Activity concurrently
             const [summaryRes, recentRes, expensesRes, profitabilityRes, highlightsRes] = await Promise.all([
-               fetch(
+               fetchDashboardResource(
                   `${apiBaseUrl}/dashboard/summary?month=${currentMonthNumber}&year=${currentYearNumber}`,
                   { headers }
                ),
-               fetch(`${apiBaseUrl}/dashboard/recent`, { headers }),
-               fetch(`${apiBaseUrl}/dashboard/expenses?farm=${dashboardFarm}`, { headers }),
-               fetch(`${apiBaseUrl}/dashboard/profitability?year=${now.getFullYear()}`, { headers }),
-               fetch(`${apiBaseUrl}/dashboard/highlights`, { headers }),
+               fetchDashboardResource(`${apiBaseUrl}/dashboard/recent`, { headers }),
+               fetchDashboardResource(`${apiBaseUrl}/dashboard/expenses?farm=${dashboardFarm}`, { headers }),
+               fetchDashboardResource(`${apiBaseUrl}/dashboard/profitability?year=${now.getFullYear()}`, { headers }),
+               fetchDashboardResource(`${apiBaseUrl}/dashboard/highlights`, { headers }),
             ]);
 
             if (!summaryRes.ok || !recentRes.ok || !expensesRes.ok || !profitabilityRes.ok || !highlightsRes.ok) {
