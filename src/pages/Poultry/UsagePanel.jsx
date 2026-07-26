@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Loader2, Boxes, Check } from "lucide-react";
+import { Plus, Trash2, Loader2, Boxes, Undo2 } from "lucide-react";
 import {
   getPoultryFeedStock,
   getPoultryFeedUsage,
@@ -61,7 +61,10 @@ export default function UsagePanel({ kind, batchId }) {
     whole: "",
     frac: 0,
     notes: "",
+    mode: "usage", // "usage" | "return"
   });
+
+  const isReturn = form.mode === "return";
 
   const load = useCallback(() => {
     if (!batchId) return;
@@ -83,14 +86,17 @@ export default function UsagePanel({ kind, batchId }) {
     load();
   }, [load]);
 
-  const amount = (parseInt(form.whole || 0, 10) || 0) + Number(form.frac || 0);
+  // Returns are whole-unit only; usage may be fractional.
+  const amount = (parseInt(form.whole || 0, 10) || 0) + (isReturn ? 0 : Number(form.frac || 0));
   const selectedStock = stock.find((s) => s[itemKey] === form.item);
   const remaining = selectedStock ? Number(selectedStock.remaining) : 0;
   const overStock = form.item && amount > remaining + 0.001;
 
+  const setMode = (mode) => setForm((f) => ({ ...f, mode, frac: mode === "return" ? 0 : f.frac }));
+
   const handleAdd = async () => {
     if (!form.item) return toast.error("Pick an item.");
-    if (amount <= 0) return toast.error("Enter an amount used.");
+    if (amount <= 0) return toast.error(`Enter an amount ${isReturn ? "to return" : "used"}.`);
     if (amount > remaining + 0.001) return toast.error(`Only ${fmtQty(remaining)} left in stock.`);
     setSaving(true);
     try {
@@ -98,14 +104,15 @@ export default function UsagePanel({ kind, batchId }) {
         date: form.date,
         batchId: parseInt(batchId, 10),
         [api.payloadKey]: form.item,
+        kind: form.mode,
         quantity: amount,
         notes: form.notes || null,
       });
-      toast.success("Usage recorded.");
+      toast.success(isReturn ? "Return recorded." : "Usage recorded.");
       setForm((f) => ({ ...f, whole: "", frac: 0, notes: "" }));
       load();
     } catch (e) {
-      toast.error(e?.message || "Failed to record usage.");
+      toast.error(e?.message || "Failed to record.");
     } finally {
       setSaving(false);
     }
@@ -116,7 +123,7 @@ export default function UsagePanel({ kind, batchId }) {
       await api.remove(id);
       load();
     } catch {
-      toast.error("Failed to delete usage record.");
+      toast.error("Failed to delete record.");
     }
   };
 
@@ -152,7 +159,8 @@ export default function UsagePanel({ kind, batchId }) {
                   <p className="text-[11px] font-bold text-gray-500 truncate" title={s[itemKey]}>{s[itemKey]}</p>
                   <p className={`text-xl font-black ${low ? "text-red-600" : "text-gray-900"}`}>{fmtQty(rem)}</p>
                   <p className="text-[10px] text-gray-400 font-bold">
-                    used {fmtQty(s.used)} of {fmtQty(s.purchased)}
+                    used {fmtQty(s.used)}
+                    {Number(s.returned) > 0 ? ` · ret ${fmtQty(s.returned)}` : ""} of {fmtQty(s.purchased)}
                   </p>
                 </div>
               );
@@ -161,9 +169,24 @@ export default function UsagePanel({ kind, batchId }) {
         )}
       </div>
 
-      {/* Add usage form */}
+      {/* Add usage / return form */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Record Usage</h3>
+        {/* Usage / Return toggle */}
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 mb-3">
+          {[
+            { k: "usage", label: "Usage" },
+            { k: "return", label: "Return" },
+          ].map((m) => (
+            <button
+              key={m.k}
+              onClick={() => setMode(m.k)}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${form.mode === m.k ? (m.k === "return" ? "bg-orange-500 text-white shadow-sm" : "bg-green-600 text-white shadow-sm") : "text-gray-500 hover:text-gray-800"}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
           <div>
             <label className="block text-[11px] font-bold text-gray-600 mb-1">Date</label>
@@ -190,25 +213,30 @@ export default function UsagePanel({ kind, batchId }) {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-gray-600 mb-1">Amount</label>
+            <label className="block text-[11px] font-bold text-gray-600 mb-1">
+              Amount {isReturn && <span className="text-orange-600">(whole)</span>}
+            </label>
             <div className="flex gap-1">
               <input
                 type="number"
                 min="0"
+                step="1"
                 placeholder="0"
                 value={form.whole}
                 onChange={(e) => setForm((f) => ({ ...f, whole: e.target.value }))}
                 className="w-14 px-2 py-2 border border-gray-200 rounded-lg text-sm font-bold bg-white outline-none focus:border-green-500 text-center"
               />
-              <select
-                value={form.frac}
-                onChange={(e) => setForm((f) => ({ ...f, frac: Number(e.target.value) }))}
-                className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-sm font-bold bg-white outline-none focus:border-green-500"
-              >
-                {FRACTIONS.map((fr) => (
-                  <option key={fr.value} value={fr.value}>{fr.label}</option>
-                ))}
-              </select>
+              {!isReturn && (
+                <select
+                  value={form.frac}
+                  onChange={(e) => setForm((f) => ({ ...f, frac: Number(e.target.value) }))}
+                  className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-sm font-bold bg-white outline-none focus:border-green-500"
+                >
+                  {FRACTIONS.map((fr) => (
+                    <option key={fr.value} value={fr.value}>{fr.label}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
           <div>
@@ -227,23 +255,24 @@ export default function UsagePanel({ kind, batchId }) {
             {form.item
               ? overStock
                 ? `Only ${fmtQty(remaining)} left in stock`
-                : `Using ${fmtQty(amount)} · ${fmtQty(remaining)} in stock`
+                : `${isReturn ? "Returning" : "Using"} ${fmtQty(amount)} · ${fmtQty(remaining)} in stock`
               : "Pick an item to see stock"}
           </p>
           <button
             onClick={handleAdd}
             disabled={saving || overStock || !form.item || amount <= 0}
-            className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-black shadow-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-black shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${isReturn ? "bg-orange-500 hover:bg-orange-600" : "bg-green-600 hover:bg-green-700"}`}
           >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Record
+            {saving ? <Loader2 size={14} className="animate-spin" /> : isReturn ? <Undo2 size={14} /> : <Plus size={14} />}
+            {isReturn ? "Record Return" : "Record"}
           </button>
         </div>
       </div>
 
-      {/* Usage log */}
+      {/* Usage / return log */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-          <h3 className="font-bold text-gray-800 text-sm">Usage Log</h3>
+          <h3 className="font-bold text-gray-800 text-sm">Usage &amp; Return Log</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
@@ -251,37 +280,46 @@ export default function UsagePanel({ kind, batchId }) {
               <tr>
                 <th className="p-4 text-left">Date</th>
                 <th className="p-4 text-left">{api.itemLabel}</th>
-                <th className="p-4 text-right">Used</th>
+                <th className="p-4 text-left">Type</th>
+                <th className="p-4 text-right">Qty</th>
                 <th className="p-4 text-left">Notes</th>
                 <th className="p-4 text-right"></th>
               </tr>
             </thead>
             <tbody>
               {usage.length === 0 ? (
-                <tr><td colSpan={5} className="p-8 text-center text-gray-400 font-bold">No usage recorded yet.</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-gray-400 font-bold">Nothing recorded yet.</td></tr>
               ) : (
-                usage.map((u) => (
-                  <tr key={u.id} className="border-t border-gray-50 hover:bg-gray-50/50">
-                    <td className="p-4 font-bold text-gray-900">
-                      {u.date}
-                      {u.day_count != null && (
-                        <span className="block text-[10px] font-bold text-amber-600 mt-0.5">Day {u.day_count}</span>
-                      )}
-                    </td>
-                    <td className="p-4 font-bold text-gray-700">{u[itemKey]}</td>
-                    <td className="p-4 text-right font-black text-gray-900">{fmtQty(u.quantity)}</td>
-                    <td className="p-4 text-gray-500">{u.notes || "—"}</td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => handleDelete(u.id)}
-                        className="text-gray-300 hover:text-red-600 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                usage.map((u) => {
+                  const ret = u.kind === "return";
+                  return (
+                    <tr key={u.id} className="border-t border-gray-50 hover:bg-gray-50/50">
+                      <td className="p-4 font-bold text-gray-900">
+                        {u.date}
+                        {u.day_count != null && (
+                          <span className="block text-[10px] font-bold text-amber-600 mt-0.5">Day {u.day_count}</span>
+                        )}
+                      </td>
+                      <td className="p-4 font-bold text-gray-700">{u[itemKey]}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${ret ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+                          {ret ? "Return" : "Usage"}
+                        </span>
+                      </td>
+                      <td className={`p-4 text-right font-black ${ret ? "text-orange-700" : "text-gray-900"}`}>{fmtQty(u.quantity)}</td>
+                      <td className="p-4 text-gray-500">{u.notes || "—"}</td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => handleDelete(u.id)}
+                          className="text-gray-300 hover:text-red-600 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
