@@ -275,18 +275,25 @@ export default function Dashboard() {
                            <div className="p-4 space-y-3">
                               {highlights.nextHarvests.map((h) => {
                                  const days = daysUntil(h.next_harvest_date);
-                                 const isOverdue = days !== null && days < 0;
-                                 const isSoon = days !== null && days >= 0 && days <= 7;
-                                 const colorClass = isOverdue
+                                 // `due` (from the API) means the planned date has passed with no
+                                 // harvest recorded yet; it clears once a harvest lands on/after.
+                                 const isDue = Number(h.due) === 1;
+                                 const isSoon = !isDue && days !== null && days >= 0 && days <= 7;
+                                 const isDone = !isDue && days !== null && days < 0;
+                                 const colorClass = isDue
                                     ? 'bg-red-50 border-red-200 text-red-700'
                                     : isSoon
                                        ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                       : 'bg-green-50 border-green-200 text-green-700';
-                                 const badgeColor = isOverdue
+                                       : isDone
+                                          ? 'bg-gray-50 border-gray-200 text-gray-500'
+                                          : 'bg-green-50 border-green-200 text-green-700';
+                                 const badgeColor = isDue
                                     ? 'bg-red-100 text-red-800'
                                     : isSoon
                                        ? 'bg-amber-100 text-amber-800'
-                                       : 'bg-green-100 text-green-800';
+                                       : isDone
+                                          ? 'bg-gray-100 text-gray-600'
+                                          : 'bg-green-100 text-green-800';
                                  return (
                                     <div key={h.farm} className={`rounded-xl border p-3 ${colorClass}`}>
                                        <div className="flex items-center justify-between">
@@ -297,11 +304,13 @@ export default function Dashboard() {
                                              </p>
                                           </div>
                                           <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black ${badgeColor}`}>
-                                             {days === 0
-                                                ? 'Today'
-                                                : isOverdue
-                                                   ? `Overdue ${Math.abs(days)}d`
-                                                   : `In ${days}d`}
+                                             {isDue
+                                                ? `DUE${days < 0 ? ` ${Math.abs(days)}d` : ''}`
+                                                : isDone
+                                                   ? 'Harvested'
+                                                   : days === 0
+                                                      ? 'Today'
+                                                      : `In ${days}d`}
                                           </span>
                                        </div>
                                     </div>

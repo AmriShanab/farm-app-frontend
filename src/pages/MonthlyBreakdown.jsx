@@ -108,7 +108,7 @@ function CyclePicker({ items, value, onChange, type }) {
         {items.map((item) => (
           <option key={item.id} value={item.id}>
             {type === 'harvest'
-              ? `${item.farm} · ${formatDate(item.startDate)} → ${formatDate(item.endDate)}`
+              ? `${item.farm} · ${item.startDate ? formatDate(item.startDate) : 'Start'} → ${item.endDate ? formatDate(item.endDate) : 'Present'}`
               : `Batch #${item.id} · ${formatDate(item.startDate)} · ${titleCase(item.status)}`}
           </option>
         ))}
@@ -255,6 +255,100 @@ function PoultryBreakdown({ batch }) {
   );
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+// Plain calendar-month P/L across both coconut farms (no farm selection,
+// poultry excluded). Settlement-style Income | Expenses | P&L.
+function CalendarBreakdown() {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError('');
+    fetch(`${API_BASE_URL}/dashboard/calendar-breakdown?month=${month}&year=${year}`, {
+      headers: getHeaders(),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error?.message || 'Unable to load calendar breakdown.');
+        return payload?.data || payload;
+      })
+      .then(setData)
+      .catch((e) => { if (e.name !== 'AbortError') setError(e.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [month, year]);
+
+  const incomeRows = data
+    ? [
+        { label: 'Coconut sales', value: data.income.coconut },
+        { label: 'Other income', value: data.income.other },
+      ]
+    : [];
+  const expenseRows = data
+    ? Object.entries(data.expenses).filter(([key]) => key !== 'total').map(([key, value]) => ({ label: titleCase(key), value }))
+    : [];
+
+  const years = [];
+  for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 4; y -= 1) years.push(y);
+
+  return (
+    <div>
+      <div className="mt-5 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+        <label className="block">
+          <span className="mb-2 block text-[11px] font-black uppercase tracking-wider text-gray-500">Month</span>
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-green-600">
+            {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-[11px] font-black uppercase tracking-wider text-gray-500">Year</span>
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-green-600">
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </label>
+        <p className="ml-auto text-xs font-bold text-gray-400">Both farms combined · poultry excluded</p>
+      </div>
+
+      {loading ? (
+        <div className="flex min-h-[30vh] items-center justify-center text-green-700"><Loader2 className="animate-spin" size={28} /></div>
+      ) : error ? (
+        <div className="mt-6 rounded-2xl border border-rose-100 bg-rose-50 p-6 text-center font-bold text-rose-800">{error}</div>
+      ) : data ? (
+        <div className="mt-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <SummaryCard label="Total income" value={data.income.total} tone="green" icon={Wallet} />
+            <SummaryCard label="Total expenses" value={data.expenses.total} tone="red" icon={ArrowDownRight} />
+            <ProfitCard value={data.netProfit} />
+          </div>
+          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <h2 className="font-black text-gray-900">Income</h2>
+              <p className="mt-1 text-xs text-gray-500">{MONTH_NAMES[month - 1]} {year} · MR1 + MR2</p>
+              <AmountRows rows={incomeRows} totalLabel="Total income" />
+            </section>
+            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <h2 className="font-black text-gray-900">Expenses</h2>
+              <p className="mt-1 text-xs text-gray-500">All costs incl. payroll &amp; fuel</p>
+              <AmountRows rows={expenseRows} totalLabel="Total expenses" />
+            </section>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function MonthlyBreakdown() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -393,8 +487,17 @@ export default function MonthlyBreakdown() {
         >
           <Bird size={17} /> Batch breakdown
         </button>
+        <button
+          onClick={() => setTab('calendar')}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black transition ${tab === 'calendar' ? 'bg-white text-green-800 shadow-sm' : 'text-gray-500'}`}
+        >
+          <CalendarDays size={17} /> Calendar breakdown
+        </button>
       </div>
 
+      {tab === 'calendar' && <CalendarBreakdown />}
+      {tab !== 'calendar' && (
+      <>
       <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-4">
         <div className={`grid gap-4 ${tab === 'harvest' ? 'md:grid-cols-[180px_1fr]' : ''}`}>
           {tab === 'harvest' && (
@@ -429,7 +532,7 @@ export default function MonthlyBreakdown() {
                 {tab === 'harvest' ? `${selection.farm} harvest cycle` : `Poultry batch #${selection.id}`}
               </p>
               <p className="mt-1 font-black">
-                {formatDate(selection.startDate)} → {formatDate(selection.endDate)}
+                {selection.startDate ? formatDate(selection.startDate) : 'Start'} → {selection.endDate ? formatDate(selection.endDate) : 'Present'}
               </p>
             </div>
             <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wider">
@@ -440,6 +543,8 @@ export default function MonthlyBreakdown() {
             ? <HarvestBreakdown cycle={selection} />
             : <PoultryBreakdown batch={selection} />}
         </div>
+      )}
+      </>
       )}
     </div>
   );

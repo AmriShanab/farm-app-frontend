@@ -95,6 +95,22 @@ const daysUntil = (dateStr) => {
   return Math.round((target - today) / 86400000);
 };
 
+// Add N days to a date string; returns YYYY-MM-DD.
+const addDays = (dateStr, n) => {
+  if (!dateStr || Number.isNaN(n)) return "";
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split("T")[0];
+};
+
+// Whole days between two date strings (to − from). "" if either is missing.
+const daysBetween = (from, to) => {
+  if (!from || !to) return "";
+  const a = new Date(from); a.setHours(0, 0, 0, 0);
+  const b = new Date(to); b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+};
+
 export default function CoconutSales() {
   const [farmFilter, setFarmFilter] = useState("MR1");
   const [sales, setSales] = useState([]);
@@ -565,17 +581,32 @@ export default function CoconutSales() {
             </div>
             <div className="md:col-span-4">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                Next Harvest Date
-                <span className="ml-1 text-gray-400 font-bold normal-case">(optional)</span>
+                Next Harvest
+                <span className="ml-1 text-gray-400 font-bold normal-case">(date or days — either fills the other)</span>
               </label>
-              <input
-                type="date"
-                name="next_harvest_date"
-                value={newRow.next_harvest_date}
-                onChange={handleRowChange}
-                className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500"
-                disabled={isSaving}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  name="next_harvest_date"
+                  value={newRow.next_harvest_date}
+                  onChange={handleRowChange}
+                  className="flex-1 p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500"
+                  disabled={isSaving}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="days"
+                  title="Days from sale date"
+                  value={daysBetween(newRow.date, newRow.next_harvest_date)}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    setNewRow((prev) => ({ ...prev, next_harvest_date: Number.isNaN(n) ? "" : addDays(prev.date, n) }));
+                  }}
+                  className="w-20 p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500 text-center"
+                  disabled={isSaving}
+                />
+              </div>
             </div>
             <div className="md:col-span-4"></div>
 
@@ -1332,16 +1363,30 @@ export default function CoconutSales() {
                 </div>
                 <div>
                   <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
-                    Next Harvest Date{" "}
-                    <span className="text-gray-400 font-bold normal-case">(optional)</span>
+                    Next Harvest{" "}
+                    <span className="text-gray-400 font-bold normal-case">(date or days)</span>
                   </label>
-                  <input
-                    type="date"
-                    name="next_harvest_date"
-                    value={editRow.next_harvest_date || ""}
-                    onChange={handleEditRowChange}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:border-green-500 focus:outline-none transition-all"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      name="next_harvest_date"
+                      value={editRow.next_harvest_date || ""}
+                      onChange={handleEditRowChange}
+                      className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 font-bold focus:border-green-500 focus:outline-none transition-all"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="days"
+                      title="Days from sale date"
+                      value={daysBetween(editRow.date, editRow.next_harvest_date)}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        setEditRow((prev) => ({ ...prev, next_harvest_date: Number.isNaN(n) ? "" : addDays(prev.date, n) }));
+                      }}
+                      className="w-20 border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:border-green-500 focus:outline-none text-center"
+                    />
+                  </div>
                 </div>
               </div>
 
