@@ -28,7 +28,7 @@ export default function PoultryExpenses() {
   const toast = useToast();
 
   useEffect(() => {
-    getPoultryBatches("active")
+    getPoultryBatches("")
       .then((res) => {
         setBatches(res);
         if (res.length > 0) {

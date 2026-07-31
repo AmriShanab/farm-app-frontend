@@ -1013,6 +1013,16 @@ export const updatePoultryBatch = async (id, data) => {
   return unwrapApiData(await response.json()) || {};
 };
 
+// Finalise a batch: records the net amount received and marks it completed.
+export const completePoultryBatch = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/batches/${id}/complete`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error(await parseApiError(response, "Failed to complete batch"));
+  return unwrapApiData(await response.json()) || {};
+};
+
 // --- POULTRY: FEED ENDPOINTS ---
 
 export const getPoultryFeed = async (batchId) => {

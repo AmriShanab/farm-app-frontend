@@ -85,7 +85,7 @@ export default function PoultryBatches() {
   };
 
   useEffect(() => {
-    getPoultryBatches("active")
+    getPoultryBatches("")
       .then(setData)
       .catch(() => setData([]))
       .finally(() => setIsLoading(false));

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Receipt, Loader2, TrendingUp, TrendingDown, Wheat, Pill, FileText, Egg, ShoppingBag } from "lucide-react";
-import { getPoultryBatches, getPoultrySettlement } from "../../services/api";
+import { Receipt, Loader2, TrendingUp, TrendingDown, Wheat, Pill, FileText, Egg, ShoppingBag, CheckCircle2, X } from "lucide-react";
+import { getPoultryBatches, getPoultrySettlement, completePoultryBatch } from "../../services/api";
+import { useToast } from "../../components/ToastProvider";
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-LK", {
@@ -10,21 +11,48 @@ const fmt = (n) =>
 
 const catLabel = (c) => ({ chicks: "Chicks", meat: "Meat", eggs: "Eggs", manure: "Manure" }[c] || c);
 
+const STATUS = {
+  active: { label: "Active", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  pending: { label: "Pending", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  completed: { label: "Completed", cls: "bg-green-50 text-green-700 border-green-200" },
+  closed: { label: "Closed", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+
 export default function PoultrySettlement() {
   const [batches, setBatches] = useState([]);
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [settlement, setSettlement] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const toast = useToast();
+
+  const reloadBatches = () => getPoultryBatches("").then((res) => { setBatches(res); return res; });
 
   useEffect(() => {
-    getPoultryBatches()
+    reloadBatches()
       .then((res) => {
-        setBatches(res);
         if (res.length > 0) setSelectedBatchId(res[0].id);
         else setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleComplete = async () => {
+    setCompleting(true);
+    try {
+      await completePoultryBatch(selectedBatchId);
+      const [s] = await Promise.all([getPoultrySettlement(selectedBatchId), reloadBatches()]);
+      setSettlement(s);
+      setConfirmComplete(false);
+      toast.success("Batch completed.");
+    } catch (e) {
+      toast.error(e?.message || "Failed to complete batch.");
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedBatchId) {
@@ -74,7 +102,7 @@ export default function PoultrySettlement() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-wrap items-center gap-4">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Batch:</label>
             <select
               value={selectedBatchId}
@@ -83,10 +111,31 @@ export default function PoultrySettlement() {
             >
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.notes || `Batch #${b.id}`} — {b.status === "active" ? "Active" : "Closed"}
+                  {b.notes || `Batch #${b.id}`} — {(STATUS[b.status] || STATUS.active).label}
                 </option>
               ))}
             </select>
+            {settlement && (
+              <>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${(STATUS[settlement.status] || STATUS.active).cls}`}>
+                  {(STATUS[settlement.status] || STATUS.active).label}
+                </span>
+                <div className="ml-auto">
+                  {settlement.status === "completed" ? (
+                    <span className="text-sm font-black text-green-700 flex items-center gap-1.5">
+                      <CheckCircle2 size={16} /> Final received: Rs. {fmt(settlement.finalReceived)}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmComplete(true)}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-black shadow-sm hover:bg-green-700 flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 size={15} /> Complete Batch
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {isLoading ? (
@@ -345,6 +394,49 @@ export default function PoultrySettlement() {
           ) : (
             <div className="text-center py-20 text-gray-500 font-bold">No settlement data.</div>
           )}
+        </div>
+      )}
+
+      {confirmComplete && settlement && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !completing && setConfirmComplete(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-black text-gray-900">Complete Batch</h3>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Final settle-up</p>
+              </div>
+              <button onClick={() => !completing && setConfirmComplete(false)} className="p-1.5 rounded-full text-gray-400 hover:bg-white transition-all shadow-sm">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm font-bold text-gray-700">Are the feed &amp; medicine payables paid?</p>
+              <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-bold text-gray-500">Total sales</span>
+                  <span className="font-bold text-gray-800">Rs. {fmt(settlement.totalSales)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-gray-500">Total payables (batch + feed + medicine)</span>
+                  <span className="font-bold text-red-600">− Rs. {fmt(settlement.totalPayables)}</span>
+                </div>
+                <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between items-center">
+                  <span className="text-xs font-black text-green-900 uppercase tracking-wider">Final amount received</span>
+                  <span className="text-xl font-black text-green-700">Rs. {fmt(settlement.netReceived)}</span>
+                </div>
+              </div>
+              <p className="text-[11px] font-semibold text-gray-400">Confirming locks the batch as completed and records the final amount received.</p>
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/60">
+              <button onClick={() => setConfirmComplete(false)} disabled={completing} className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                Cancel
+              </button>
+              <button onClick={handleComplete} disabled={completing} className="px-5 py-2 rounded-xl bg-green-600 text-white text-sm font-black shadow-md hover:bg-green-700 disabled:opacity-60 flex items-center gap-2">
+                {completing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Yes, complete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
