@@ -81,6 +81,21 @@ const getSalaryWeek = () => {
   };
 };
 
+// Snap any date to the Friday→Thursday salary week that contains it.
+const weekOf = (dateStr) => {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  const back = (d.getDay() - 5 + 7) % 7; // Fri->0, Sat->1, ... Thu->6
+  const friday = new Date(d);
+  friday.setDate(d.getDate() - back);
+  const thursday = new Date(friday);
+  thursday.setDate(friday.getDate() + 6);
+  return {
+    startDate: friday.toISOString().split("T")[0],
+    endDate: thursday.toISOString().split("T")[0],
+  };
+};
+
 export default function RunPayroll() {
   const salaryWeek = getSalaryWeek();
   const [payrollData, setPayrollData] = useState([]);
@@ -465,7 +480,13 @@ export default function RunPayroll() {
             <CalendarDays size={14} className="text-gray-400" />
             <select
               value={payFrequency}
-              onChange={(e) => setPayFrequency(e.target.value)}
+              onChange={(e) => {
+                setPayFrequency(e.target.value);
+                if (e.target.value === "weekly") {
+                  const w = weekOf(startDate);
+                  if (w) { setStartDate(w.startDate); setEndDate(w.endDate); }
+                }
+              }}
               className="text-sm font-bold text-gray-700 bg-transparent outline-none cursor-pointer"
             >
               <option value="weekly">Weekly Schedule</option>
@@ -480,7 +501,11 @@ export default function RunPayroll() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                const w = payFrequency === "weekly" ? weekOf(e.target.value) : null;
+                if (w) { setStartDate(w.startDate); setEndDate(w.endDate); }
+                else setStartDate(e.target.value);
+              }}
               className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
             />
           </div>
@@ -491,7 +516,11 @@ export default function RunPayroll() {
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                const w = payFrequency === "weekly" ? weekOf(e.target.value) : null;
+                if (w) { setStartDate(w.startDate); setEndDate(w.endDate); }
+                else setEndDate(e.target.value);
+              }}
               className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
             />
           </div>

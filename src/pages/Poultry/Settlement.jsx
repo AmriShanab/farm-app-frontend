@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Receipt, Loader2, TrendingUp, TrendingDown, Wheat, Pill, FileText, Egg, ShoppingBag, CheckCircle2, X } from "lucide-react";
+import { Receipt, Loader2, TrendingUp, TrendingDown, Wheat, Pill, FileText, Egg, ShoppingBag, CheckCircle2, X, Users } from "lucide-react";
 import { getPoultryBatches, getPoultrySettlement, completePoultryBatch } from "../../services/api";
 import { useToast } from "../../components/ToastProvider";
 
@@ -65,12 +65,12 @@ export default function PoultrySettlement() {
   }, [selectedBatchId]);
 
   const net = settlement?.netReceived ?? 0;
-  const totalCosts = settlement?.totalCosts ?? ((settlement?.feed?.totalCost || 0) + (settlement?.medicine?.totalCost || 0) + (settlement?.expenses?.totalCost || 0) + (settlement?.batchCost || 0));
+  const totalCosts = settlement?.totalCosts ?? ((settlement?.feed?.totalCost || 0) + (settlement?.medicine?.totalCost || 0) + (settlement?.expenses?.totalCost || 0) + (settlement?.batchCost || 0) + (settlement?.labour || 0));
   const totalIncome = settlement?.totalSales ?? 0;
   const profit = settlement?.profit ?? (totalIncome - totalCosts);
   const isProfit = profit >= 0;
 
-  // Expense lines for the ledger (right side). Additional expenses only shown if any.
+  // Expense lines for the ledger (right side). Additional expenses & labour only shown if any.
   const expenseLines = settlement
     ? [
         { key: "batch", label: "Batch Purchase", amount: settlement.batchCost || 0, Icon: Egg, color: "text-blue-600" },
@@ -78,6 +78,9 @@ export default function PoultrySettlement() {
         { key: "medicine", label: "Medicine", amount: settlement.medicine?.totalCost || 0, Icon: Pill, color: "text-purple-600" },
         ...((settlement.expenses?.totalCost || 0) > 0
           ? [{ key: "other", label: "Additional Expenses", amount: settlement.expenses.totalCost, Icon: FileText, color: "text-orange-600" }]
+          : []),
+        ...((settlement.labour || 0) > 0
+          ? [{ key: "labour", label: "Poultry Labour", amount: settlement.labour, Icon: Users, color: "text-teal-600" }]
           : []),
       ]
     : [];
@@ -317,7 +320,7 @@ export default function PoultrySettlement() {
                     <tfoot>
                       <tr className="border-t-2 border-gray-200 bg-gray-50/80">
                         <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Total Costs</td>
-                        <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(totalCosts)}</td>
+                        <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(totalCosts - (settlement.labour || 0))}</td>
                         <td className="p-4 text-right font-black text-green-700">
                           Rs. {fmt((settlement.batchPaid || 0) + (settlement.feed?.totalPaid || 0) + (settlement.medicine?.totalPaid || 0))}
                         </td>
