@@ -15,6 +15,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useToast } from "../components/ToastProvider";
+import DateRangePicker from "../components/DateRangePicker";
 import {
   createManagerSalary,
   finalizePayroll,
@@ -59,6 +60,11 @@ const managerSalaryToForm = (row, fallbackYear) => ({
   chequeDate: row?.chequeDate ?? "",
 });
 
+// Format a Date in LOCAL time (avoids toISOString's UTC shift that moved
+// dates back a day in timezones ahead of UTC, e.g. IST +5:30).
+const localISO = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const getSalaryWeek = () => {
   const today = new Date();
   const day = today.getDay();
@@ -76,14 +82,14 @@ const getSalaryWeek = () => {
   }
 
   return {
-    startDate: friday.toISOString().split("T")[0],
-    endDate: thursday.toISOString().split("T")[0],
+    startDate: localISO(friday),
+    endDate: localISO(thursday),
   };
 };
 
 // Snap any date to the Friday→Thursday salary week that contains it.
 const weekOf = (dateStr) => {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + "T00:00:00");
   if (Number.isNaN(d.getTime())) return null;
   const back = (d.getDay() - 5 + 7) % 7; // Fri->0, Sat->1, ... Thu->6
   const friday = new Date(d);
@@ -91,8 +97,8 @@ const weekOf = (dateStr) => {
   const thursday = new Date(friday);
   thursday.setDate(friday.getDate() + 6);
   return {
-    startDate: friday.toISOString().split("T")[0],
-    endDate: thursday.toISOString().split("T")[0],
+    startDate: localISO(friday),
+    endDate: localISO(thursday),
   };
 };
 
@@ -494,36 +500,12 @@ export default function RunPayroll() {
             </select>
           </div>
 
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Start
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                const w = payFrequency === "weekly" ? weekOf(e.target.value) : null;
-                if (w) { setStartDate(w.startDate); setEndDate(w.endDate); }
-                else setStartDate(e.target.value);
-              }}
-              className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              End
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                const w = payFrequency === "weekly" ? weekOf(e.target.value) : null;
-                if (w) { setStartDate(w.startDate); setEndDate(w.endDate); }
-                else setEndDate(e.target.value);
-              }}
-              className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
-            />
-          </div>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            mode={payFrequency === "monthly" ? "monthly" : "weekly"}
+            onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
+          />
         </div>
       </div>
 
