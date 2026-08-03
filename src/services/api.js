@@ -681,6 +681,65 @@ export const finalizePayroll = async (payload) => {
   }
 };
 
+// Batch-driven poultry payroll: preview computes each poultry worker's pay for
+// a batch (monthly salary × batch-days ÷ 30, less advances). Finalize records a
+// real payroll run tagged to the batch.
+export const getBatchPayrollPreview = async (batchId) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/hr/payroll/batch/preview?batchId=${encodeURIComponent(batchId)}`,
+      { method: "GET", headers: getHeaders() },
+    );
+    if (!response.ok) throw new Error("Failed to fetch batch payroll preview");
+    const payload = unwrapApiData(await response.json()) || {};
+    const payouts = Array.isArray(payload.payouts) ? payload.payouts : [];
+    return {
+      batch: payload.batch || {},
+      startDate: payload.startDate ?? "",
+      endDate: payload.endDate ?? "",
+      days: Number(payload.days ?? 0),
+      basicRate: Number(payload.basicRate ?? 0),
+      payouts: payouts.map((row) => ({
+        empId: String(row.empId ?? row.employee_id ?? row.id ?? ""),
+        name: row.name ?? row.employee_name ?? "",
+        monthlySalary: Number(row.monthlySalary ?? 0),
+        wagePerDay: Number(row.wagePerDay ?? 0),
+        days: Number(row.days ?? payload.days ?? 0),
+        basicPay: Number(row.basicPay ?? 0),
+        allowancePay: Number(row.allowancePay ?? 0),
+        grossPay: Number(row.grossPay ?? 0),
+        advanceDeducted: Number(row.advanceDeducted ?? 0),
+        advanceOutstanding: Number(row.advanceOutstanding ?? 0),
+        advanceDetails: Array.isArray(row.advanceDetails) ? row.advanceDetails : [],
+        netPay: Number(row.netPay ?? 0),
+        alreadyPaid: Boolean(row.alreadyPaid),
+        paidNet: row.paidNet == null ? null : Number(row.paidNet),
+      })),
+    };
+  } catch (error) {
+    console.error("API Error (getBatchPayrollPreview):", error);
+    throw error;
+  }
+};
+
+export const finalizeBatchPayroll = async (payload) => {
+  try {
+    const response = await fetch(`${BASE_URL}/hr/payroll/batch/finalize`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok || data?.success === false) {
+      throw new Error(data?.error?.message || "Failed to run batch payroll");
+    }
+    return unwrapApiData(data) || {};
+  } catch (error) {
+    console.error("API Error (finalizeBatchPayroll):", error);
+    throw error;
+  }
+};
+
 export const getPayrollRunDetails = async (id) => {
   try {
     const response = await fetch(`${BASE_URL}/hr/payroll/history/${id}`, { method: "GET", headers: getHeaders() });

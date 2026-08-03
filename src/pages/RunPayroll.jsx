@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../components/ToastProvider";
 import DateRangePicker from "../components/DateRangePicker";
+import BatchPayrollPanel from "../components/BatchPayrollPanel";
 import {
   createManagerSalary,
   finalizePayroll,
@@ -140,6 +141,13 @@ export default function RunPayroll() {
     let active = true;
 
     const loadData = async () => {
+      // Batch schedule is driven entirely by BatchPayrollPanel; skip the
+      // attendance-based weekly/monthly preview load.
+      if (payFrequency === "batch") {
+        setIsLoading(false);
+        setPayrollData([]);
+        return;
+      }
       setIsLoading(true);
       setError(null);
       try {
@@ -497,15 +505,18 @@ export default function RunPayroll() {
             >
               <option value="weekly">Weekly Schedule</option>
               <option value="monthly">Monthly Schedule</option>
+              <option value="batch">Batch Schedule</option>
             </select>
           </div>
 
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            mode={payFrequency === "monthly" ? "monthly" : "weekly"}
-            onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
-          />
+          {payFrequency !== "batch" && (
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              mode={payFrequency === "monthly" ? "monthly" : "weekly"}
+              onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
+            />
+          )}
         </div>
       </div>
 
@@ -523,6 +534,10 @@ export default function RunPayroll() {
         </div>
       )}
 
+      {payFrequency === "batch" ? (
+        <BatchPayrollPanel />
+      ) : (
+      <>
       {/* ── PREMIUM KPI STAT CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {[
@@ -894,6 +909,8 @@ export default function RunPayroll() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* ── HISTORICAL ARCHIVES ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
