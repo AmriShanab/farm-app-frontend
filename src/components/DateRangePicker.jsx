@@ -5,7 +5,8 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const WEEKDAYS_MON = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const WEEKDAYS_FRI = ["Fr", "Sa", "Su", "Mo", "Tu", "We", "Th"];
 
 const iso = (d) => {
   const x = new Date(d);
@@ -60,10 +61,15 @@ export default function DateRangePicker({ startDate, endDate, mode = "weekly", o
         date: addDays(today, -7 * n),
       }));
 
+  // Weekly mode uses a Friday-first grid so every row IS one Fri→Thu salary
+  // week (pick a stripe, not a date). Monthly keeps a Monday-first grid.
+  const weekly = mode !== "monthly";
+  const WEEKDAYS = weekly ? WEEKDAYS_FRI : WEEKDAYS_MON;
   const first = new Date(view.getFullYear(), view.getMonth(), 1);
-  const lead = (first.getDay() + 6) % 7; // Monday-first offset
+  const lead = (first.getDay() - (weekly ? 5 : 1) + 7) % 7;
   const gridStart = addDays(first, -lead);
   const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const weeks = Array.from({ length: 6 }, (_, r) => cells.slice(r * 7, r * 7 + 7));
 
   return (
     <div ref={ref} className="relative">
@@ -114,39 +120,79 @@ export default function DateRangePicker({ startDate, endDate, mode = "weekly", o
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-7 text-center">
+            <div className="grid grid-cols-7 text-center mb-1">
               {WEEKDAYS.map((w) => (
-                <div key={w} className="text-xs font-bold text-gray-400 pb-2">{w}</div>
+                <div key={w} className="text-xs font-bold text-gray-400 pb-1">{w}</div>
               ))}
-              {cells.map((d, i) => {
-                const inMonth = d.getMonth() === view.getMonth();
-                const inRange = start && end && d >= start && d <= end;
-                const isStart = sameDay(d, start);
-                const isEnd = sameDay(d, end);
-                const edge = isStart || isEnd;
-                const col = i % 7;
-                const roundL = inRange && (isStart || col === 0);
-                const roundR = inRange && (isEnd || col === 6);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => commit(d)}
-                    className={`relative h-10 text-sm font-bold flex items-center justify-center
-                      ${inRange ? "bg-blue-50" : ""}
-                      ${roundL ? "rounded-l-full" : ""}
-                      ${roundR ? "rounded-r-full" : ""}`}
-                  >
-                    <span
-                      className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors
-                        ${edge ? "bg-blue-600 text-white shadow-sm" : inMonth ? "text-gray-800 hover:bg-gray-100" : "text-gray-300"}`}
-                    >
-                      {d.getDate()}
-                    </span>
-                  </button>
-                );
-              })}
             </div>
+
+            {weekly ? (
+              // Each row is one Fri→Thu week: selected week = solid blue band
+              // with circled endpoints; other weeks = muted stripes you can pick.
+              <div className="space-y-1">
+                {weeks.map((week, r) => {
+                  const isSel = start && sameDay(week[0], start);
+                  return (
+                    <div
+                      key={r}
+                      onClick={() => commit(week[0])}
+                      className={`group grid grid-cols-7 rounded-full cursor-pointer transition-colors
+                        ${isSel ? "bg-blue-100" : "bg-gray-100 hover:bg-blue-50"}`}
+                    >
+                      {week.map((d, c) => {
+                        const inMonth = d.getMonth() === view.getMonth();
+                        const edge = isSel && (c === 0 || c === 6);
+                        return (
+                          <div key={c} className="relative h-10 flex items-center justify-center">
+                            <span
+                              className={`w-9 h-9 flex items-center justify-center rounded-full text-sm font-bold transition-colors
+                                ${edge
+                                  ? "bg-blue-600 text-white shadow-sm"
+                                  : inMonth
+                                  ? "text-gray-700 group-hover:text-blue-700"
+                                  : "text-gray-300 group-hover:text-blue-300"}`}
+                            >
+                              {d.getDate()}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-7 text-center">
+                {cells.map((d, i) => {
+                  const inMonth = d.getMonth() === view.getMonth();
+                  const inRange = start && end && d >= start && d <= end;
+                  const isStart = sameDay(d, start);
+                  const isEnd = sameDay(d, end);
+                  const edge = isStart || isEnd;
+                  const col = i % 7;
+                  const roundL = inRange && (isStart || col === 0);
+                  const roundR = inRange && (isEnd || col === 6);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => commit(d)}
+                      className={`relative h-10 text-sm font-bold flex items-center justify-center
+                        ${inRange ? "bg-blue-50" : ""}
+                        ${roundL ? "rounded-l-full" : ""}
+                        ${roundR ? "rounded-r-full" : ""}`}
+                    >
+                      <span
+                        className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors
+                          ${edge ? "bg-blue-600 text-white shadow-sm" : inMonth ? "text-gray-800 hover:bg-gray-100" : "text-gray-300"}`}
+                      >
+                        {d.getDate()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
