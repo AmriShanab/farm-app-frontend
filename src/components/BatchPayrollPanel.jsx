@@ -78,9 +78,10 @@ export default function BatchPayrollPanel() {
     () => batches.find((b) => String(b.id) === String(batchId)),
     [batches, batchId],
   );
-  const runnable =
-    selectedBatch &&
-    (selectedBatch.status === "pending" || selectedBatch.status === "completed");
+  // Pay is attendance-based and incremental, so payroll can be run at any point
+  // in the batch (a month now, the remainder at batch end) — except once it's
+  // closed. The per-row button is enabled only when there's something new to pay.
+  const runnable = selectedBatch && selectedBatch.status !== "closed";
 
   const totals = useMemo(() => {
     const rows = preview?.payouts || [];
@@ -159,13 +160,13 @@ export default function BatchPayrollPanel() {
         )}
       </div>
 
-      {/* Ready-to-run hint */}
-      {selectedBatch && !runnable && (
-        <div className="mb-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm font-semibold text-amber-800">
+      {/* Info hint */}
+      {selectedBatch && runnable && selectedBatch.status === "active" && (
+        <div className="mb-4 flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-semibold text-blue-800">
           <Info size={16} className="mt-0.5 shrink-0" />
-          This batch is still <b>active</b> — its payroll can be run once all
-          chicks are sold (the batch moves to <b>pending</b>) or the batch is
-          completed. The figures below are a live preview to date.
+          Pay is based on attendance and paid in installments — you can run a
+          month now and the remaining days at batch end. Each run pays only the
+          days worked since the last one.
         </div>
       )}
 
@@ -198,8 +199,9 @@ export default function BatchPayrollPanel() {
               <tr className="bg-[#f7faf7] text-gray-500 text-[11px] font-black uppercase tracking-wider">
                 <th className="text-left px-4 py-3">Employee</th>
                 <th className="text-right px-4 py-3">Monthly Salary</th>
-                <th className="text-right px-4 py-3">Batch Days</th>
-                <th className="text-right px-4 py-3">Gross Pay</th>
+                <th className="text-right px-4 py-3">Days Worked</th>
+                <th className="text-right px-4 py-3">Paid So Far</th>
+                <th className="text-right px-4 py-3">To Pay</th>
                 <th className="text-right px-4 py-3">Advance</th>
                 <th className="text-right px-4 py-3">Net Pay</th>
                 <th className="text-right px-4 py-3">Action</th>
@@ -208,7 +210,7 @@ export default function BatchPayrollPanel() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
                     <Loader2 className="animate-spin inline mr-2" size={16} />
                     Loading…
                   </td>
@@ -217,13 +219,16 @@ export default function BatchPayrollPanel() {
               {!loading &&
                 (preview?.payouts?.length ?? 0) === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-gray-400 font-semibold">
+                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 font-semibold">
                       No poultry workers found for this batch.
                     </td>
                   </tr>
                 )}
               {!loading &&
-                preview?.payouts?.map((row) => (
+                preview?.payouts?.map((row) => {
+                  const toPay = row.grossPay || 0;
+                  const fullyPaid = toPay <= 0.009 && (row.paidGross || 0) > 0;
+                  return (
                   <tr key={row.empId} className="border-t border-[#f0f4f0]">
                     <td className="px-4 py-3 font-bold text-gray-800">
                       {row.name}
@@ -234,11 +239,14 @@ export default function BatchPayrollPanel() {
                     <td className="px-4 py-3 text-right text-gray-600">
                       {row.days}{" "}
                       <span className="text-gray-400 text-xs">
-                        (÷30 × {fmt(row.wagePerDay)})
+                        (× {fmt(row.wagePerDay)}/day)
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-right text-gray-600">
+                      {(row.paidGross || 0) > 0 ? `Rs. ${fmt(row.paidGross)}` : "—"}
+                    </td>
                     <td className="px-4 py-3 text-right font-bold text-gray-900">
-                      Rs. {fmt(row.grossPay)}
+                      Rs. {fmt(toPay)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-600">
                       {row.advanceOutstanding > 0
@@ -246,13 +254,15 @@ export default function BatchPayrollPanel() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-black text-green-700">
-                      Rs. {fmt(row.alreadyPaid ? row.paidNet : row.netPay)}
+                      Rs. {fmt(row.netPay)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {row.alreadyPaid ? (
+                      {fullyPaid ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200">
                           <CheckCircle2 size={13} /> Paid
                         </span>
+                      ) : toPay <= 0.009 ? (
+                        <span className="text-xs font-bold text-gray-400">—</span>
                       ) : (
                         <button
                           type="button"
@@ -274,7 +284,8 @@ export default function BatchPayrollPanel() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
             </tbody>
           </table>
         </div>
@@ -294,14 +305,16 @@ export default function BatchPayrollPanel() {
               Run Batch Payroll — {confirm.row.name}
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Batch #{batchId} · {preview?.days} days · {preview?.startDate} →{" "}
-              {preview?.endDate}
+              Batch #{batchId} · {preview?.startDate} → {preview?.endDate}
+              {(confirm.row.paidGross || 0) > 0 && (
+                <> · already paid Rs. {fmt(confirm.row.paidGross)}</>
+              )}
             </p>
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500 font-semibold">
-                  Gross ({fmt(confirm.row.monthlySalary)} × {preview?.days} ÷ 30)
+                  To pay ({confirm.row.days} days worked × {fmt(confirm.row.wagePerDay)}/day)
                 </span>
                 <span className="font-bold text-gray-900">
                   Rs. {fmt(confirm.row.grossPay)}
