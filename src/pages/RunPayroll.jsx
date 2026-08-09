@@ -375,14 +375,19 @@ export default function RunPayroll() {
         const empIdStr = String(emp.employeeId || emp.empId || emp.id);
         const payout = details.payouts?.find((p) => String(p.empId) === empIdStr);
         if (payout) {
-          setBreakdownEmp(payout);
+          setBreakdownEmp({
+            ...payout,
+            periodStart: matchingRun.startDate,
+            periodEnd: matchingRun.endDate,
+            paidOn: matchingRun.finalizedAt,
+          });
           return;
         }
       } catch {
         // fall through to preview data
       }
     }
-    setBreakdownEmp(emp);
+    setBreakdownEmp({ ...emp, periodStart: startDate, periodEnd: endDate });
   };
 
   const handleViewHistoricalRun = async (runRow) => {
@@ -852,7 +857,7 @@ export default function RunPayroll() {
                             {isItemSaving ? "Processing..." : "Finalize Pay"}
                           </button>
                           <button
-                            onClick={() => setBreakdownEmp(emp)}
+                            onClick={() => setBreakdownEmp({ ...emp, periodStart: startDate, periodEnd: endDate })}
                             className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-sm flex items-center gap-1"
                           >
                             <FileCheck size={12} /> Slip
@@ -1475,6 +1480,18 @@ export default function RunPayroll() {
                   {breakdownEmp.role} &middot;{" "}
                   {breakdownEmp.farm || breakdownEmp.homeFarm}
                 </p>
+                {(breakdownEmp.periodStart || startDate) && (
+                  <p className="text-xs font-bold text-green-700 mt-1.5 flex items-center gap-1.5">
+                    <CalendarDays size={12} />
+                    {breakdownEmp.periodStart || startDate} &rarr;{" "}
+                    {breakdownEmp.periodEnd || endDate}
+                  </p>
+                )}
+                {breakdownEmp.paidOn && (
+                  <p className="text-[11px] font-semibold text-gray-400 mt-0.5">
+                    Paid on {String(breakdownEmp.paidOn).slice(0, 10)}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setBreakdownEmp(null)}
@@ -1713,7 +1730,7 @@ export default function RunPayroll() {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <button
-                          onClick={() => setBreakdownEmp(emp)}
+                          onClick={() => setBreakdownEmp({ ...emp, periodStart: historicalRun.startDate, periodEnd: historicalRun.endDate, paidOn: historicalRun.finalizedAt })}
                           className="px-3 py-1.5 text-[10px] font-bold text-blue-700 bg-white border border-blue-200 rounded-lg shadow-sm hover:bg-blue-50 transition-colors uppercase tracking-wider flex items-center justify-center gap-1 mx-auto"
                         >
                           <FileCheck size={12} /> View Slip
