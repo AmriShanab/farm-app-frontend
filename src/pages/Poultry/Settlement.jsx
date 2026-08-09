@@ -169,6 +169,11 @@ export default function PoultrySettlement() {
                   <p className="text-[10px] text-gray-400 mt-1">
                     Batch: {fmt(settlement.batchPayable)} | Feed: {fmt(settlement.feed?.totalPayable)} | Med: {fmt(settlement.medicine?.totalPayable)}
                   </p>
+                  {(settlement.totalReceivables || 0) > 0 && (
+                    <p className="text-[10px] font-bold text-green-600 mt-1">
+                      Receivable (refund due from returns): Rs. {fmt(settlement.totalReceivables)}
+                    </p>
+                  )}
                 </div>
 
                 <div className={`border rounded-xl p-5 shadow-sm ${isProfit ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
@@ -278,6 +283,7 @@ export default function PoultrySettlement() {
                         <th className="p-4 text-left">Category</th>
                         <th className="p-4 text-right">Total Cost</th>
                         <th className="p-4 text-right">Paid</th>
+                        <th className="p-4 text-right">Returned</th>
                         <th className="p-4 text-right">Payable (Supplier)</th>
                       </tr>
                     </thead>
@@ -288,6 +294,7 @@ export default function PoultrySettlement() {
                         </td>
                         <td className="p-4 text-right font-bold">Rs. {fmt(settlement.batchCost)}</td>
                         <td className="p-4 text-right font-bold text-green-700">Rs. {fmt(settlement.batchPaid)}</td>
+                        <td className="p-4 text-right font-bold text-gray-400">—</td>
                         <td className="p-4 text-right font-black text-red-600">Rs. {fmt(settlement.batchPayable)}</td>
                       </tr>
                       <tr className="border-t border-gray-50 hover:bg-gray-50/50">
@@ -296,6 +303,9 @@ export default function PoultrySettlement() {
                         </td>
                         <td className="p-4 text-right font-bold">Rs. {fmt(settlement.feed?.totalCost)}</td>
                         <td className="p-4 text-right font-bold text-green-700">Rs. {fmt(settlement.feed?.totalPaid)}</td>
+                        <td className="p-4 text-right font-bold text-amber-700">
+                          {(settlement.feed?.returned || 0) > 0 ? `Rs. ${fmt(settlement.feed?.returned)}` : "—"}
+                        </td>
                         <td className="p-4 text-right font-black text-red-600">Rs. {fmt(settlement.feed?.totalPayable)}</td>
                       </tr>
                       <tr className="border-t border-gray-50 hover:bg-gray-50/50">
@@ -304,6 +314,9 @@ export default function PoultrySettlement() {
                         </td>
                         <td className="p-4 text-right font-bold">Rs. {fmt(settlement.medicine?.totalCost)}</td>
                         <td className="p-4 text-right font-bold text-green-700">Rs. {fmt(settlement.medicine?.totalPaid)}</td>
+                        <td className="p-4 text-right font-bold text-amber-700">
+                          {(settlement.medicine?.returned || 0) > 0 ? `Rs. ${fmt(settlement.medicine?.returned)}` : "—"}
+                        </td>
                         <td className="p-4 text-right font-black text-red-600">Rs. {fmt(settlement.medicine?.totalPayable)}</td>
                       </tr>
                       {(settlement.expenses?.totalCost || 0) > 0 && (
@@ -312,6 +325,7 @@ export default function PoultrySettlement() {
                             <FileText size={14} className="text-orange-600" /> Additional Expenses
                           </td>
                           <td className="p-4 text-right font-bold">Rs. {fmt(settlement.expenses?.totalCost)}</td>
+                          <td className="p-4 text-right font-bold text-gray-400">—</td>
                           <td className="p-4 text-right font-bold text-gray-400">—</td>
                           <td className="p-4 text-right font-bold text-gray-400">—</td>
                         </tr>
@@ -323,6 +337,9 @@ export default function PoultrySettlement() {
                         <td className="p-4 text-right font-black text-gray-900">Rs. {fmt(totalCosts - (settlement.labour || 0))}</td>
                         <td className="p-4 text-right font-black text-green-700">
                           Rs. {fmt((settlement.batchPaid || 0) + (settlement.feed?.totalPaid || 0) + (settlement.medicine?.totalPaid || 0))}
+                        </td>
+                        <td className="p-4 text-right font-black text-amber-700">
+                          Rs. {fmt((settlement.feed?.returned || 0) + (settlement.medicine?.returned || 0))}
                         </td>
                         <td className="p-4 text-right font-black text-red-600">Rs. {fmt(settlement.totalPayables)}</td>
                       </tr>
@@ -424,6 +441,12 @@ export default function PoultrySettlement() {
                   <span className="font-bold text-gray-500">Total payables (batch + feed + medicine)</span>
                   <span className="font-bold text-red-600">− Rs. {fmt(settlement.totalPayables)}</span>
                 </div>
+                {(settlement.totalReceivables || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-500">Refund due from returns</span>
+                    <span className="font-bold text-green-600">+ Rs. {fmt(settlement.totalReceivables)}</span>
+                  </div>
+                )}
                 <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between items-center">
                   <span className="text-xs font-black text-green-900 uppercase tracking-wider">Final amount received</span>
                   <span className="text-xl font-black text-green-700">Rs. {fmt(settlement.netReceived)}</span>
