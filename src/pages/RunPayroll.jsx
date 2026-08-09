@@ -1502,25 +1502,6 @@ export default function RunPayroll() {
             </div>
 
             <div className="p-5 grid gap-4 text-sm bg-white">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                    Wage / Day
-                  </span>
-                  <span className="font-bold text-gray-800">
-                    Rs. {fmt(breakdownEmp.wagePerDay)}
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                    Total Gross
-                  </span>
-                  <span className="font-bold text-green-700">
-                    Rs. {fmt(breakdownEmp.grossPay)}
-                  </span>
-                </div>
-              </div>
-
               {/* Salary composition for EPF/ETF: Basic + Allowance = Gross */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
