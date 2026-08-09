@@ -161,6 +161,10 @@ function ExpenseCategoryTab({ category, farm, year }) {
     chequeNo: "",
     chequeDate: "",
     unitsUsed: "",
+    meterStart: "",
+    meterEnd: "",
+    startDate: "",
+    endDate: "",
     billAmount: "",
     meterId: "",
     vehicle: "",
@@ -276,6 +280,10 @@ function ExpenseCategoryTab({ category, farm, year }) {
     chequeNo: "",
     chequeDate: "",
     unitsUsed: "",
+    meterStart: "",
+    meterEnd: "",
+    startDate: "",
+    endDate: "",
     billAmount: "",
     meterId: "",
     vehicle: "",
@@ -309,6 +317,10 @@ function ExpenseCategoryTab({ category, farm, year }) {
       chequeNo: row.chequeNo ?? "",
       chequeDate: row.chequeDate ?? "",
       unitsUsed: row.unitsUsed ?? "",
+      meterStart: row.meterStart ?? "",
+      meterEnd: row.meterEnd ?? "",
+      startDate: row.startDate ?? "",
+      endDate: row.endDate ?? "",
       billAmount: row.billAmount ?? "",
       meterId: row.meterId ?? "",
       vehicle: row.vehicle ?? "",
@@ -356,11 +368,23 @@ function ExpenseCategoryTab({ category, farm, year }) {
       createFn = createMaintenanceExpense;
       updateFn = updateMaintenanceExpense;
     } else if (category === "ceb") {
+      // Units used is derived from the meter readings; fall back to a manual
+      // value only if readings aren't provided.
+      const mStart = parseFloat(form.meterStart);
+      const mEnd = parseFloat(form.meterEnd);
+      const derivedUnits =
+        !Number.isNaN(mStart) && !Number.isNaN(mEnd)
+          ? Math.max(0, mEnd - mStart)
+          : parseFloat(form.unitsUsed || 0);
       payload = {
         date: form.date,
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
         meter_id: form.meterId || null,
         billAmount: parseFloat(form.billAmount || 0),
-        unitsUsed: parseFloat(form.unitsUsed || 0),
+        unitsUsed: derivedUnits,
+        meterStart: form.meterStart === "" ? null : mStart,
+        meterEnd: form.meterEnd === "" ? null : mEnd,
         chequeNo: form.chequeNo || "",
         chequeDate: form.chequeDate || null,
       };
@@ -729,18 +753,98 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     ))}
                   </select>
                 </div>
-                <div className="md:col-span-6">
+                {/* Billing period → auto day count */}
+                <div className="md:col-span-3">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Units Used
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(e) =>
+                      setForm({ ...form, startDate: e.target.value })
+                    }
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.endDate}
+                    onChange={(e) =>
+                      setForm({ ...form, endDate: e.target.value })
+                    }
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500"
+                  />
+                </div>
+                <div className="md:col-span-6 flex items-end">
+                  <div className="px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-200 text-sm font-black text-gray-600 w-full">
+                    Billing days:{" "}
+                    <span className="text-gray-900">
+                      {form.startDate && form.endDate
+                        ? Math.max(
+                            0,
+                            Math.round(
+                              (new Date(form.endDate) - new Date(form.startDate)) /
+                                86400000,
+                            ),
+                          )
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Meter readings → auto units used */}
+                <div className="md:col-span-4">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                    Meter Start
                   </label>
                   <input
                     type="number"
-                    placeholder="Total kWh"
-                    value={form.unitsUsed}
+                    placeholder="Reading"
+                    value={form.meterStart}
                     onChange={(e) =>
-                      setForm({ ...form, unitsUsed: e.target.value })
+                      setForm({ ...form, meterStart: e.target.value })
                     }
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500"
+                  />
+                </div>
+                <div className="md:col-span-4">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                    Meter End
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="Reading"
+                    value={form.meterEnd}
+                    onChange={(e) =>
+                      setForm({ ...form, meterEnd: e.target.value })
+                    }
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500"
+                  />
+                </div>
+                <div className="md:col-span-4">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                    Units Used (auto)
+                  </label>
+                  <input
+                    type="number"
+                    readOnly
+                    value={
+                      form.meterStart !== "" &&
+                      form.meterEnd !== "" &&
+                      !Number.isNaN(parseFloat(form.meterStart)) &&
+                      !Number.isNaN(parseFloat(form.meterEnd))
+                        ? Math.max(
+                            0,
+                            parseFloat(form.meterEnd) - parseFloat(form.meterStart),
+                          )
+                        : form.unitsUsed
+                    }
+                    className="w-full p-2.5 text-sm border border-gray-200 bg-gray-50 rounded-lg outline-none text-right font-black text-gray-700"
                   />
                 </div>
                 <div className="md:col-span-12">
@@ -1142,6 +1246,20 @@ function ExpenseCategoryTab({ category, farm, year }) {
                               <p className="font-black text-gray-700">
                                 {row.unitsUsed} kWh
                               </p>
+                              {row.startDate && row.endDate && (
+                                <p className="text-[10px] text-gray-500 mt-0.5">
+                                  {row.startDate} → {row.endDate} (
+                                  {Math.max(
+                                    0,
+                                    Math.round(
+                                      (new Date(row.endDate) -
+                                        new Date(row.startDate)) /
+                                        86400000,
+                                    ),
+                                  )}
+                                  d)
+                                </p>
+                              )}
                               {row.meterId && (
                                 <p className="text-[10px] text-gray-500 mt-0.5">
                                   Acc. {row.meterId}

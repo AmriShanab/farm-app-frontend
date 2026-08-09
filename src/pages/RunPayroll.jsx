@@ -1534,6 +1534,11 @@ export default function RunPayroll() {
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
                       Basic Salary
                     </span>
+                    {(breakdownEmp.basicRate || 0) > 0 && (
+                      <span className="block text-[10px] font-bold text-gray-500 mt-0.5">
+                        Rs. {fmt(breakdownEmp.basicRate)}/day
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="block text-lg font-black text-blue-700">

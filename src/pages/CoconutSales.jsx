@@ -95,6 +95,20 @@ const daysUntil = (dateStr) => {
   return Math.round((target - today) / 86400000);
 };
 
+// A sale's predicted next-harvest is "fulfilled" once another harvest for the
+// same farm is recorded on or after that date. Only an unfulfilled, past-due
+// prediction is overdue — if a harvest was logged on/after the date, it's done.
+const harvestFulfilled = (sale, allSales) => {
+  if (!sale?.next_harvest_date) return false;
+  return allSales.some(
+    (s) =>
+      s.id !== sale.id &&
+      s.farm === sale.farm &&
+      s.date &&
+      s.date >= sale.next_harvest_date,
+  );
+};
+
 // Add N days to a date string; returns YYYY-MM-DD.
 const addDays = (dateStr, n) => {
   if (!dateStr || Number.isNaN(n)) return "";
@@ -926,6 +940,17 @@ export default function CoconutSales() {
                         </span>
                         {sale.next_harvest_date &&
                           (() => {
+                            // Fulfilled by a later harvest → never overdue.
+                            if (harvestFulfilled(sale, sales)) {
+                              return (
+                                <span
+                                  className="mt-1 inline-flex items-center gap-1 border rounded px-1.5 py-0.5 text-[10px] font-black w-max bg-green-50 text-green-700 border-green-100"
+                                  title={`Next harvest: ${sale.next_harvest_date} — harvested`}
+                                >
+                                  <CalendarClock size={10} /> Harvested
+                                </span>
+                              );
+                            }
                             const d = daysUntil(sale.next_harvest_date);
                             const tone =
                               d < 0
@@ -1128,15 +1153,18 @@ export default function CoconutSales() {
                   {/* Next Harvest */}
                   {s.next_harvest_date &&
                     (() => {
+                      const fulfilled = harvestFulfilled(s, sales);
                       const d = daysUntil(s.next_harvest_date);
-                      const tone =
-                        d < 0
+                      const tone = fulfilled
+                        ? "border-green-200 bg-green-50 text-green-800"
+                        : d < 0
                           ? "border-red-200 bg-red-50 text-red-700"
                           : d <= 7
                             ? "border-amber-200 bg-amber-50 text-amber-800"
                             : "border-green-200 bg-green-50 text-green-800";
-                      const label =
-                        d < 0
+                      const label = fulfilled
+                        ? "Harvested"
+                        : d < 0
                           ? `Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}`
                           : d === 0
                             ? "Due today"

@@ -140,6 +140,14 @@ const normalizeGeneralExpenseRecord = (record) => {
     normalized.permanentLaborCost = normalized.permanent_labor_cost;
   if ("meter_id" in normalized && !("meterId" in normalized))
     normalized.meterId = normalized.meter_id;
+  if ("start_date" in normalized && !("startDate" in normalized))
+    normalized.startDate = normalized.start_date;
+  if ("end_date" in normalized && !("endDate" in normalized))
+    normalized.endDate = normalized.end_date;
+  if ("meter_start" in normalized && !("meterStart" in normalized))
+    normalized.meterStart = normalized.meter_start;
+  if ("meter_end" in normalized && !("meterEnd" in normalized))
+    normalized.meterEnd = normalized.meter_end;
   if ("fuel_type" in normalized && !("fuelType" in normalized))
     normalized.fuelType = normalized.fuel_type;
 
