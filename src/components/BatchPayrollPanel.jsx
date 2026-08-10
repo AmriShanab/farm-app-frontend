@@ -7,13 +7,17 @@ import {
   CalendarRange,
   Play,
   Info,
+  FileCheck,
+  X,
 } from "lucide-react";
 import {
   getPoultryBatches,
   getBatchPayrollPreview,
   finalizeBatchPayroll,
+  savePayslipSignature,
 } from "../services/api";
 import { useToast } from "./ToastProvider";
+import SignaturePad from "./SignaturePad";
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-IN", {
@@ -39,6 +43,8 @@ export default function BatchPayrollPanel() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [confirm, setConfirm] = useState(null); // { row, advance }
+  const [slip, setSlip] = useState(null); // paid row shown as a slip
+  const [sigSaving, setSigSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -118,6 +124,21 @@ export default function BatchPayrollPanel() {
       toast.error(e.message || "Failed to run batch payroll.");
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleSaveSignature = async (dataUrl) => {
+    if (!slip?.itemId) return;
+    setSigSaving(true);
+    try {
+      await savePayslipSignature(slip.itemId, dataUrl);
+      setSlip((prev) => ({ ...prev, signature: dataUrl }));
+      toast.success("Signature saved.");
+      await loadPreview(batchId);
+    } catch (e) {
+      toast.error(e.message || "Failed to save signature.");
+    } finally {
+      setSigSaving(false);
     }
   };
 
@@ -257,31 +278,42 @@ export default function BatchPayrollPanel() {
                       Rs. {fmt(row.netPay)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {fullyPaid ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200">
-                          <CheckCircle2 size={13} /> Paid
-                        </span>
-                      ) : toPay <= 0.009 ? (
-                        <span className="text-xs font-bold text-gray-400">—</span>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!runnable || savingId === row.empId}
-                          onClick={() => openConfirm(row)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-colors ${
-                            runnable
-                              ? "bg-green-700 text-white hover:bg-green-800"
-                              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          }`}
-                        >
-                          {savingId === row.empId ? (
-                            <Loader2 className="animate-spin" size={13} />
-                          ) : (
-                            <Play size={13} />
-                          )}
-                          Run Payroll
-                        </button>
-                      )}
+                      <div className="inline-flex items-center gap-2">
+                        {fullyPaid ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200">
+                            <CheckCircle2 size={13} /> Paid
+                          </span>
+                        ) : toPay <= 0.009 ? (
+                          <span className="text-xs font-bold text-gray-400">—</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!runnable || savingId === row.empId}
+                            onClick={() => openConfirm(row)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-colors ${
+                              runnable
+                                ? "bg-green-700 text-white hover:bg-green-800"
+                                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            }`}
+                          >
+                            {savingId === row.empId ? (
+                              <Loader2 className="animate-spin" size={13} />
+                            ) : (
+                              <Play size={13} />
+                            )}
+                            Run Payroll
+                          </button>
+                        )}
+                        {(row.paidGross || 0) > 0 && row.itemId && (
+                          <button
+                            type="button"
+                            onClick={() => setSlip(row)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50"
+                          >
+                            <FileCheck size={13} /> Slip
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   );
@@ -388,6 +420,94 @@ export default function BatchPayrollPanel() {
                 )}
                 Confirm &amp; Pay
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slip modal */}
+      {slip && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
+          onClick={() => !sigSaving && setSlip(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 mb-0.5">{slip.name}</h3>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Poultry &middot; Batch #{batchId}
+                </p>
+                <p className="text-xs font-bold text-green-700 mt-1">
+                  {preview?.startDate} &rarr; {preview?.endDate}
+                </p>
+              </div>
+              <button
+                onClick={() => setSlip(null)}
+                className="p-1.5 rounded-full text-gray-400 hover:bg-white hover:text-gray-700 shadow-sm"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Days Worked</span>
+                  <span className="font-bold text-gray-800">{slip.days}</span>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Monthly Salary</span>
+                  <span className="font-bold text-gray-800">Rs. {fmt(slip.monthlySalary)}</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+                  Salary Composition (EPF)
+                </div>
+                <div className="p-4 grid grid-cols-2 divide-x divide-gray-100 text-center">
+                  <div>
+                    <span className="block text-lg font-black text-gray-900">Rs. {fmt(slip.paidBasic)}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Basic</span>
+                  </div>
+                  <div>
+                    <span className="block text-lg font-black text-blue-700">Rs. {fmt(slip.paidAllowance)}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Allowance</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2 shadow-sm">
+                <div className="flex justify-between">
+                  <span className="font-bold text-gray-500">Gross (paid)</span>
+                  <span className="font-bold text-gray-900">Rs. {fmt(slip.paidGross)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-gray-500">Advances Deducted</span>
+                  <span className="font-bold text-red-600">− Rs. {fmt(slip.paidAdvance)}</span>
+                </div>
+                <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between items-center">
+                  <span className="text-xs font-black text-green-900 uppercase tracking-wider">Net Cash Paid</span>
+                  <span className="text-2xl font-black text-green-700">Rs. {fmt(slip.paidNet)}</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+                  Employee Signature
+                </div>
+                <div className="p-4">
+                  <SignaturePad
+                    value={slip.signature}
+                    onSave={handleSaveSignature}
+                    saving={sigSaving}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

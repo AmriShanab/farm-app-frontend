@@ -665,6 +665,10 @@ export const getPayrollPreview = async ({ startDate, endDate, farm, payFrequency
       advanceDetails: Array.isArray(row.advanceDetails) ? row.advanceDetails : [],
       netPay: Number(row.netPay ?? row.net_pay ?? 0),
 
+      isFinalized: Boolean(row.isFinalized),
+      paidFrom: row.paidFrom ?? null,
+      paidTo: row.paidTo ?? null,
+
       harvestDays: Number(row.harvestDays ?? 0),
       harvestLaborCost: Number(row.harvestLaborCost ?? 0),
     }));
@@ -725,6 +729,12 @@ export const getBatchPayrollPreview = async (batchId) => {
         netPay: Number(row.netPay ?? 0),
         alreadyPaid: Boolean(row.alreadyPaid),
         paidNet: row.paidNet == null ? null : Number(row.paidNet),
+        paidAdvance: Number(row.paidAdvance ?? 0),
+        paidBasic: Number(row.paidBasic ?? 0),
+        paidAllowance: Number(row.paidAllowance ?? 0),
+        itemId: row.itemId ?? null,
+        signature: row.signature ?? null,
+        signedAt: row.signedAt ?? row.signed_at ?? null,
       })),
     };
   } catch (error) {
@@ -779,12 +789,29 @@ export const getPayrollRunDetails = async (id) => {
         advanceDeducted: Number(row.advanceDeducted ?? 0),
         advanceDetails: Array.isArray(row.advanceDetails) ? row.advanceDetails : [],
         netPay: Number(row.netPay ?? row.net_pay ?? 0),
+        itemId: row.itemId ?? row.item_id ?? null,
+        signature: row.signature ?? null,
+        signedAt: row.signedAt ?? row.signed_at ?? null,
       }))
     };
   } catch (error) {
     console.error("API Error (getPayrollRunDetails):", error);
     throw error;
   }
+};
+
+// Save (or clear with null/empty) a drawn employee signature on a payslip item.
+export const savePayslipSignature = async (itemId, signature) => {
+  const response = await fetch(`${BASE_URL}/hr/payroll/items/${itemId}/signature`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ signature }),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.success === false) {
+    throw new Error(data?.error?.message || "Failed to save signature");
+  }
+  return unwrapApiData(data) || {};
 };
 
 export const getPayrollHistory = async ({ year, farm }) => {

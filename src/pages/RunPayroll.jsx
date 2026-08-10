@@ -15,6 +15,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useToast } from "../components/ToastProvider";
+import SignaturePad from "../components/SignaturePad";
 import DateRangePicker from "../components/DateRangePicker";
 import BatchPayrollPanel from "../components/BatchPayrollPanel";
 import {
@@ -26,6 +27,7 @@ import {
   getPayrollHistory,
   getPayrollPreview,
   getPayrollRunDetails,
+  savePayslipSignature,
   updateManagerSalary,
 } from "../services/api";
 
@@ -113,6 +115,7 @@ export default function RunPayroll() {
   const [individualSaving, setIndividualSaving] = useState({});
 
   const [breakdownEmp, setBreakdownEmp] = useState(null);
+  const [sigSaving, setSigSaving] = useState(false);
   const [historicalRun, setHistoricalRun] = useState(null);
   const [finalizeEmp, setFinalizeEmp] = useState(null);
   // Per-advance recovery selection for the finalize dialog:
@@ -136,6 +139,20 @@ export default function RunPayroll() {
   );
   const [isManagerSaving, setIsManagerSaving] = useState(false);
   const toast = useToast();
+
+  const handleSaveSignature = async (dataUrl) => {
+    if (!breakdownEmp?.itemId) return;
+    setSigSaving(true);
+    try {
+      await savePayslipSignature(breakdownEmp.itemId, dataUrl);
+      setBreakdownEmp((prev) => ({ ...prev, signature: dataUrl }));
+      toast.success("Signature saved.");
+    } catch (e) {
+      toast.error(e.message || "Failed to save signature.");
+    } finally {
+      setSigSaving(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -499,13 +516,7 @@ export default function RunPayroll() {
             <CalendarDays size={14} className="text-gray-400" />
             <select
               value={payFrequency}
-              onChange={(e) => {
-                setPayFrequency(e.target.value);
-                if (e.target.value === "weekly") {
-                  const w = weekOf(startDate);
-                  if (w) { setStartDate(w.startDate); setEndDate(w.endDate); }
-                }
-              }}
+              onChange={(e) => setPayFrequency(e.target.value)}
               className="text-sm font-bold text-gray-700 bg-transparent outline-none cursor-pointer"
             >
               <option value="weekly">Weekly Schedule</option>
@@ -515,12 +526,32 @@ export default function RunPayroll() {
           </div>
 
           {payFrequency !== "batch" && (
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              mode={payFrequency === "monthly" ? "monthly" : "weekly"}
-              onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  From
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  max={endDate || undefined}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  To
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="text-sm font-semibold text-gray-800 bg-transparent outline-none"
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1640,6 +1671,21 @@ export default function RunPayroll() {
                   </div>
                 </div>
               </div>
+
+              {breakdownEmp.itemId && (
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+                    Employee Signature
+                  </div>
+                  <div className="p-4">
+                    <SignaturePad
+                      value={breakdownEmp.signature}
+                      onSave={handleSaveSignature}
+                      saving={sigSaving}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
