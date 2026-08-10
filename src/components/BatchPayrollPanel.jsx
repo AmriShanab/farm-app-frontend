@@ -9,6 +9,7 @@ import {
   Info,
   FileCheck,
   X,
+  Download,
 } from "lucide-react";
 import {
   getPoultryBatches,
@@ -140,6 +141,57 @@ export default function BatchPayrollPanel() {
     } finally {
       setSigSaving(false);
     }
+  };
+
+  // Render the batch payslip into a print window so the user can "Save as PDF".
+  const exportSlipPdf = (row) => {
+    if (!row) return;
+    const money = (n) => "Rs. " + fmt(n);
+    const period = `${preview?.startDate || ""} to ${preview?.endDate || ""}`;
+    const win = window.open("", "_blank", "width=720,height=920");
+    if (!win) {
+      toast.error("Allow pop-ups to export the payslip PDF.");
+      return;
+    }
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8" />
+      <title>Payslip - ${row.name}</title>
+      <style>
+        *{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box}
+        body{margin:0;padding:30px;color:#111827}
+        .head{border-bottom:2px solid #166534;padding-bottom:12px;margin-bottom:18px}
+        .head h1{margin:0 0 4px;font-size:20px}
+        .muted{color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:bold;margin-top:2px}
+        table{width:100%;border-collapse:collapse;margin-top:6px}
+        td{padding:9px 4px;border-bottom:1px solid #eef2f0;font-size:14px}
+        td.r{text-align:right;font-weight:bold}
+        tr.net td{border-bottom:none;padding-top:14px}
+        .net-v{font-size:18px;font-weight:900;color:#166534}
+        .sig{margin-top:40px}
+        .sig img{max-height:96px;display:block}
+        .sig .line{border-bottom:1px solid #9ca3af;width:240px;height:1px;margin-top:4px}
+        .sig .lbl{margin-top:6px;font-size:12px;color:#6b7280;font-weight:bold;text-transform:uppercase;letter-spacing:.04em}
+        @media print{body{padding:14px}}
+      </style></head><body>
+      <div class="head">
+        <h1>Payslip — ${row.name}</h1>
+        <div class="muted">Poultry · Batch #${batchId}</div>
+        <div class="muted">Pay period: ${period} · ${row.days} days worked</div>
+      </div>
+      <table>
+        <tr><td>Basic Salary</td><td class="r">${money(row.paidBasic)}</td></tr>
+        <tr><td>Allowance</td><td class="r">${money(row.paidAllowance)}</td></tr>
+        <tr><td>Gross Pay</td><td class="r">${money(row.paidGross)}</td></tr>
+        <tr><td>Advances Deducted</td><td class="r" style="color:#b91c1c">− ${money(row.paidAdvance)}</td></tr>
+        <tr class="net"><td><b>Net Cash Paid</b></td><td class="r net-v">${money(row.paidNet)}</td></tr>
+      </table>
+      <div class="sig">
+        ${row.signature ? `<img src="${row.signature}" alt="signature" />` : ""}
+        <div class="line"></div>
+        <div class="lbl">Employee Signature</div>
+      </div>
+      <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
+      </body></html>`);
+    win.document.close();
   };
 
   return (
@@ -432,10 +484,10 @@ export default function BatchPayrollPanel() {
           onClick={() => !sigSaving && setSlip(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[92vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start">
+            <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start shrink-0">
               <div>
                 <h3 className="text-lg font-black text-gray-900 mb-0.5">{slip.name}</h3>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -453,7 +505,7 @@ export default function BatchPayrollPanel() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-sm">
+            <div className="p-5 space-y-4 text-sm overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Days Worked</span>
@@ -508,6 +560,16 @@ export default function BatchPayrollPanel() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="shrink-0 px-4 py-3 border-t border-gray-100 bg-gray-50/60 flex justify-end">
+              <button
+                type="button"
+                onClick={() => exportSlipPdf(slip)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-700 text-white text-sm font-black hover:bg-green-800 shadow-sm"
+              >
+                <Download size={15} /> Download PDF
+              </button>
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
   Edit2,
   X,
   CalendarDays,
+  Download,
 } from "lucide-react";
 import { useToast } from "../components/ToastProvider";
 import SignaturePad from "../components/SignaturePad";
@@ -152,6 +153,64 @@ export default function RunPayroll() {
     } finally {
       setSigSaving(false);
     }
+  };
+
+  // Render the payslip (incl. signature) into a print window so the user can
+  // "Save as PDF" — no external library needed.
+  const exportSlipPdf = (emp) => {
+    if (!emp) return;
+    const money = (n) =>
+      "Rs. " +
+      Number(n || 0).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    const period = `${emp.periodStart || startDate} to ${emp.periodEnd || endDate}`;
+    const sub = `${emp.role ? emp.role + " · " : ""}${emp.farm || emp.homeFarm || ""}`;
+    const win = window.open("", "_blank", "width=720,height=920");
+    if (!win) {
+      toast.error("Allow pop-ups to export the payslip PDF.");
+      return;
+    }
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8" />
+      <title>Payslip - ${emp.name}</title>
+      <style>
+        *{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box}
+        body{margin:0;padding:30px;color:#111827}
+        .head{border-bottom:2px solid #166534;padding-bottom:12px;margin-bottom:18px}
+        .head h1{margin:0 0 4px;font-size:20px}
+        .muted{color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:bold;margin-top:2px}
+        table{width:100%;border-collapse:collapse;margin-top:6px}
+        td{padding:9px 4px;border-bottom:1px solid #eef2f0;font-size:14px}
+        td.r{text-align:right;font-weight:bold}
+        tr.net td{border-bottom:none;padding-top:14px}
+        .net-v{font-size:18px;font-weight:900;color:#166534}
+        .sig{margin-top:40px}
+        .sig img{max-height:96px;display:block}
+        .sig .line{border-bottom:1px solid #9ca3af;width:240px;height:1px;margin-top:4px}
+        .sig .lbl{margin-top:6px;font-size:12px;color:#6b7280;font-weight:bold;text-transform:uppercase;letter-spacing:.04em}
+        @media print{body{padding:14px}}
+      </style></head><body>
+      <div class="head">
+        <h1>Payslip — ${emp.name}</h1>
+        <div class="muted">${sub}</div>
+        <div class="muted">Pay period: ${period}${emp.paidOn ? " · Paid on " + String(emp.paidOn).slice(0, 10) : ""}</div>
+      </div>
+      <table>
+        <tr><td>Basic Salary</td><td class="r">${money(emp.basicPay)}</td></tr>
+        <tr><td>Allowance</td><td class="r">${money(emp.allowancePay)}</td></tr>
+        <tr><td>Gross Pay</td><td class="r">${money(emp.grossPay)}</td></tr>
+        <tr><td>Advances Deducted</td><td class="r" style="color:#b91c1c">− ${money(emp.advanceDeducted)}</td></tr>
+        <tr class="net"><td><b>Net Cash Paid</b></td><td class="r net-v">${money(emp.netPay)}</td></tr>
+      </table>
+      <div class="sig">
+        ${emp.signature ? `<img src="${emp.signature}" alt="signature" />` : ""}
+        <div class="line"></div>
+        <div class="lbl">Employee Signature</div>
+      </div>
+      <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
+      </body></html>`);
+    win.document.close();
   };
 
   useEffect(() => {
@@ -369,6 +428,16 @@ export default function RunPayroll() {
             : row,
         ),
       );
+
+      // Refresh history so the just-created run is found immediately — this is
+      // what lets the settled slip resolve its itemId (and show the signature
+      // pad) without a page reload.
+      try {
+        const history = await getPayrollHistory({ year: startDate.slice(0, 4) });
+        setHistoryRows(Array.isArray(history) ? history : []);
+      } catch {
+        // non-fatal; a reload will still pick it up
+      }
 
       toast.success(`Payroll successfully secured for ${emp.name}.`);
     } catch {
@@ -1501,8 +1570,8 @@ export default function RunPayroll() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setBreakdownEmp(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start">
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start shrink-0">
               <div>
                 <h3 className="text-lg font-black text-gray-900 mb-1">
                   {breakdownEmp.name}
@@ -1532,7 +1601,7 @@ export default function RunPayroll() {
               </button>
             </div>
 
-            <div className="p-5 grid gap-4 text-sm bg-white">
+            <div className="p-5 grid gap-4 text-sm bg-white overflow-y-auto">
               {/* Salary composition for EPF/ETF: Basic + Allowance = Gross */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
@@ -1686,6 +1755,16 @@ export default function RunPayroll() {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="shrink-0 px-4 py-3 border-t border-gray-100 bg-gray-50/60 flex justify-end">
+              <button
+                type="button"
+                onClick={() => exportSlipPdf(breakdownEmp)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-700 text-white text-sm font-black hover:bg-green-800 shadow-sm"
+              >
+                <Download size={15} /> Download PDF
+              </button>
             </div>
           </div>
         </div>
