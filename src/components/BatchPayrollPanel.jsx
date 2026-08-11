@@ -484,7 +484,7 @@ export default function BatchPayrollPanel() {
           onClick={() => !sigSaving && setSlip(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[92vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start shrink-0">
@@ -505,7 +505,7 @@ export default function BatchPayrollPanel() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-sm overflow-y-auto">
+            <div className="p-5 space-y-4 text-sm overflow-y-auto flex-1 min-h-0">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Days Worked</span>
