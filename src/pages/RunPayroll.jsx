@@ -1570,7 +1570,7 @@ export default function RunPayroll() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setBreakdownEmp(null)}
           />
-          <div className="relative z-10 w-full max-w-xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="relative z-10 w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start shrink-0">
               <div>
                 <h3 className="text-lg font-black text-gray-900 mb-1">
@@ -1601,7 +1601,7 @@ export default function RunPayroll() {
               </button>
             </div>
 
-            <div className="p-5 grid gap-4 text-sm bg-white overflow-y-auto flex-1 min-h-0">
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-white overflow-y-auto flex-1 min-h-0 items-start content-start">
               {/* Salary composition for EPF/ETF: Basic + Allowance = Gross */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
@@ -1742,7 +1742,7 @@ export default function RunPayroll() {
               </div>
 
               {breakdownEmp.itemId && (
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm sm:col-span-2">
                   <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
                     Employee Signature
                   </div>

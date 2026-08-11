@@ -484,7 +484,7 @@ export default function BatchPayrollPanel() {
           onClick={() => !sigSaving && setSlip(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden max-h-[90vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start shrink-0">
@@ -505,8 +505,8 @@ export default function BatchPayrollPanel() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-sm overflow-y-auto flex-1 min-h-0">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm overflow-y-auto flex-1 min-h-0 items-start content-start">
+              <div className="grid grid-cols-2 gap-3 sm:col-span-2">
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Days Worked</span>
                   <span className="font-bold text-gray-800">{slip.days}</span>
@@ -548,7 +548,7 @@ export default function BatchPayrollPanel() {
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm sm:col-span-2">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
                   Employee Signature
                 </div>
