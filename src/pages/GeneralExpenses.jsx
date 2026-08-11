@@ -5,7 +5,6 @@ import {
   X,
   Trash2,
   MapPin,
-  Leaf,
   Wrench,
   Zap,
   Fuel,
@@ -17,10 +16,6 @@ import {
   Car,
 } from "lucide-react";
 import {
-  getHarvestExpenses,
-  createHarvestExpense,
-  updateHarvestExpense,
-  deleteHarvestExpense,
   getMaintenanceExpenses,
   createMaintenanceExpense,
   updateMaintenanceExpense,
@@ -37,7 +32,6 @@ import {
   createMachineryExpense,
   updateMachineryExpense,
   deleteMachineryExpense,
-  getAttendance,
   getVehicles,
   createVehicle,
   deleteVehicle,
@@ -53,12 +47,11 @@ const fmt = (n) =>
 const FUEL_TYPES = ["Petrol", "Diesel", "Kerosene"];
 
 export default function GeneralExpenses() {
-  const [activeTab, setActiveTab] = useState("harvest");
+  const [activeTab, setActiveTab] = useState("maintenance");
   const [selectedFarm, setSelectedFarm] = useState("MR1");
   const [selectedYear, setSelectedYear] = useState("2026");
 
   const tabs = [
-    { id: "harvest", label: "Harvest", icon: Leaf },
     { id: "maintenance", label: "Maintenance", icon: Wrench },
     { id: "ceb", label: "CEB Bills", icon: Zap },
     { id: "fuel", label: "Fuel Logs", icon: Fuel },
@@ -134,7 +127,6 @@ export default function GeneralExpenses() {
 // ─── UNIFIED TAB COMPONENT (Routing to explicit API functions) ─────────────
 function ExpenseCategoryTab({ category, farm, year }) {
   const [data, setData] = useState([]);
-  const [attendance, setAttendance] = useState([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -175,23 +167,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
   });
 
   // -------------------------------
-  // CALCULATE PERMANENT LABOUR COST
-  // -------------------------------
-  let autoWage = 0;
-  if (category === "harvest") {
-    attendance.forEach((a) => {
-      const wage = Number(a.wagePerDay || 0);
-      (a.segments || []).forEach((seg) => {
-        if (seg.status === "absent") return;
-        const actualLocation = seg.locationWorked || a.home_farm || a.farm;
-        if (actualLocation !== form.farm) return;
-        if (seg.status === "full") autoWage += wage;
-        if (seg.status === "half") autoWage += wage / 2;
-      });
-    });
-  }
-
-  // -------------------------------
   // FETCH CATEGORY DATA
   // -------------------------------
   useEffect(() => {
@@ -199,8 +174,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
       setIsLoading(true);
       try {
         let req;
-        if (category === "harvest") req = getHarvestExpenses(farm, year);
-        else if (category === "maintenance") req = getMaintenanceExpenses(farm);
+        if (category === "maintenance") req = getMaintenanceExpenses(farm);
         else if (category === "ceb") req = getCEBBills("", year);
         else if (category === "fuel") req = getFuelLogs();
         else if (category === "machinery") req = getMachineryExpenses(year);
@@ -216,18 +190,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
     };
     fetchData();
   }, [category, farm, year]);
-
-  // -------------------------------
-  // FETCH ATTENDANCE (harvest only)
-  // -------------------------------
-  useEffect(() => {
-    if (category !== "harvest") return;
-    if (!form.date || !form.farm) return;
-
-    getAttendance(form.date, form.farm)
-      .then(setAttendance)
-      .catch(() => setAttendance([]));
-  }, [form.date, form.farm, category]);
 
   // -------------------------------
   // FETCH VEHICLES (fuel tab)
@@ -342,20 +304,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
     let createFn;
     let updateFn;
 
-    if (category === "harvest") {
-      payload = {
-        date: form.date,
-        farm: form.farm,
-        notes: form.notes,
-        mainLabor: parseFloat(form.mainLabor || 0),
-        collectors: parseFloat(form.collectors || 0),
-        tractorDriver: parseFloat(form.tractorDriver || 0),
-        foodExpenses: parseFloat(form.foodExpenses || 0),
-        permanentLaborCost: autoWage,
-      };
-      createFn = createHarvestExpense;
-      updateFn = updateHarvestExpense;
-    } else if (category === "maintenance") {
+    if (category === "maintenance") {
       payload = {
         date: form.date,
         farm: form.farm,
@@ -442,8 +391,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure?")) return;
 
-    if (category === "harvest") await deleteHarvestExpense(id);
-    else if (category === "maintenance") await deleteMaintenanceExpense(id);
+    if (category === "maintenance") await deleteMaintenanceExpense(id);
     else if (category === "ceb") await deleteCEBBill(id);
     else if (category === "fuel") await deleteFuelLog(id);
     else if (category === "machinery") await deleteMachineryExpense(id);
@@ -456,17 +404,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
   // -------------------------------
   const calcTotal = () => {
     return data.reduce((acc, curr) => {
-      if (category === "harvest") {
-        return (
-          acc +
-          (Number(curr.mainLabor || 0) +
-            Number(curr.collectors || 0) +
-            Number(curr.tractorDriver || 0) +
-            Number(curr.foodExpenses || 0) +
-            Number(curr.permanentLaborCost || 0))
-        );
-      }
-
       if (category === "ceb") return acc + Number(curr.billAmount || 0);
       if (category === "fuel") return acc + Number(curr.totalCost || 0);
       return acc + Number(curr.amount || 0);
@@ -538,106 +475,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
             )}
 
             {/* Dynamic Fields based on Category */}
-            {category === "harvest" && (
-              <>
-                <div className="md:col-span-6">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Notes
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. May harvest"
-                    value={form.notes}
-                    onChange={(e) =>
-                      setForm({ ...form, notes: e.target.value })
-                    }
-                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
-                  />
-                </div>
-
-                {/* Permanent labour cost — auto-calculated from attendance, read-only */}
-                <div className="md:col-span-6">
-                  <label className="text-[11px] font-black text-gray-500 flex items-center flex-wrap uppercase tracking-wider mb-1 gap-2">
-                    Permanent Labour Cost on {form.date || "selected date"}
-                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black rounded uppercase tracking-wider">
-                      Auto
-                    </span>
-                  </label>
-                  <div className="w-full p-2.5 text-sm border border-amber-200 bg-amber-50 rounded-lg text-right font-black text-amber-800">
-                    {autoWage > 0 ? (
-                      `Rs. ${Number(autoWage).toLocaleString("en-LK", { minimumFractionDigits: 2 })}`
-                    ) : (
-                      <span className="text-gray-400 font-medium text-xs">
-                        No permanent attendance logged for this date & farm
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    Auto-calculated cost specific to {form.date}'s attendance at{" "}
-                    {form.farm}. Assessed to harvest expense. (Workers are still
-                    paid via actual payroll).
-                  </p>
-                </div>
-
-                <div className="md:col-span-3">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Hired Labour (Rs.)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={form.mainLabor}
-                    onChange={(e) =>
-                      setForm({ ...form, mainLabor: e.target.value })
-                    }
-                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500"
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Collectors (Rs.)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={form.collectors}
-                    onChange={(e) =>
-                      setForm({ ...form, collectors: e.target.value })
-                    }
-                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500"
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Tractor Driver (Rs.)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={form.tractorDriver}
-                    onChange={(e) =>
-                      setForm({ ...form, tractorDriver: e.target.value })
-                    }
-                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500"
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Food Expenses (Rs.)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={form.foodExpenses}
-                    onChange={(e) =>
-                      setForm({ ...form, foodExpenses: e.target.value })
-                    }
-                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none text-right focus:border-green-500"
-                  />
-                </div>
-              </>
-            )}
-
             {(category === "maintenance" || category === "machinery") && (
               <>
                 <div className="md:col-span-6">
@@ -1095,13 +932,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   </th>
 
                   {/* Dynamic Headers */}
-                  {category === "harvest" && (
-                    <>
-                      <th className="p-4 text-left">Notes</th>
-                      <th className="p-4 text-right">Oth. Breakdown (Rs.)</th>
-                      <th className="p-4 text-right">Perm. Labor (Rs.)</th>
-                    </>
-                  )}
                   {(category === "maintenance" || category === "machinery") && (
                     <>
                       <th className="p-4 text-left">Details</th>
@@ -1140,15 +970,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     let rowTotal = parseFloat(
                       row.amount || row.billAmount || row.totalCost || 0,
                     );
-                    if (category === "harvest") {
-                      rowTotal =
-                        parseFloat(row.mainLabor || 0) +
-                        parseFloat(row.collectors || 0) +
-                        parseFloat(row.tractorDriver || 0) +
-                        parseFloat(row.foodExpenses || 0) +
-                        parseFloat(row.permanentLaborCost || 0);
-                    }
-
                     return (
                       <tr
                         key={row.id}
@@ -1184,27 +1005,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
                         </td>
 
                         {/* Dynamic Cells */}
-                        {category === "harvest" && (
-                          <>
-                            <td className="p-4 text-gray-700 font-medium">
-                              {row.notes}
-                            </td>
-                            <td className="p-4 text-right text-[11px] text-gray-500">
-                              <p>
-                                Hired Labour: Rs.{fmt(row.mainLabor)} | Collect:
-                                Rs.{fmt(row.collectors)}
-                              </p>
-                              <p>
-                                Tractor: Rs.{fmt(row.tractorDriver)} | Food: Rs.
-                                {fmt(row.foodExpenses)}
-                              </p>
-                            </td>
-                            <td className="p-4 text-right font-black text-amber-700 bg-amber-50/30">
-                              Rs.{fmt(row.permanentLaborCost || 0)}
-                            </td>
-                          </>
-                        )}
-
                         {(category === "maintenance" ||
                           category === "machinery") && (
                           <>
@@ -1326,19 +1126,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
                 <tfoot>
                   <tr className="border-t-2 border-gray-200 bg-gray-50/80">
                     <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals ({data.length})</td>
-
-                    {category === "harvest" && (
-                      <>
-                        <td className="p-4"></td>
-                        <td className="p-4 text-right text-[11px] text-gray-700">
-                          <p>Hired: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.mainLabor || 0), 0))} | Collect: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.collectors || 0), 0))}</p>
-                          <p>Tractor: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.tractorDriver || 0), 0))} | Food: Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.foodExpenses || 0), 0))}</p>
-                        </td>
-                        <td className="p-4 text-right font-black text-amber-700">
-                          Rs.{fmt(data.reduce((s, r) => s + parseFloat(r.permanentLaborCost || 0), 0))}
-                        </td>
-                      </>
-                    )}
 
                     {(category === "maintenance" || category === "machinery") && (
                       <>

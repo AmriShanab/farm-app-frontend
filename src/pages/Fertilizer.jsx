@@ -26,13 +26,13 @@ export default function FertilizerManagement() {
   const [isSaving, setIsSaving] = useState(false);
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split('T')[0],
-    farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', laborCost: ''
+    farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', treesApplied: '', laborCost: ''
   });
 
   // Inline Edit States
   const [editingId, setEditingId] = useState(null);
   const [editRow, setEditRow] = useState({
-    date: '', farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', laborCost: ''
+    date: '', farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', treesApplied: '', laborCost: ''
   });
 
   // Fetch Data
@@ -66,16 +66,17 @@ export default function FertilizerManagement() {
         fertilizerName: newRow.fertilizerName,
         unitCost: parseFloat(newRow.unitCost),
         quantity: parseFloat(newRow.quantity),
+        treesApplied: newRow.treesApplied ? parseInt(newRow.treesApplied, 10) : null,
         laborCost: parseFloat(newRow.laborCost) || 0
       };
-      
+
       const savedApp = await createFertilizer(payload);
       setLedgerData([savedApp, ...ledgerData]);
       setIsAdding(false);
-      setNewRow({ 
-        date: new Date().toISOString().split('T')[0], 
-        farm: selectedFarm === 'All' ? 'MR1' : selectedFarm, 
-        fertilizerName: '', unitCost: '', quantity: '', laborCost: '' 
+      setNewRow({
+        date: new Date().toISOString().split('T')[0],
+        farm: selectedFarm === 'All' ? 'MR1' : selectedFarm,
+        fertilizerName: '', unitCost: '', quantity: '', treesApplied: '', laborCost: ''
       });
     } catch (err) {
       alert("Failed to save fertilizer application.");
@@ -104,13 +105,14 @@ export default function FertilizerManagement() {
       fertilizerName: app.fertilizerName || app.fertilizer_name || '',
       unitCost: app.unitCost ?? app.unit_cost ?? '',
       quantity: app.quantity ?? '',
+      treesApplied: app.treesApplied ?? app.trees_applied ?? '',
       laborCost: app.laborCost ?? app.labor_cost ?? '',
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditRow({ date: '', farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', laborCost: '' });
+    setEditRow({ date: '', farm: 'MR1', fertilizerName: '', unitCost: '', quantity: '', treesApplied: '', laborCost: '' });
   };
 
   const handleUpdate = async (app) => {
@@ -126,6 +128,7 @@ export default function FertilizerManagement() {
         fertilizerName: editRow.fertilizerName,
         unitCost: parseFloat(editRow.unitCost),
         quantity: parseFloat(editRow.quantity),
+        treesApplied: editRow.treesApplied ? parseInt(editRow.treesApplied, 10) : null,
         laborCost: parseFloat(editRow.laborCost) || 0,
       };
       const updated = await updateFertilizer(app.id, payload);
@@ -260,6 +263,7 @@ export default function FertilizerManagement() {
                         <th className="p-4 text-left">Farm</th>
                         <th className="p-4 text-left">Fertilizer Type</th>
                         <th className="p-4 text-right">Quantity</th>
+                        <th className="p-4 text-right">Trees</th>
                         <th className="p-4 text-right">Costs (Rs.)</th>
                         <th className="p-4 text-right">Total (Rs.)</th>
                         <th className="p-4 text-right"></th>
@@ -278,6 +282,7 @@ export default function FertilizerManagement() {
                           </td>
                           <td className="p-3"><input type="text" placeholder="e.g. Muriate of Potash" value={newRow.fertilizerName} onChange={e => setNewRow({...newRow, fertilizerName: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
                           <td className="p-3 text-right"><input type="number" placeholder="Qty" value={newRow.quantity} onChange={e => setNewRow({...newRow, quantity: e.target.value})} className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto" disabled={isSaving} /></td>
+                          <td className="p-3 text-right"><input type="number" placeholder="No." value={newRow.treesApplied} onChange={e => setNewRow({...newRow, treesApplied: e.target.value})} className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto" disabled={isSaving} /></td>
                           <td className="p-3 space-y-2 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-[10px] text-gray-400">Unit:</span>
@@ -322,6 +327,7 @@ export default function FertilizerManagement() {
                               </td>
                               <td className="p-3"><input type="text" value={editRow.fertilizerName} onChange={e => setEditRow({...editRow, fertilizerName: e.target.value})} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} /></td>
                               <td className="p-3 text-right"><input type="number" value={editRow.quantity} onChange={e => setEditRow({...editRow, quantity: e.target.value})} className="w-24 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto" disabled={isSaving} /></td>
+                              <td className="p-3 text-right"><input type="number" value={editRow.treesApplied} onChange={e => setEditRow({...editRow, treesApplied: e.target.value})} className="w-20 p-2 text-xs border border-gray-300 rounded outline-none text-right ml-auto" disabled={isSaving} /></td>
                               <td className="p-3 space-y-2 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[10px] text-gray-400">Unit:</span>
@@ -355,6 +361,7 @@ export default function FertilizerManagement() {
                             </td>
                             <td className="p-4 font-bold text-gray-800">{name}</td>
                             <td className="p-4 text-right font-black text-gray-900">{qty}</td>
+                            <td className="p-4 text-right font-bold text-gray-700">{app.treesApplied || app.trees_applied || '—'}</td>
                             <td className="p-4 text-right text-xs">
                               <p className="text-gray-500"><span className="font-bold text-gray-400 mr-1">Unit:</span>Rs. {fmt(unitCost)}</p>
                               <p className="text-gray-500"><span className="font-bold text-gray-400 mr-1">Labor:</span>Rs. {fmt(laborCost)}</p>
@@ -375,6 +382,7 @@ export default function FertilizerManagement() {
                         <tr className="border-t-2 border-gray-200 bg-gray-50/80">
                           <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider" colSpan={3}>Totals</td>
                           <td className="p-4 text-right font-black text-gray-900">{totalQuantity}</td>
+                          <td className="p-4"></td>
                           <td className="p-4 text-right text-xs">
                             <p className="text-gray-700"><span className="font-bold text-gray-500 mr-1">Material:</span>Rs. {fmt(totalMaterialCost)}</p>
                             <p className="text-gray-700"><span className="font-bold text-gray-500 mr-1">Labor:</span>Rs. {fmt(totalLaborCost)}</p>
@@ -392,9 +400,9 @@ export default function FertilizerManagement() {
 
           {/* ── TAB: DUE SCHEDULE ── */}
           {activeTab === 'Due Schedule' && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-8 text-center">
+            <div>
               {dueData.length === 0 ? (
-                <>
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-8 text-center">
                   <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
                     <Check size={28} className="text-green-600" />
                   </div>
@@ -402,26 +410,84 @@ export default function FertilizerManagement() {
                   <p className="text-sm text-gray-500 font-medium max-w-md mx-auto">
                     There are currently no fertilizer applications due. Your schedule is clear.
                   </p>
-                </>
+                </div>
               ) : (
-                <div className="text-left">
-                  <h3 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
-                    <CalendarClock className="text-amber-500" /> Upcoming Schedules
+                <div className="space-y-6">
+                  <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                    <CalendarClock className="text-amber-500" /> Fertilizer Schedule
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {dueData.map((dueItem, idx) => (
-                      <div key={idx} className="border border-amber-200 bg-amber-50 rounded-xl p-4 shadow-sm">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="bg-amber-200 text-amber-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">DUE SOON</span>
-                          <span className="font-bold text-gray-900">{dueItem.dueDate || dueItem.due_date}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {dueData.map((item, idx) => {
+                      const daysUntil = parseInt(item.days_until_due ?? 0, 10);
+                      const daysSince = parseInt(item.days_since_applied ?? 0, 10);
+                      const isOverdue = daysUntil < 0;
+                      const isDueToday = daysUntil === 0;
+                      const isUpcoming = daysUntil > 0;
+                      const overdueDays = Math.abs(daysUntil);
+                      const appliedDate = item.date;
+                      const nextDue = item.next_due_date;
+                      const name = item.fertilizerName || item.fertilizer_name || 'Fertilizer';
+                      const progressPct = Math.min(100, Math.round((daysSince / 100) * 100));
+
+                      const borderColor = isOverdue ? 'border-red-200' : isDueToday ? 'border-amber-300' : 'border-green-200';
+                      const bgColor = isOverdue ? 'bg-red-50/60' : isDueToday ? 'bg-amber-50/60' : 'bg-green-50/40';
+
+                      return (
+                        <div key={idx} className={`border ${borderColor} ${bgColor} rounded-xl p-5 shadow-sm`}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h4 className="font-black text-lg text-gray-900">{name}</h4>
+                              <p className="text-sm text-gray-600 flex items-center gap-1 font-bold mt-0.5">
+                                <MapPin size={13} className="text-gray-400" /> {item.farm}
+                              </p>
+                            </div>
+                            {isOverdue && (
+                              <span className="bg-red-100 text-red-700 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border border-red-200">
+                                {overdueDays}d Overdue
+                              </span>
+                            )}
+                            {isDueToday && (
+                              <span className="bg-amber-200 text-amber-800 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg">
+                                Due Today
+                              </span>
+                            )}
+                            {isUpcoming && (
+                              <span className="bg-green-100 text-green-700 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border border-green-200">
+                                {daysUntil}d Left
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className="bg-white/70 border border-gray-100 rounded-lg p-2.5 text-center">
+                              <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Last Applied</span>
+                              <span className="block text-sm font-black text-gray-800">{appliedDate}</span>
+                            </div>
+                            <div className="bg-white/70 border border-gray-100 rounded-lg p-2.5 text-center">
+                              <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Days Ago</span>
+                              <span className={`block text-xl font-black ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>{daysSince}</span>
+                            </div>
+                            <div className="bg-white/70 border border-gray-100 rounded-lg p-2.5 text-center">
+                              <span className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Next Due</span>
+                              <span className="block text-sm font-black text-gray-800">{nextDue}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Cycle Progress (100 days)</span>
+                              <span className={`text-xs font-black ${isOverdue ? 'text-red-600' : 'text-green-700'}`}>{progressPct}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200/60 rounded-full h-2.5 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${isOverdue ? 'bg-red-500' : progressPct > 80 ? 'bg-amber-500' : 'bg-green-500'}`}
+                                style={{ width: `${Math.min(progressPct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <h4 className="font-black text-lg text-gray-800 mb-1">{dueItem.fertilizerName || dueItem.fertilizer_name || 'Scheduled Fertilizer'}</h4>
-                        <p className="text-sm text-gray-600 flex items-center gap-1 font-bold">
-                          <MapPin size={14} className="text-gray-400"/> {dueItem.farm} 
-                          {dueItem.block && <span className="text-gray-400 font-normal"> - Block {dueItem.block}</span>}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
