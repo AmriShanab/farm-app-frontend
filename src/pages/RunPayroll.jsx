@@ -165,9 +165,28 @@ export default function RunPayroll() {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-    const period = `${emp.periodStart || startDate} to ${emp.periodEnd || endDate}`;
+    const period = `${emp.periodStart || startDate} → ${emp.periodEnd || endDate}`;
     const sub = `${emp.role ? emp.role + " · " : ""}${emp.farm || emp.homeFarm || ""}`;
-    const win = window.open("", "_blank", "width=720,height=920");
+
+    const advRows = (emp.advanceDetails || [])
+      .map((adv) => {
+        const ded = Number(adv.amount || 0);
+        const orig = Number(adv.originalAmount || 0);
+        const partial = orig > 0 && ded + 0.01 < orig;
+        return `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;font-size:12px">
+            <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-weight:bold;color:#4b5563">${adv.date}</span>
+            ${partial ? '<span style="background:#eff6ff;border:1px solid #dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:800;text-transform:uppercase;margin-left:6px">Partial</span>' : ""}
+          </td>
+          <td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right;font-weight:bold;color:#dc2626">
+            −${money(ded)}
+            ${orig > 0 ? `<div style="font-size:10px;color:#9ca3af;font-weight:600">of ${money(orig)} advance</div>` : ""}
+          </td>
+        </tr>`;
+      })
+      .join("");
+
+    const win = window.open("", "_blank", "width=780,height=960");
     if (!win) {
       toast.error("Allow pop-ups to export the payslip PDF.");
       return;
@@ -175,38 +194,105 @@ export default function RunPayroll() {
     win.document.write(`<!doctype html><html><head><meta charset="utf-8" />
       <title>Payslip - ${emp.name}</title>
       <style>
-        *{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box}
-        body{margin:0;padding:30px;color:#111827}
-        .head{border-bottom:2px solid #166534;padding-bottom:12px;margin-bottom:18px}
-        .head h1{margin:0 0 4px;font-size:20px}
-        .muted{color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:bold;margin-top:2px}
-        table{width:100%;border-collapse:collapse;margin-top:6px}
-        td{padding:9px 4px;border-bottom:1px solid #eef2f0;font-size:14px}
-        td.r{text-align:right;font-weight:bold}
-        tr.net td{border-bottom:none;padding-top:14px}
-        .net-v{font-size:18px;font-weight:900;color:#166534}
-        .sig{margin-top:40px}
-        .sig img{max-height:96px;display:block}
-        .sig .line{border-bottom:1px solid #9ca3af;width:240px;height:1px;margin-top:4px}
-        .sig .lbl{margin-top:6px;font-size:12px;color:#6b7280;font-weight:bold;text-transform:uppercase;letter-spacing:.04em}
-        @media print{body{padding:14px}}
+        *{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box;margin:0;padding:0}
+        body{padding:28px;color:#111827;font-size:13px}
+        .head{border-bottom:2px solid #166534;padding-bottom:10px;margin-bottom:16px}
+        .head h1{font-size:18px;margin-bottom:3px}
+        .muted{color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:bold;margin-top:2px}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        .card{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden}
+        .card-hd{background:#f9fafb;border-bottom:1px solid #f3f4f6;padding:7px 12px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#4b5563;display:flex;justify-content:space-between}
+        .card-bd{padding:10px 12px}
+        .split{display:grid;grid-template-columns:1fr 1fr;text-align:center}
+        .split>div+div{border-left:1px solid #f3f4f6}
+        .tri{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center}
+        .tri>div+div{border-left:1px solid #f3f4f6}
+        .big{font-size:18px;font-weight:900;display:block}
+        .lbl{font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;letter-spacing:.04em}
+        .sub{font-size:9px;font-weight:700;color:#6b7280;margin-top:1px}
+        .row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px}
+        .row .k{font-weight:700;color:#6b7280} .row .v{font-weight:700;color:#111827}
+        .row .v.red{color:#dc2626}
+        .net-row{border-top:1px dashed #e5e7eb;padding-top:8px;margin-top:4px}
+        .net-lbl{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#14532d}
+        .net-val{font-size:22px;font-weight:900;color:#15803d}
+        .full{grid-column:span 2}
+        .sig{margin-top:24px}
+        .sig img{max-height:80px;display:block}
+        .sig .line{border-bottom:1px solid #9ca3af;width:200px;margin-top:4px}
+        .sig .slbl{margin-top:4px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+        @media print{body{padding:14px} .card{break-inside:avoid}}
       </style></head><body>
       <div class="head">
         <h1>Payslip — ${emp.name}</h1>
         <div class="muted">${sub}</div>
         <div class="muted">Pay period: ${period}${emp.paidOn ? " · Paid on " + String(emp.paidOn).slice(0, 10) : ""}</div>
       </div>
-      <table>
-        <tr><td>Basic Salary</td><td class="r">${money(emp.basicPay)}</td></tr>
-        <tr><td>Allowance</td><td class="r">${money(emp.allowancePay)}</td></tr>
-        <tr><td>Gross Pay</td><td class="r">${money(emp.grossPay)}</td></tr>
-        <tr><td>Advances Deducted</td><td class="r" style="color:#b91c1c">− ${money(emp.advanceDeducted)}</td></tr>
-        <tr class="net"><td><b>Net Cash Paid</b></td><td class="r net-v">${money(emp.netPay)}</td></tr>
-      </table>
-      <div class="sig">
-        ${emp.signature ? `<img src="${emp.signature}" alt="signature" />` : ""}
-        <div class="line"></div>
-        <div class="lbl">Employee Signature</div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-hd">Salary Composition (EPF)</div>
+          <div class="card-bd split">
+            <div>
+              <span class="big">${money(emp.basicPay)}</span>
+              <span class="lbl">Basic Salary</span>
+              ${(emp.basicRate || 0) > 0 ? `<div class="sub">${money(emp.basicRate)}/day</div>` : ""}
+            </div>
+            <div>
+              <span class="big" style="color:#1d4ed8">${money(emp.allowancePay)}</span>
+              <span class="lbl">Allowance</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">Attendance</div>
+          <div class="card-bd tri">
+            <div>
+              <span class="big">${emp.fullDays}</span>
+              <span class="lbl">Full Days</span>
+            </div>
+            <div>
+              <span class="big">${emp.halfDays}</span>
+              <span class="lbl">Half Days</span>
+            </div>
+            <div>
+              <span class="big">${emp.absentDays}</span>
+              <span class="lbl">Absent</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span>Advance Deductions</span>
+            <span style="color:#9a3412">−${money(emp.advanceDeducted)}</span>
+          </div>
+          ${
+            advRows
+              ? `<table style="width:100%;border-collapse:collapse">${advRows}</table>`
+              : '<div style="padding:10px 12px;font-size:11px;color:#9ca3af;font-style:italic;text-align:center">No advances deducted for this period.</div>'
+          }
+        </div>
+
+        <div class="card">
+          <div class="card-bd">
+            <div class="row"><span class="k">Gross Pay (to pay)</span><span class="v">${money(emp.grossPay)}</span></div>
+            <div class="row"><span class="k">Advances Deducted</span><span class="v red">− ${money(emp.advanceDeducted)}</span></div>
+            <div class="row net-row">
+              <span class="net-lbl">Net Cash Paid</span>
+              <span class="net-val">${money(emp.netPay)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card full sig">
+          <div class="card-hd">Employee Signature</div>
+          <div class="card-bd">
+            ${emp.signature ? `<img src="${emp.signature}" alt="signature" />` : ""}
+            <div class="line"></div>
+            <div class="slbl">Employee Signature</div>
+          </div>
+        </div>
       </div>
       <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
       </body></html>`);
