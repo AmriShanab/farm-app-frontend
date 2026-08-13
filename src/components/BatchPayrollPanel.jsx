@@ -46,6 +46,7 @@ export default function BatchPayrollPanel() {
   const [confirm, setConfirm] = useState(null); // { row, advance }
   const [slip, setSlip] = useState(null); // paid row shown as a slip
   const [sigSaving, setSigSaving] = useState(false);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -62,24 +63,32 @@ export default function BatchPayrollPanel() {
         toast.error("Failed to load poultry batches.");
       }
     })();
-  }, []);
-
-  const loadPreview = async (id) => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      setPreview(await getBatchPayrollPreview(id));
-    } catch {
-      toast.error("Failed to load batch payroll.");
-      setPreview(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    loadPreview(batchId);
-  }, [batchId]);
+    let active = true;
+    const fetchPreview = async () => {
+      if (!batchId) {
+        setPreview(null);
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await getBatchPayrollPreview(batchId);
+        if (active) setPreview(data);
+      } catch {
+        toast.error("Failed to load batch payroll.");
+        if (active) setPreview(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchPreview();
+    return () => {
+      active = false;
+    };
+  }, [batchId, reloadTrigger, toast]);
 
   const selectedBatch = useMemo(
     () => batches.find((b) => String(b.id) === String(batchId)),
@@ -120,7 +129,7 @@ export default function BatchPayrollPanel() {
       });
       toast.success(`Batch payroll run for ${row.name}.`);
       setConfirm(null);
-      await loadPreview(batchId);
+      setReloadTrigger((prev) => prev + 1);
     } catch (e) {
       toast.error(e.message || "Failed to run batch payroll.");
     } finally {
@@ -135,7 +144,7 @@ export default function BatchPayrollPanel() {
       await savePayslipSignature(slip.itemId, dataUrl);
       setSlip((prev) => ({ ...prev, signature: dataUrl }));
       toast.success("Signature saved.");
-      await loadPreview(batchId);
+      setReloadTrigger((prev) => prev + 1);
     } catch (e) {
       toast.error(e.message || "Failed to save signature.");
     } finally {

@@ -91,21 +91,6 @@ const getSalaryWeek = () => {
   };
 };
 
-// Snap any date to the Friday→Thursday salary week that contains it.
-const weekOf = (dateStr) => {
-  const d = new Date(dateStr + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return null;
-  const back = (d.getDay() - 5 + 7) % 7; // Fri->0, Sat->1, ... Thu->6
-  const friday = new Date(d);
-  friday.setDate(d.getDate() - back);
-  const thursday = new Date(friday);
-  thursday.setDate(friday.getDate() + 6);
-  return {
-    startDate: localISO(friday),
-    endDate: localISO(thursday),
-  };
-};
-
 export default function RunPayroll() {
   const salaryWeek = getSalaryWeek();
   const [payrollData, setPayrollData] = useState([]);
