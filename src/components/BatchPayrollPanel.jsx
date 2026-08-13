@@ -176,7 +176,7 @@ export default function BatchPayrollPanel() {
         .net-lbl{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#14532d}
         .net-val{font-size:22px;font-weight:900;color:#15803d}
         .full{grid-column:span 2}
-        .top-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;grid-column:span 2}
+        .top-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;grid-column:span 2}
         .stat{background:#f9fafb;border:1px solid #f3f4f6;border-radius:8px;padding:8px 12px}
         .stat .slbl{display:block;font-size:9px;font-weight:800;text-transform:uppercase;color:#9ca3af;margin-bottom:2px}
         .stat .sval{font-weight:700;color:#111827;font-size:14px}
@@ -196,6 +196,10 @@ export default function BatchPayrollPanel() {
           <div class="stat">
             <span class="slbl">Days Worked</span>
             <span class="sval">${row.days}</span>
+          </div>
+          <div class="stat">
+            <span class="slbl">Wage / Day</span>
+            <span class="sval">${money(row.wagePerDay)}</span>
           </div>
           <div class="stat">
             <span class="slbl">Monthly Salary</span>
@@ -294,9 +298,21 @@ export default function BatchPayrollPanel() {
       {/* Summary strip */}
       <div className="grid grid-cols-3 gap-4 mb-5">
         {[
-          { label: "Total Gross", value: totals.gross, icon: <Wallet size={14} /> },
-          { label: "Advances Deducted", value: totals.advance, icon: <Wallet size={14} /> },
-          { label: "Net Payout", value: totals.net, icon: <CheckCircle2 size={14} /> },
+          {
+            label: "Total Gross",
+            value: totals.gross,
+            icon: <Wallet size={14} />,
+          },
+          {
+            label: "Advances Deducted",
+            value: totals.advance,
+            icon: <Wallet size={14} />,
+          },
+          {
+            label: "Net Payout",
+            value: totals.net,
+            icon: <CheckCircle2 size={14} />,
+          },
         ].map((c) => (
           <div
             key={c.label}
@@ -331,91 +347,100 @@ export default function BatchPayrollPanel() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                  <td
+                    colSpan={8}
+                    className="px-4 py-10 text-center text-gray-400"
+                  >
                     <Loader2 className="animate-spin inline mr-2" size={16} />
                     Loading…
                   </td>
                 </tr>
               )}
-              {!loading &&
-                (preview?.payouts?.length ?? 0) === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 font-semibold">
-                      No poultry workers found for this batch.
-                    </td>
-                  </tr>
-                )}
+              {!loading && (preview?.payouts?.length ?? 0) === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-4 py-10 text-center text-gray-400 font-semibold"
+                  >
+                    No poultry workers found for this batch.
+                  </td>
+                </tr>
+              )}
               {!loading &&
                 preview?.payouts?.map((row) => {
                   const toPay = row.grossPay || 0;
                   const fullyPaid = toPay <= 0.009 && (row.paidGross || 0) > 0;
                   return (
-                  <tr key={row.empId} className="border-t border-[#f0f4f0]">
-                    <td className="px-4 py-3 font-bold text-gray-800">
-                      {row.name}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      Rs. {fmt(row.monthlySalary)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      {row.days}{" "}
-                      <span className="text-gray-400 text-xs">
-                        (× {fmt(row.wagePerDay)}/day)
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      {(row.paidGross || 0) > 0 ? `Rs. ${fmt(row.paidGross)}` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">
-                      Rs. {fmt(toPay)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      {row.advanceOutstanding > 0
-                        ? `Rs. ${fmt(row.advanceOutstanding)}`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-black text-green-700">
-                      Rs. {fmt(row.netPay)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        {fullyPaid ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200">
-                            <CheckCircle2 size={13} /> Paid
-                          </span>
-                        ) : toPay <= 0.009 ? (
-                          <span className="text-xs font-bold text-gray-400">—</span>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!runnable || savingId === row.empId}
-                            onClick={() => openConfirm(row)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-colors ${
-                              runnable
-                                ? "bg-green-700 text-white hover:bg-green-800"
-                                : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                            }`}
-                          >
-                            {savingId === row.empId ? (
-                              <Loader2 className="animate-spin" size={13} />
-                            ) : (
-                              <Play size={13} />
-                            )}
-                            Run Payroll
-                          </button>
-                        )}
-                        {(row.paidGross || 0) > 0 && row.itemId && (
-                          <button
-                            type="button"
-                            onClick={() => setSlip(row)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50"
-                          >
-                            <FileCheck size={13} /> Slip
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    <tr key={row.empId} className="border-t border-[#f0f4f0]">
+                      <td className="px-4 py-3 font-bold text-gray-800">
+                        {row.name}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-600">
+                        Rs. {fmt(row.monthlySalary)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-600">
+                        {row.days}{" "}
+                        <span className="text-gray-400 text-xs">
+                          (× {fmt(row.wagePerDay)}/day)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-600">
+                        {(row.paidGross || 0) > 0
+                          ? `Rs. ${fmt(row.paidGross)}`
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-gray-900">
+                        Rs. {fmt(toPay)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-600">
+                        {row.advanceOutstanding > 0
+                          ? `Rs. ${fmt(row.advanceOutstanding)}`
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-black text-green-700">
+                        Rs. {fmt(row.netPay)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          {fullyPaid ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200">
+                              <CheckCircle2 size={13} /> Paid
+                            </span>
+                          ) : toPay <= 0.009 ? (
+                            <span className="text-xs font-bold text-gray-400">
+                              —
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!runnable || savingId === row.empId}
+                              onClick={() => openConfirm(row)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-colors ${
+                                runnable
+                                  ? "bg-green-700 text-white hover:bg-green-800"
+                                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              }`}
+                            >
+                              {savingId === row.empId ? (
+                                <Loader2 className="animate-spin" size={13} />
+                              ) : (
+                                <Play size={13} />
+                              )}
+                              Run Payroll
+                            </button>
+                          )}
+                          {(row.paidGross || 0) > 0 && row.itemId && (
+                            <button
+                              type="button"
+                              onClick={() => setSlip(row)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50"
+                            >
+                              <FileCheck size={13} /> Slip
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
             </tbody>
@@ -446,7 +471,8 @@ export default function BatchPayrollPanel() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500 font-semibold">
-                  To pay ({confirm.row.days} days worked × {fmt(confirm.row.wagePerDay)}/day)
+                  To pay ({confirm.row.days} days worked ×{" "}
+                  {fmt(confirm.row.wagePerDay)}/day)
                 </span>
                 <span className="font-bold text-gray-900">
                   Rs. {fmt(confirm.row.grossPay)}
@@ -537,7 +563,9 @@ export default function BatchPayrollPanel() {
           >
             <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-5 border-b border-green-200 flex justify-between items-start shrink-0">
               <div>
-                <h3 className="text-lg font-black text-gray-900 mb-0.5">{slip.name}</h3>
+                <h3 className="text-lg font-black text-gray-900 mb-0.5">
+                  {slip.name}
+                </h3>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Poultry &middot; Batch #{batchId}
                 </p>
@@ -554,14 +582,28 @@ export default function BatchPayrollPanel() {
             </div>
 
             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm overflow-y-auto flex-1 min-h-0 items-start content-start">
-              <div className="grid grid-cols-2 gap-3 sm:col-span-2">
+              <div className="grid grid-cols-3 gap-3 sm:col-span-2">
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Days Worked</span>
+                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">
+                    Days Worked
+                  </span>
                   <span className="font-bold text-gray-800">{slip.days}</span>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Monthly Salary</span>
-                  <span className="font-bold text-gray-800">Rs. {fmt(slip.monthlySalary)}</span>
+                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">
+                    Wage / Day
+                  </span>
+                  <span className="font-bold text-gray-800">
+                    Rs. {fmt(slip.wagePerDay)}
+                  </span>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">
+                    Monthly Salary
+                  </span>
+                  <span className="font-bold text-gray-800">
+                    Rs. {fmt(slip.monthlySalary)}
+                  </span>
                 </div>
               </div>
 
@@ -571,12 +613,20 @@ export default function BatchPayrollPanel() {
                 </div>
                 <div className="p-4 grid grid-cols-2 divide-x divide-gray-100 text-center">
                   <div>
-                    <span className="block text-lg font-black text-gray-900">Rs. {fmt(slip.paidBasic)}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Basic</span>
+                    <span className="block text-lg font-black text-gray-900">
+                      Rs. {fmt(slip.paidBasic)}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">
+                      Basic
+                    </span>
                   </div>
                   <div>
-                    <span className="block text-lg font-black text-blue-700">Rs. {fmt(slip.paidAllowance)}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Allowance</span>
+                    <span className="block text-lg font-black text-blue-700">
+                      Rs. {fmt(slip.paidAllowance)}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">
+                      Allowance
+                    </span>
                   </div>
                 </div>
               </div>
@@ -584,15 +634,25 @@ export default function BatchPayrollPanel() {
               <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2 shadow-sm">
                 <div className="flex justify-between">
                   <span className="font-bold text-gray-500">Gross (paid)</span>
-                  <span className="font-bold text-gray-900">Rs. {fmt(slip.paidGross)}</span>
+                  <span className="font-bold text-gray-900">
+                    Rs. {fmt(slip.paidGross)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-gray-500">Advances Deducted</span>
-                  <span className="font-bold text-red-600">− Rs. {fmt(slip.paidAdvance)}</span>
+                  <span className="font-bold text-gray-500">
+                    Advances Deducted
+                  </span>
+                  <span className="font-bold text-red-600">
+                    − Rs. {fmt(slip.paidAdvance)}
+                  </span>
                 </div>
                 <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between items-center">
-                  <span className="text-xs font-black text-green-900 uppercase tracking-wider">Net Cash Paid</span>
-                  <span className="text-2xl font-black text-green-700">Rs. {fmt(slip.paidNet)}</span>
+                  <span className="text-xs font-black text-green-900 uppercase tracking-wider">
+                    Net Cash Paid
+                  </span>
+                  <span className="text-2xl font-black text-green-700">
+                    Rs. {fmt(slip.paidNet)}
+                  </span>
                 </div>
               </div>
 

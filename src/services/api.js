@@ -1555,6 +1555,10 @@ export const deleteOwnerFinancial = async (id) => {
 };
 
 export const searchCheques = async (chequeNo) => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_cheques") || "[]");
+    return mock.filter(c => !chequeNo || c.chequeNo.toLowerCase().includes(chequeNo.toLowerCase()));
+  }
   const response = await fetch(
     `${BASE_URL}/finance/cheques?chequeNo=${chequeNo || ""}`,
     { headers: getHeaders() },
@@ -1571,6 +1575,40 @@ export const searchCheques = async (chequeNo) => {
     amount: item.amount,
     status: item.status || "Pending",
   }));
+};
+
+export const createCheque = async (data) => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_cheques") || "[]");
+    const newCheque = {
+      id: Date.now(),
+      chequeNo: data.chequeNo,
+      cheque_date: data.chequeDate,
+      payee: data.payee,
+      category: data.category,
+      amount: data.amount,
+      status: data.status || "Pending",
+    };
+    mock.push(newCheque);
+    localStorage.setItem("mock_cheques", JSON.stringify(mock));
+    return newCheque;
+  }
+  const response = await fetch(`${BASE_URL}/finance/cheques`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to create cheque");
+  const item = unwrapApiData(await response.json());
+  return {
+    id: item.id,
+    chequeNo: item.cheque_no,
+    cheque_date: item.cheque_date,
+    payee: item.description,
+    category: item.source,
+    amount: item.amount,
+    status: item.status || "Pending",
+  };
 };
 
 // --- ASSET & WARRANTY ENDPOINTS ---
@@ -1936,3 +1974,92 @@ export const deleteMachineryExpense = async (id) => {
   });
   return response.ok;
 };
+
+export const getExcelDocuments = async () => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_excel_docs") || "[]");
+    return mock.map(d => ({ id: d.id, name: d.name, uploaded_at: d.uploaded_at, updated_at: d.updated_at }));
+  }
+  const response = await fetch(`${BASE_URL}/excel-documents`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to list archived documents: ${response.statusText}`);
+  }
+  const payload = unwrapApiData(await response.json());
+  return Array.isArray(payload) ? payload : [];
+};
+
+export const getExcelDocument = async (id) => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_excel_docs") || "[]");
+    const doc = mock.find((d) => d.id === Number(id));
+    if (!doc) throw new Error("Document not found");
+    return doc;
+  }
+  const response = await fetch(`${BASE_URL}/excel-documents/${id}`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to fetch excel document");
+  return unwrapApiData(await response.json());
+};
+
+export const createExcelDocument = async (data) => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_excel_docs") || "[]");
+    const newDoc = {
+      id: Date.now(),
+      name: data.name,
+      content: data.content,
+      uploaded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mock.push(newDoc);
+    localStorage.setItem("mock_excel_docs", JSON.stringify(mock));
+    return { id: newDoc.id, name: newDoc.name, message: "Document save successful" };
+  }
+  const response = await fetch(`${BASE_URL}/excel-documents`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to create excel document");
+  return unwrapApiData(await response.json());
+};
+
+export const updateExcelDocument = async (id, data) => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_excel_docs") || "[]");
+    const idx = mock.findIndex((d) => d.id === Number(id));
+    if (idx !== -1) {
+      if (data.name) mock[idx].name = data.name;
+      if (data.content) mock[idx].content = data.content;
+      mock[idx].updated_at = new Date().toISOString();
+      localStorage.setItem("mock_excel_docs", JSON.stringify(mock));
+      return { id: Number(id), message: "Document updated successfully" };
+    }
+    throw new Error("Document not found");
+  }
+  const response = await fetch(`${BASE_URL}/excel-documents/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update excel document");
+  return unwrapApiData(await response.json());
+};
+
+export const deleteExcelDocument = async (id) => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_excel_docs") || "[]");
+    const filtered = mock.filter((d) => d.id !== Number(id));
+    localStorage.setItem("mock_excel_docs", JSON.stringify(filtered));
+    return true;
+  }
+  const response = await fetch(`${BASE_URL}/excel-documents/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  return response.ok;
+};
+

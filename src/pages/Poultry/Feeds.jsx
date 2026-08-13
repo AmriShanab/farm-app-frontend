@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Wheat, Plus, Loader2, X, Check, Trash2, Filter, Pencil } from "lucide-react";
+import { Wheat, Plus, Loader2, X, Check, Trash2, Pencil } from "lucide-react";
 import {
   getPoultryBatches,
   getPoultryFeed,
@@ -108,9 +108,42 @@ export default function PoultryFeeds() {
   };
 
   const feedTypes = useMemo(() => {
-    const types = [...new Set(data.map((l) => l.feed_type || l.feedType).filter(Boolean))];
+    const types = [
+      ...new Set(data.map((l) => l.feed_type || l.feedType).filter(Boolean)),
+    ];
     types.sort((a, b) => a.localeCompare(b));
     return types;
+  }, [data]);
+
+  const feedSummary = useMemo(() => {
+    const summary = {};
+    data.forEach((item) => {
+      const type = item.feed_type || item.feedType || "Other";
+      const qty = parseFloat(item.quantity || 0);
+      const rate = parseFloat(item.rate_per_unit || item.ratePerUnit || 0);
+      const amount = qty * rate;
+      const paid = parseFloat(item.paid_amount || item.paidAmount || 0);
+      const payable = parseFloat(
+        item.payable_balance || item.payableBalance || 0,
+      );
+
+      if (!summary[type]) {
+        summary[type] = {
+          feedType: type,
+          quantity: 0,
+          amount: 0,
+          paidAmount: 0,
+          payableBalance: 0,
+        };
+      }
+      summary[type].quantity += qty;
+      summary[type].amount += amount;
+      summary[type].paidAmount += paid;
+      summary[type].payableBalance += payable;
+    });
+    return Object.values(summary).sort((a, b) =>
+      a.feedType.localeCompare(b.feedType),
+    );
   }, [data]);
 
   const filtered = useMemo(() => {
@@ -207,372 +240,488 @@ export default function PoultryFeeds() {
           {tab === "usage" ? (
             <UsagePanel kind="feed" batchId={selectedBatchId} />
           ) : (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
-            <div className="flex items-center gap-3">
-              <Wheat size={16} className="text-green-600" />
-              <h2 className="font-bold text-gray-800">Feed Ledger</h2>
-              {batches.length > 0 && (
-                <select
-                  value={selectedBatchId}
-                  onChange={(e) => {
-                    if (selectedBatchId !== e.target.value) {
-                      setIsLoadingFeed(true);
-                      setFeedFilter("All");
-                      setSelectedBatchId(e.target.value);
-                    }
-                  }}
-                  className="ml-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg px-3 py-1.5 outline-none cursor-pointer"
-                >
-                  {batches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      Batch {b.notes || `#${b.id}`}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {feedTypes.length > 1 && (
-                <select
-                  value={feedFilter}
-                  onChange={(e) => setFeedFilter(e.target.value)}
-                  className="ml-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg px-3 py-1.5 outline-none cursor-pointer"
-                >
-                  <option value="All">All Feed Types</option>
-                  {feedTypes.map((ft) => (
-                    <option key={ft} value={ft}>{ft}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <button
-              onClick={() => setIsAdding(true)}
-              disabled={isAdding || editingId !== null || batches.length === 0}
-              className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:-translate-y-0.5 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:transform-none"
-            >
-              <Plus size={14} /> Add Feed
-            </button>
-          </div>
-
-          {isLoadingFeed ? (
-            <div className="text-center py-10">
-              <Loader2 className="animate-spin mx-auto text-green-600" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap">
-                <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="p-4 text-left">Date</th>
-                    <th className="p-4 text-left">Feed Details</th>
-                    <th className="p-4 text-right">Cost Breakdown</th>
-                    <th className="p-4 text-left">Payment Info</th>
-                    <th className="p-4 text-right">Payable Bal.</th>
-                    <th className="p-4 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isAdding && (
-                    <tr className="bg-green-50/30 border-b border-green-100 align-top">
-                      <td className="p-3">
-                        <input
-                          type="date"
-                          value={newRow.date}
-                          onChange={(e) =>
-                            setNewRow({ ...newRow, date: e.target.value })
-                          }
-                          className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
-                          disabled={isSaving}
-                        />
-                      </td>
-                      <td className="p-3 space-y-2">
-                        <input
-                          type="text"
-                          placeholder="e.g. Starter Pellets"
-                          value={newRow.feedType}
-                          onChange={(e) =>
-                            setNewRow({ ...newRow, feedType: e.target.value })
-                          }
-                          className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
-                          disabled={isSaving}
-                        />
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            placeholder="Qty"
-                            value={newRow.quantity}
-                            onChange={(e) =>
-                              setNewRow({ ...newRow, quantity: e.target.value })
-                            }
-                            className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
-                            disabled={isSaving}
-                          />
-                          <input
-                            type="number"
-                            placeholder="Rate"
-                            value={newRow.ratePerUnit}
-                            onChange={(e) =>
-                              setNewRow({
-                                ...newRow,
-                                ratePerUnit: e.target.value,
-                              })
-                            }
-                            className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
-                            disabled={isSaving}
-                          />
-                        </div>
-                      </td>
-                      <td className="p-3 text-right pt-5 font-bold text-gray-800">
-                        Rs.{" "}
-                        {fmt(
-                          (parseFloat(newRow.quantity) || 0) *
-                            (parseFloat(newRow.ratePerUnit) || 0),
-                        )}
-                      </td>
-                      <td className="p-3 space-y-2">
-                        <input
-                          type="number"
-                          placeholder="Cash Paid"
-                          value={newRow.paidAmount}
-                          onChange={(e) =>
-                            setNewRow({
-                              ...newRow,
-                              paidAmount: e.target.value,
-                            })
-                          }
-                          className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
-                          disabled={isSaving}
-                        />
-                      </td>
-                      <td className="p-3 text-right pt-5 font-black text-red-600">
-                        Rs.{" "}
-                        {fmt(
-                          (parseFloat(newRow.quantity) || 0) *
-                            (parseFloat(newRow.ratePerUnit) || 0) -
-                            (parseFloat(newRow.paidAmount) || 0),
-                        )}
-                      </td>
-                      <td className="p-3 text-right pt-5">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setIsAdding(false)}
-                            disabled={isSaving}
-                            className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
-                          >
-                            <X size={14} />
-                          </button>
-                          <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700"
-                          >
-                            {isSaving ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Check size={14} />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {filtered.length === 0 && !isAdding && (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-400 font-bold">
-                        {feedFilter !== "All" ? `No records for "${feedFilter}".` : "No feed records found."}
-                      </td>
-                    </tr>
-                  )}
-                  {filtered.map((log) => {
-                    const isEditing = editingId === log.id;
-                    if (isEditing) {
-                      return (
-                        <tr key={log.id} className="bg-amber-50/30 border-b border-amber-100 align-top">
-                          <td className="p-3">
-                            <input
-                              type="date"
-                              value={editRow.date}
-                              onChange={(e) =>
-                                setEditRow({ ...editRow, date: e.target.value })
-                              }
-                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
-                              disabled={isSaving}
-                            />
-                          </td>
-                          <td className="p-3 space-y-2">
-                            <input
-                              type="text"
-                              placeholder="e.g. Starter Pellets"
-                              value={editRow.feedType}
-                              onChange={(e) =>
-                                setEditRow({ ...editRow, feedType: e.target.value })
-                              }
-                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
-                              disabled={isSaving}
-                            />
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                placeholder="Qty"
-                                value={editRow.quantity}
-                                onChange={(e) =>
-                                  setEditRow({ ...editRow, quantity: e.target.value })
-                                }
-                                className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
-                                disabled={isSaving}
-                              />
-                              <input
-                                type="number"
-                                placeholder="Rate"
-                                value={editRow.ratePerUnit}
-                                onChange={(e) =>
-                                  setEditRow({ ...editRow, ratePerUnit: e.target.value })
-                                }
-                                className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
-                                disabled={isSaving}
-                              />
-                            </div>
-                          </td>
-                          <td className="p-3 text-right pt-5 font-bold text-gray-800">
-                            Rs.{" "}
-                            {fmt(
-                              (parseFloat(editRow.quantity) || 0) *
-                                (parseFloat(editRow.ratePerUnit) || 0),
-                            )}
-                          </td>
-                          <td className="p-3 space-y-2">
-                            <input
-                              type="number"
-                              placeholder="Cash Paid"
-                              value={editRow.paidAmount}
-                              onChange={(e) =>
-                                setEditRow({ ...editRow, paidAmount: e.target.value })
-                              }
-                              className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
-                              disabled={isSaving}
-                            />
-                          </td>
-                          <td className="p-3 text-right pt-5 font-black text-red-600">
-                            Rs.{" "}
-                            {fmt(
-                              (parseFloat(editRow.quantity) || 0) *
-                                (parseFloat(editRow.ratePerUnit) || 0) -
-                                (parseFloat(editRow.paidAmount) || 0),
-                            )}
-                          </td>
-                          <td className="p-3 text-right pt-5">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => setEditingId(null)}
-                                disabled={isSaving}
-                                className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
-                              >
-                                <X size={14} />
-                              </button>
-                              <button
-                                onClick={handleEditSave}
-                                disabled={isSaving}
-                                className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700"
-                              >
-                                {isSaving ? (
-                                  <Loader2 size={14} className="animate-spin" />
-                                ) : (
-                                  <Check size={14} />
-                                )}
-                              </button>
-                            </div>
-                          </td>
+            <div className="space-y-6">
+              {feedSummary.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-fadeIn">
+                  <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
+                    <Wheat size={16} className="text-green-600" />
+                    <h2 className="font-bold text-gray-800 text-sm">
+                      Feed Summary by Type
+                    </h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-4 text-left">Feed Type</th>
+                          <th className="p-4 text-right">Total Quantity</th>
+                          <th className="p-4 text-right">Full Cost</th>
+                          <th className="p-4 text-right">Paid</th>
+                          <th className="p-4 text-right">Payable Bal.</th>
                         </tr>
-                      );
-                    }
-                    const qty = parseFloat(log.quantity || 0);
-                    const rate = parseFloat(log.rate_per_unit || 0);
-                    const totalCost = qty * rate;
-                    return (
-                      <tr
-                        key={log.id}
-                        className="border-t border-gray-50 hover:bg-gray-50/50"
-                      >
-                        <td className="p-4 font-bold text-gray-900">
-                          {log.date}
-                          {log.day_count != null && (
-                            <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
-                              Day {log.day_count}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <p className="font-bold text-gray-800">
-                            {log.feed_type}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {qty} units @ Rs. {fmt(rate)}
-                          </p>
-                        </td>
-                        <td className="p-4 text-right">
-                          <span className="font-black text-gray-900">
-                            Rs. {fmt(totalCost)}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className="font-bold text-green-700">
-                            Rs. {fmt(log.paid_amount)}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <span
-                            className={`font-black ${parseFloat(log.payable_balance) > 0 ? "text-red-600" : "text-gray-400"}`}
+                      </thead>
+                      <tbody>
+                        {feedSummary.map((feed) => (
+                          <tr
+                            key={feed.feedType}
+                            className="border-t border-gray-50 hover:bg-gray-50/50"
                           >
-                            Rs. {fmt(log.payable_balance)}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => startEditing(log)}
-                              disabled={isAdding || editingId !== null}
-                              className="text-gray-400 hover:text-amber-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                            <td className="p-4 font-bold text-gray-900">
+                              {feed.feedType}
+                            </td>
+                            <td className="p-4 text-right font-semibold">
+                              {parseFloat(feed.quantity).toLocaleString()} units
+                            </td>
+                            <td className="p-4 text-right font-black text-gray-900">
+                              Rs. {fmt(feed.amount)}
+                            </td>
+                            <td className="p-4 text-right font-bold text-green-700">
+                              Rs. {fmt(feed.paidAmount)}
+                            </td>
+                            <td className="p-4 text-right font-black text-amber-700">
+                              Rs. {fmt(feed.payableBalance)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
+                  <div className="flex items-center gap-3">
+                    <Wheat size={16} className="text-green-600" />
+                    <h2 className="font-bold text-gray-800">Feed Ledger</h2>
+                    {batches.length > 0 && (
+                      <select
+                        value={selectedBatchId}
+                        onChange={(e) => {
+                          if (selectedBatchId !== e.target.value) {
+                            setIsLoadingFeed(true);
+                            setFeedFilter("All");
+                            setSelectedBatchId(e.target.value);
+                          }
+                        }}
+                        className="ml-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg px-3 py-1.5 outline-none cursor-pointer"
+                      >
+                        {batches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            Batch {b.notes || `#${b.id}`}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {feedTypes.length > 1 && (
+                      <select
+                        value={feedFilter}
+                        onChange={(e) => setFeedFilter(e.target.value)}
+                        className="ml-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg px-3 py-1.5 outline-none cursor-pointer"
+                      >
+                        <option value="All">All Feed Types</option>
+                        {feedTypes.map((ft) => (
+                          <option key={ft} value={ft}>
+                            {ft}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setIsAdding(true)}
+                    disabled={
+                      isAdding || editingId !== null || batches.length === 0
+                    }
+                    className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:-translate-y-0.5 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:transform-none"
+                  >
+                    <Plus size={14} /> Add Feed
+                  </button>
+                </div>
+
+                {isLoadingFeed ? (
+                  <div className="text-center py-10">
+                    <Loader2 className="animate-spin mx-auto text-green-600" />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm whitespace-nowrap">
+                      <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-4 text-left">Date</th>
+                          <th className="p-4 text-left">Feed Details</th>
+                          <th className="p-4 text-right">Cost Breakdown</th>
+                          <th className="p-4 text-left">Payment Info</th>
+                          <th className="p-4 text-right">Payable Bal.</th>
+                          <th className="p-4 text-right"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {isAdding && (
+                          <tr className="bg-green-50/30 border-b border-green-100 align-top">
+                            <td className="p-3">
+                              <input
+                                type="date"
+                                value={newRow.date}
+                                onChange={(e) =>
+                                  setNewRow({ ...newRow, date: e.target.value })
+                                }
+                                className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                                disabled={isSaving}
+                              />
+                            </td>
+                            <td className="p-3 space-y-2">
+                              <input
+                                type="text"
+                                placeholder="e.g. Starter Pellets"
+                                value={newRow.feedType}
+                                onChange={(e) =>
+                                  setNewRow({
+                                    ...newRow,
+                                    feedType: e.target.value,
+                                  })
+                                }
+                                className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                                disabled={isSaving}
+                              />
+                              <div className="flex gap-2">
+                                <input
+                                  type="number"
+                                  placeholder="Qty"
+                                  value={newRow.quantity}
+                                  onChange={(e) =>
+                                    setNewRow({
+                                      ...newRow,
+                                      quantity: e.target.value,
+                                    })
+                                  }
+                                  className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
+                                  disabled={isSaving}
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Rate"
+                                  value={newRow.ratePerUnit}
+                                  onChange={(e) =>
+                                    setNewRow({
+                                      ...newRow,
+                                      ratePerUnit: e.target.value,
+                                    })
+                                  }
+                                  className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
+                                  disabled={isSaving}
+                                />
+                              </div>
+                            </td>
+                            <td className="p-3 text-right pt-5 font-bold text-gray-800">
+                              Rs.{" "}
+                              {fmt(
+                                (parseFloat(newRow.quantity) || 0) *
+                                  (parseFloat(newRow.ratePerUnit) || 0),
+                              )}
+                            </td>
+                            <td className="p-3 space-y-2">
+                              <input
+                                type="number"
+                                placeholder="Cash Paid"
+                                value={newRow.paidAmount}
+                                onChange={(e) =>
+                                  setNewRow({
+                                    ...newRow,
+                                    paidAmount: e.target.value,
+                                  })
+                                }
+                                className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                                disabled={isSaving}
+                              />
+                            </td>
+                            <td className="p-3 text-right pt-5 font-black text-red-600">
+                              Rs.{" "}
+                              {fmt(
+                                (parseFloat(newRow.quantity) || 0) *
+                                  (parseFloat(newRow.ratePerUnit) || 0) -
+                                  (parseFloat(newRow.paidAmount) || 0),
+                              )}
+                            </td>
+                            <td className="p-3 text-right pt-5">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => setIsAdding(false)}
+                                  disabled={isSaving}
+                                  className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
+                                >
+                                  <X size={14} />
+                                </button>
+                                <button
+                                  onClick={handleSave}
+                                  disabled={isSaving}
+                                  className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700"
+                                >
+                                  {isSaving ? (
+                                    <Loader2
+                                      size={14}
+                                      className="animate-spin"
+                                    />
+                                  ) : (
+                                    <Check size={14} />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {filtered.length === 0 && !isAdding && (
+                          <tr>
+                            <td
+                              colSpan={6}
+                              className="p-8 text-center text-gray-400 font-bold"
                             >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(log.id)}
-                              disabled={isAdding || editingId !== null}
-                              className="text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                              {feedFilter !== "All"
+                                ? `No records for "${feedFilter}".`
+                                : "No feed records found."}
+                            </td>
+                          </tr>
+                        )}
+                        {filtered.map((log) => {
+                          const isEditing = editingId === log.id;
+                          if (isEditing) {
+                            return (
+                              <tr
+                                key={log.id}
+                                className="bg-amber-50/30 border-b border-amber-100 align-top"
+                              >
+                                <td className="p-3">
+                                  <input
+                                    type="date"
+                                    value={editRow.date}
+                                    onChange={(e) =>
+                                      setEditRow({
+                                        ...editRow,
+                                        date: e.target.value,
+                                      })
+                                    }
+                                    className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                                    disabled={isSaving}
+                                  />
+                                </td>
+                                <td className="p-3 space-y-2">
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Starter Pellets"
+                                    value={editRow.feedType}
+                                    onChange={(e) =>
+                                      setEditRow({
+                                        ...editRow,
+                                        feedType: e.target.value,
+                                      })
+                                    }
+                                    className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                                    disabled={isSaving}
+                                  />
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="number"
+                                      placeholder="Qty"
+                                      value={editRow.quantity}
+                                      onChange={(e) =>
+                                        setEditRow({
+                                          ...editRow,
+                                          quantity: e.target.value,
+                                        })
+                                      }
+                                      className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
+                                      disabled={isSaving}
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="Rate"
+                                      value={editRow.ratePerUnit}
+                                      onChange={(e) =>
+                                        setEditRow({
+                                          ...editRow,
+                                          ratePerUnit: e.target.value,
+                                        })
+                                      }
+                                      className="w-1/2 p-2 text-xs border border-gray-300 rounded outline-none"
+                                      disabled={isSaving}
+                                    />
+                                  </div>
+                                </td>
+                                <td className="p-3 text-right pt-5 font-bold text-gray-800">
+                                  Rs.{" "}
+                                  {fmt(
+                                    (parseFloat(editRow.quantity) || 0) *
+                                      (parseFloat(editRow.ratePerUnit) || 0),
+                                  )}
+                                </td>
+                                <td className="p-3 space-y-2">
+                                  <input
+                                    type="number"
+                                    placeholder="Cash Paid"
+                                    value={editRow.paidAmount}
+                                    onChange={(e) =>
+                                      setEditRow({
+                                        ...editRow,
+                                        paidAmount: e.target.value,
+                                      })
+                                    }
+                                    className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                                    disabled={isSaving}
+                                  />
+                                </td>
+                                <td className="p-3 text-right pt-5 font-black text-red-600">
+                                  Rs.{" "}
+                                  {fmt(
+                                    (parseFloat(editRow.quantity) || 0) *
+                                      (parseFloat(editRow.ratePerUnit) || 0) -
+                                      (parseFloat(editRow.paidAmount) || 0),
+                                  )}
+                                </td>
+                                <td className="p-3 text-right pt-5">
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={() => setEditingId(null)}
+                                      disabled={isSaving}
+                                      className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                    <button
+                                      onClick={handleEditSave}
+                                      disabled={isSaving}
+                                      className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700"
+                                    >
+                                      {isSaving ? (
+                                        <Loader2
+                                          size={14}
+                                          className="animate-spin"
+                                        />
+                                      ) : (
+                                        <Check size={14} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                          const qty = parseFloat(log.quantity || 0);
+                          const rate = parseFloat(log.rate_per_unit || 0);
+                          const totalCost = qty * rate;
+                          return (
+                            <tr
+                              key={log.id}
+                              className="border-t border-gray-50 hover:bg-gray-50/50"
                             >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                {filtered.length > 0 && (
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200 bg-gray-50/80">
-                      <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">
-                        {feedFilter !== "All" ? feedFilter : "Totals"}
-                      </td>
-                      <td className="p-4 text-xs text-gray-700 font-bold">
-                        {filtered.reduce((sum, l) => sum + parseFloat(l.quantity || 0), 0)} units
-                      </td>
-                      <td className="p-4 text-right font-black text-gray-900">
-                        Rs. {fmt(filtered.reduce((sum, l) => sum + (parseFloat(l.quantity || 0) * parseFloat(l.rate_per_unit || 0)), 0))}
-                      </td>
-                      <td className="p-4 text-right font-bold text-green-700">
-                        Rs. {fmt(filtered.reduce((sum, l) => sum + parseFloat(l.paid_amount || 0), 0))}
-                      </td>
-                      <td className="p-4 text-right font-black text-red-600">
-                        Rs. {fmt(filtered.reduce((sum, l) => sum + parseFloat(l.payable_balance || 0), 0))}
-                      </td>
-                      <td className="p-4"></td>
-                    </tr>
-                  </tfoot>
+                              <td className="p-4 font-bold text-gray-900">
+                                {log.date}
+                                {log.day_count != null && (
+                                  <span className="block text-[10px] font-bold text-amber-600 mt-0.5">
+                                    Day {log.day_count}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-4">
+                                <p className="font-bold text-gray-800">
+                                  {log.feed_type}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {qty} units @ Rs. {fmt(rate)}
+                                </p>
+                              </td>
+                              <td className="p-4 text-right">
+                                <span className="font-black text-gray-900">
+                                  Rs. {fmt(totalCost)}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="font-bold text-green-700">
+                                  Rs. {fmt(log.paid_amount)}
+                                </span>
+                              </td>
+                              <td className="p-4 text-right">
+                                <span
+                                  className={`font-black ${parseFloat(log.payable_balance) > 0 ? "text-red-600" : "text-gray-400"}`}
+                                >
+                                  Rs. {fmt(log.payable_balance)}
+                                </span>
+                              </td>
+                              <td className="p-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => startEditing(log)}
+                                    disabled={isAdding || editingId !== null}
+                                    className="text-gray-400 hover:text-amber-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(log.id)}
+                                    disabled={isAdding || editingId !== null}
+                                    className="text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      {filtered.length > 0 && (
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                            <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">
+                              {feedFilter !== "All" ? feedFilter : "Totals"}
+                            </td>
+                            <td className="p-4 text-xs text-gray-700 font-bold">
+                              {filtered.reduce(
+                                (sum, l) => sum + parseFloat(l.quantity || 0),
+                                0,
+                              )}{" "}
+                              units
+                            </td>
+                            <td className="p-4 text-right font-black text-gray-900">
+                              Rs.{" "}
+                              {fmt(
+                                filtered.reduce(
+                                  (sum, l) =>
+                                    sum +
+                                    parseFloat(l.quantity || 0) *
+                                      parseFloat(l.rate_per_unit || 0),
+                                  0,
+                                ),
+                              )}
+                            </td>
+                            <td className="p-4 text-right font-bold text-green-700">
+                              Rs.{" "}
+                              {fmt(
+                                filtered.reduce(
+                                  (sum, l) =>
+                                    sum + parseFloat(l.paid_amount || 0),
+                                  0,
+                                ),
+                              )}
+                            </td>
+                            <td className="p-4 text-right font-black text-red-600">
+                              Rs.{" "}
+                              {fmt(
+                                filtered.reduce(
+                                  (sum, l) =>
+                                    sum + parseFloat(l.payable_balance || 0),
+                                  0,
+                                ),
+                              )}
+                            </td>
+                            <td className="p-4"></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
                 )}
-              </table>
+              </div>
             </div>
-          )}
-        </div>
           )}
         </>
       )}

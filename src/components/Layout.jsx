@@ -28,6 +28,7 @@ import {
   HandCoins,
   Skull,
   Download,
+  FileSpreadsheet,
 } from "lucide-react";
 import { clearStoredAuth } from "../services/api";
 import { downloadTablesCsv } from "../utils/csv";
@@ -53,9 +54,9 @@ export default function Layout() {
     if (!content) return undefined;
 
     const updateAvailability = () => {
-      const hasVisibleTable = Array.from(content.querySelectorAll("table")).some(
-        (table) => table.getClientRects().length > 0,
-      );
+      const hasVisibleTable = Array.from(
+        content.querySelectorAll("table"),
+      ).some((table) => table.getClientRects().length > 0);
       setHasExportableData(hasVisibleTable);
     };
 
@@ -79,7 +80,10 @@ export default function Layout() {
   const handlePageExport = () => {
     const pageName =
       location.pathname.split("/").filter(Boolean).join("-") || "dashboard";
-    downloadTablesCsv(`${pageName}-${new Date().toISOString().slice(0, 10)}.csv`, pageContentRef.current);
+    downloadTablesCsv(
+      `${pageName}-${new Date().toISOString().slice(0, 10)}.csv`,
+      pageContentRef.current,
+    );
   };
 
   // Updated Navigation Array with Sub-Items
@@ -135,6 +139,7 @@ export default function Layout() {
     { name: "Finances", path: "/finances", icon: Landmark },
     { name: "Assets & Warranty", path: "/assets", icon: ShieldCheck },
     { name: "Cycle Breakdown", path: "/breakdown", icon: Calculator },
+    { name: "Excel Archive", path: "/excel-archive", icon: FileSpreadsheet },
   ];
 
   return (
@@ -318,7 +323,11 @@ export default function Layout() {
               onClick={handlePageExport}
               disabled={!hasExportableData}
               className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-              title={hasExportableData ? "Export the visible page data as CSV" : "No table data to export"}
+              title={
+                hasExportableData
+                  ? "Export the visible page data as CSV"
+                  : "No table data to export"
+              }
             >
               <Download size={14} />
               <span className="hidden sm:inline">Export CSV</span>
@@ -348,7 +357,10 @@ export default function Layout() {
         </header>
 
         {/* Dynamic Page Content */}
-        <main ref={pageContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 pt-4">
+        <main
+          ref={pageContentRef}
+          className="flex-1 overflow-y-auto p-4 md:p-8 pt-4"
+        >
           <Outlet />
         </main>
       </div>

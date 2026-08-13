@@ -23,6 +23,8 @@ import FinanceManagement from "./pages/Finance";
 import AssetManagement from "./pages/Assets";
 import GeneralExpenses from "./pages/GeneralExpenses";
 import MonthlyBreakdown from "./pages/MonthlyBreakdown";
+import ExcelArchiveDashboard from "./pages/ExcelArchive/Dashboard";
+import ExcelSheetEditor from "./pages/ExcelArchive/SheetEditor";
 import { getStoredAuth } from "./services/api";
 
 const ProtectedRoute = ({ children }) => {
@@ -84,6 +86,8 @@ function App() {
           <Route path="finances" element={<FinanceManagement />} />
           <Route path="assets" element={<AssetManagement />} />
           <Route path="breakdown" element={<MonthlyBreakdown />} />
+          <Route path="excel-archive" element={<ExcelArchiveDashboard />} />
+          <Route path="excel-archive/edit/:id" element={<ExcelSheetEditor />} />
         </Route>
       </Routes>
     </BrowserRouter>
