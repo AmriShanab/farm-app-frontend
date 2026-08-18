@@ -37,3 +37,75 @@
     @apply bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide;
   }
 }
+
+@media print {
+  /* Hide UI elements that shouldn't appear on documents */
+  aside,
+  header,
+  .no-print,
+  button,
+  select,
+  input,
+  form,
+  .inline-actions {
+    display: none !important;
+  }
+
+  /* Reset layout constraints for standard document flow */
+  html, body, #root, .h-screen, .overflow-hidden, .overflow-y-auto {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Force standard block canvas for printing on the main content */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    background: white !important;
+    color: black !important;
+    font-family: "Nunito", sans-serif !important;
+  }
+
+  /* Ensure background colors print natively in browser */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Table formatting checks */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+
+  /* Force print text colors */
+  .text-gray-900,
+  .text-gray-800,
+  .text-gray-700 {
+    color: #111827 !important;
+  }
+  .bg-gray-50 {
+    background-color: #f9fafb !important;
+  }
+
+  /* Focus print detailed sections individually */
+  .print-focus-active .hide-on-print-focus {
+    display: none !important;
+  }
+}

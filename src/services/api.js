@@ -1379,6 +1379,44 @@ export const deletePoultryExpense = async (id) => {
   return true;
 };
 
+// --- POULTRY: SUPPLIER EXPENSES ENDPOINTS ---
+
+export const getPoultrySupplierExpenses = async (batchId) => {
+  let url = `${BASE_URL}/poultry/supplier-expenses`;
+  if (batchId) url += `?batchId=${batchId}`;
+  const response = await fetch(url, { headers: getHeaders() });
+  return unwrapApiData(await response.json()) || [];
+};
+
+export const createPoultrySupplierExpense = async (data) => {
+  const response = await fetch(`${BASE_URL}/poultry/supplier-expenses`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to create supplier expense");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const updatePoultrySupplierExpense = async (id, data) => {
+  const response = await fetch(`${BASE_URL}/poultry/supplier-expenses/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update supplier expense");
+  return unwrapApiData(await response.json()) || {};
+};
+
+export const deletePoultrySupplierExpense = async (id) => {
+  const response = await fetch(`${BASE_URL}/poultry/supplier-expenses/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete supplier expense");
+  return true;
+};
+
 // --- POULTRY: SETTLEMENT ENDPOINT ---
 
 export const getPoultrySettlement = async (batchId) => {

@@ -31,14 +31,11 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { clearStoredAuth } from "../services/api";
-import { downloadTablesCsv } from "../utils/csv";
-
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const pageContentRef = useRef(null);
-  const [hasExportableData, setHasExportableData] = useState(false);
 
   // State to track which sidebar menus are expanded
   const [expandedMenus, setExpandedMenus] = useState({
@@ -47,23 +44,6 @@ export default function Layout() {
 
   useEffect(() => {
     setTimeout(() => setIsSidebarOpen(false), 0);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const content = pageContentRef.current;
-    if (!content) return undefined;
-
-    const updateAvailability = () => {
-      const hasVisibleTable = Array.from(
-        content.querySelectorAll("table"),
-      ).some((table) => table.getClientRects().length > 0);
-      setHasExportableData(hasVisibleTable);
-    };
-
-    updateAvailability();
-    const observer = new MutationObserver(updateAvailability);
-    observer.observe(content, { childList: true, subtree: true });
-    return () => observer.disconnect();
   }, [location.pathname]);
 
   const toggleMenu = (key) => {
@@ -78,12 +58,7 @@ export default function Layout() {
   };
 
   const handlePageExport = () => {
-    const pageName =
-      location.pathname.split("/").filter(Boolean).join("-") || "dashboard";
-    downloadTablesCsv(
-      `${pageName}-${new Date().toISOString().slice(0, 10)}.csv`,
-      pageContentRef.current,
-    );
+    window.print();
   };
 
   // Updated Navigation Array with Sub-Items
@@ -321,16 +296,11 @@ export default function Layout() {
             <button
               type="button"
               onClick={handlePageExport}
-              disabled={!hasExportableData}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-              title={
-                hasExportableData
-                  ? "Export the visible page data as CSV"
-                  : "No table data to export"
-              }
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              title="Export the visible page data as PDF"
             >
               <Download size={14} />
-              <span className="hidden sm:inline">Export CSV</span>
+              <span className="hidden sm:inline">Export PDF</span>
             </button>
 
             {/* Dynamic Date & Weather/Status */}
@@ -361,7 +331,134 @@ export default function Layout() {
           ref={pageContentRef}
           className="flex-1 overflow-y-auto p-4 md:p-8 pt-4"
         >
+          {/* Print-only Letterhead */}
+          <div className="hidden print:block mb-8 border-b-2 border-emerald-800 pb-6">
+            <div className="flex justify-between text-[11px] font-bold text-gray-500 mb-6">
+              {/* <div className="text-left leading-relaxed">
+                <p>123 Farm Road, Green Valley,</p>
+                <p>Kerala - 695001, INDIA</p>
+              </div> */}
+              {/* <div className="text-right leading-relaxed">
+                <p>Phone: +91 98765 43210</p>
+                <p>Email: info@mrfarms.com</p>
+              </div> */}
+            </div>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="relative w-28 h-28 flex items-center justify-center bg-white rounded-full border-4 border-emerald-800 shadow-sm p-1">
+                <svg
+                  className="w-24 h-24 text-emerald-800"
+                  viewBox="0 0 100 100"
+                >
+                  {/* Outer circle decoration */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="45"
+                    stroke="#065f46"
+                    strokeWidth="1.5"
+                    strokeDasharray="3 2"
+                    fill="none"
+                  />
+
+                  {/* Palm Tree Leaves */}
+                  <path d="M50,42 Q40,32 24,36 Q38,40 50,42" fill="#047857" />
+                  <path d="M50,42 Q60,32 76,36 Q62,40 50,42" fill="#047857" />
+                  <path d="M50,42 Q42,26 30,22 Q40,30 50,42" fill="#047857" />
+                  <path d="M50,42 Q58,26 70,22 Q60,30 50,42" fill="#047857" />
+                  <path
+                    d="M50,42 Q50,22 50,15 Q50,22 50,42"
+                    stroke="#047857"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+
+                  {/* Palm Tree Trunk */}
+                  <path d="M48,70 L52,70 L51,42 L49,42 Z" fill="#78350f" />
+
+                  {/* Cashew Apple and Seed (Left) */}
+                  <path
+                    d="M32,62 C32,59 36,59 36,62 C36,65 32,65 32,62"
+                    fill="#e11d48"
+                  />
+                  <path
+                    d="M35,63 C35,65 34,67 32,67"
+                    stroke="#f59e0b"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+
+                  {/* Cashew Apple and Seed (Right) */}
+                  <path
+                    d="M68,62 C68,59 64,59 64,62 C64,65 68,65 68,62"
+                    fill="#e11d48"
+                  />
+                  <path
+                    d="M65,63 C65,65 66,67 68,67"
+                    stroke="#f59e0b"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+
+                  {/* Broiler Chicken */}
+                  <path
+                    d="M43,65 C43,57 57,57 57,65 C57,72 43,72 43,65"
+                    fill="#fef08a"
+                    stroke="#ca8a04"
+                    strokeWidth="1"
+                  />
+                  <path
+                    d="M53,61 C53,58 56,58 56,61"
+                    fill="#fef08a"
+                    stroke="#ca8a04"
+                    strokeWidth="1"
+                  />
+                  <polygon points="56,60 59,61 56,62" fill="#ea580c" />
+                  <path
+                    d="M54,58 Q55,55 56,58"
+                    stroke="#dc2626"
+                    strokeWidth="1.5"
+                    fill="none"
+                  />
+                </svg>
+
+                <div className="absolute bottom-1 bg-white px-2 py-0.5 text-[8px] font-black tracking-widest text-emerald-850 leading-none uppercase rounded border border-emerald-100 shadow-sm">
+                  MR FARMS
+                </div>
+              </div>
+
+              <h1 className="text-4xl font-extrabold tracking-wider text-emerald-800 mt-3 font-serif">
+                MR FARMS
+              </h1>
+              <p className="text-[10px] uppercase font-black tracking-widest text-emerald-900 mt-1 font-sans">
+                Growers & Processors: Coconut Farms • Broiler Chicken Farms •
+                Cashew Nuts
+              </p>
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold mt-4 pt-2 border-t border-dashed border-gray-200">
+              <span className="capitalize">
+                Document Section:{" "}
+                {location.pathname.split("/").filter(Boolean).join(" > ") ||
+                  "Dashboard"}
+              </span>
+              <span>
+                Report Date:{" "}
+                {new Date().toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+            </div>
+          </div>
           <Outlet />
+          {/* Print-only Footer */}
+          {/* <div className="hidden print:block text-center text-xs font-bold text-gray-400 mt-12 pt-4 border-t border-gray-200">
+            www.mrfarms.com
+          </div> */}
         </main>
       </div>
     </div>
