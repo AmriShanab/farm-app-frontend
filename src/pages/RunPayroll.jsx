@@ -1899,7 +1899,7 @@ export default function RunPayroll() {
                     No advances deducted for this period.
                   </div>
                 ) : (
-                  <ul className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                  <ul className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
                     {breakdownEmp.advanceDetails.map((adv) => {
                       const deducted = Number(adv.amount || 0);
                       const original = Number(adv.originalAmount || 0);
