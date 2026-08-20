@@ -411,10 +411,10 @@ export default function RunPayroll() {
 
   const totalGross = payrollData.reduce((sum, emp) => sum + emp.grossPay, 0);
   const totalDeductions = payrollData.reduce(
-    (sum, emp) => sum + emp.advanceDeducted,
+    (sum, emp) => sum + (emp.advanceOutstanding || emp.advanceDeducted || 0),
     0,
   );
-  const totalNetPayout = payrollData.reduce((sum, emp) => sum + emp.netPay, 0);
+  const totalNetPayout = payrollData.reduce((sum, emp) => sum + (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted || 0)), 0);
 
   const handleFinalizeSingle = (emp) => {
     const rawEmpId = emp.employeeId || emp.empId || emp.id;
@@ -734,10 +734,10 @@ export default function RunPayroll() {
                 path: "M0,40 L0,25 C 20,30 40,10 60,15 C 80,20 90,5 100,5 L100,40 Z",
               },
               {
-                title: "Advances Recovered",
+                title: "Advances Outstanding",
                 amount: `Rs. ${fmt(totalDeductions)}`,
-                badge: "Deductions Map",
-                sub: "From outstanding advances",
+                badge: "Total Owed",
+                sub: "Total advance balance",
                 icon: <Banknote size={14} />,
                 path: "M0,40 L0,20 C 30,35 50,15 70,25 C 85,30 95,10 100,10 L100,40 Z",
               },
@@ -998,11 +998,11 @@ export default function RunPayroll() {
                             ...tdStyle(),
                             textAlign: "right",
                             color:
-                              emp.advanceDeducted > 0 ? "#b45309" : "#9ca3af",
+                              (emp.advanceOutstanding || emp.advanceDeducted) > 0 ? "#b45309" : "#9ca3af",
                           }}
                         >
-                          {emp.advanceDeducted > 0
-                            ? `Rs. ${fmt(emp.advanceDeducted)}`
+                          {(emp.advanceOutstanding || emp.advanceDeducted) > 0
+                            ? `Rs. ${fmt(emp.advanceOutstanding || emp.advanceDeducted)}`
                             : "—"}
                         </td>
 
@@ -1011,10 +1011,10 @@ export default function RunPayroll() {
                             ...tdStyle(),
                             textAlign: "right",
                             fontWeight: 900,
-                            color: "#166534",
+                            color: (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted)) < 0 ? "#dc2626" : "#166534",
                           }}
                         >
-                          Rs. {fmt(emp.netPay)}
+                          Rs. {fmt(emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted))}
                         </td>
 
                         <td style={tdStyle()}>
@@ -1126,7 +1126,7 @@ export default function RunPayroll() {
                         Rs.{" "}
                         {fmt(
                           filtered.reduce(
-                            (s, e) => s + (e.advanceDeducted || 0),
+                            (s, e) => s + (e.advanceOutstanding || e.advanceDeducted || 0),
                             0,
                           ),
                         )}
@@ -1136,11 +1136,11 @@ export default function RunPayroll() {
                           ...tdStyle(),
                           textAlign: "right",
                           fontWeight: 900,
-                          color: "#166534",
+                          color: filtered.reduce((s, e) => s + (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0)), 0) < 0 ? "#dc2626" : "#166534",
                         }}
                       >
                         Rs.{" "}
-                        {fmt(filtered.reduce((s, e) => s + (e.netPay || 0), 0))}
+                        {fmt(filtered.reduce((s, e) => s + (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0)), 0))}
                       </td>
                       <td style={tdStyle()}></td>
                     </tr>
