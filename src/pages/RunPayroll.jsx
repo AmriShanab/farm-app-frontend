@@ -1886,8 +1886,8 @@ export default function RunPayroll() {
               </div>
 
               {/* Advance deductions — per date, mirroring the Cash Advances screen */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider flex justify-between">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider flex justify-between rounded-t-xl">
                   <span>Advance Deductions</span>
                   <span className="text-orange-700">
                     −Rs. {fmt(breakdownEmp.advanceDeducted)}
@@ -1899,7 +1899,7 @@ export default function RunPayroll() {
                     No advances deducted for this period.
                   </div>
                 ) : (
-                  <ul className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                  <ul className="divide-y divide-gray-50">
                     {breakdownEmp.advanceDetails.map((adv) => {
                       const deducted = Number(adv.amount || 0);
                       const original = Number(adv.originalAmount || 0);
