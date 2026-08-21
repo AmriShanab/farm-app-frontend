@@ -778,8 +778,10 @@ export const getPayrollRunDetails = async (id) => {
 
         wagePerDay: Number(row.wage ?? row.base_wage ?? row.wage_per_day ?? row.wagePerDay ?? 0),
 
+        basicRate: Number(row.basicRate ?? 0),
         basicPay: Number(row.basicPay ?? 0),
         allowancePay: Number(row.allowancePay ?? 0),
+        homeFarm: row.homeFarm ?? row.home_farm ?? "",
 
         fullDays: Number(row.fullDays ?? 0),
         halfDays: Number(row.halfDays ?? 0),
