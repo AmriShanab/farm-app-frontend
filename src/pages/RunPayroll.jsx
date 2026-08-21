@@ -1816,8 +1816,8 @@ export default function RunPayroll() {
 
             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-white overflow-y-auto flex-1 min-h-0 items-start content-start">
               {/* Salary composition for EPF/ETF: Basic + Allowance = Gross */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider rounded-t-xl">
                   Salary &amp; Wage Composition
                 </div>
                 <div className="p-4 grid grid-cols-3 divide-x divide-gray-100 text-center">
@@ -1853,8 +1853,8 @@ export default function RunPayroll() {
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider rounded-t-xl">
                   Attendance
                 </div>
                 <div className="p-4 grid grid-cols-3 divide-x divide-gray-100 text-center">
@@ -1938,7 +1938,7 @@ export default function RunPayroll() {
               </div>
 
               {/* Payment summary — what we owed, what we recovered, what we paid */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex justify-between items-center text-sm">
                     <span className="font-bold text-gray-500">
@@ -1968,7 +1968,7 @@ export default function RunPayroll() {
               </div>
 
               {breakdownEmp.itemId && (
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm sm:col-span-2">
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm sm:col-span-2">
                   <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
                     Employee Signature
                   </div>
