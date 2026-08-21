@@ -580,7 +580,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     onChange={(e) => {
                       const accId = e.target.value;
                       const updates = { meterId: accId };
-                      if (accId && !editId) {
+                      if (accId && !editingId) {
                         const prev = data.find((r) => String(r.meterId ?? r.meter_id) === accId);
                         if (prev) {
                           if (prev.endDate || prev.end_date) updates.startDate = prev.endDate || prev.end_date;
