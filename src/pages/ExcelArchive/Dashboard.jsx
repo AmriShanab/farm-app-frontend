@@ -3,11 +3,10 @@ import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
   FileSpreadsheet,
-  Plus,
   Upload,
   Download,
   Trash2,
-  Pencil,
+  Eye,
   Search,
   Loader2,
   Calendar,
@@ -26,11 +25,8 @@ export default function ExcelArchiveDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newDocName, setNewDocName] = useState("");
 
   const loadDocuments = async () => {
-    setIsLoading(true);
     try {
       const docs = await getExcelDocuments();
       setDocuments(docs);
@@ -44,7 +40,10 @@ export default function ExcelArchiveDashboard() {
   };
 
   useEffect(() => {
-    loadDocuments();
+    const timer = setTimeout(() => {
+      loadDocuments();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleFileUpload = async (e) => {
@@ -57,9 +56,10 @@ export default function ExcelArchiveDashboard() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: "binary" });
-        const content = wb.SheetNames.map((sheetName) => {
+        const arrayBuffer = evt.target.result;
+        // Parse with XLSX to generate visual grid for see-only viewer
+        const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
+        const sheets = wb.SheetNames.map((sheetName) => {
           const ws = wb.Sheets[sheetName];
           const range = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
           const data = [];
@@ -75,7 +75,20 @@ export default function ExcelArchiveDashboard() {
           return { name: sheetName, data };
         });
 
+        // Convert the complete binary file to a base64 string
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            "",
+          ),
+        );
+
         const docName = file.name.replace(/\.[^/.]+$/, "");
+        const content = {
+          sheets,
+          fileData: base64,
+        };
+
         await createExcelDocument({ name: docName, content });
         await loadDocuments();
       } catch (err) {
@@ -94,35 +107,7 @@ export default function ExcelArchiveDashboard() {
       setIsUploading(false);
     };
 
-    reader.readAsBinaryString(file);
-  };
-
-  const handleCreateDocument = async (e) => {
-    e.preventDefault();
-    if (!newDocName.trim()) return;
-
-    try {
-      const emptyContent = [
-        {
-          name: "Sheet1",
-          data: [
-            ["Row 1 Col 1", "Row 1 Col 2", "Row 1 Col 3"],
-            ["Row 2 Col 1", "Row 2 Col 2", "Row 2 Col 3"],
-            ["Row 3 Col 1", "Row 3 Col 2", "Row 3 Col 3"],
-          ],
-        },
-      ];
-      await createExcelDocument({
-        name: newDocName.trim(),
-        content: emptyContent,
-      });
-      setShowCreateModal(false);
-      setNewDocName("");
-      await loadDocuments();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to create document.");
-    }
+    reader.readAsArrayBuffer(file);
   };
 
   const handleDelete = async (id) => {
@@ -145,14 +130,48 @@ export default function ExcelArchiveDashboard() {
   const handleDownload = async (docId, name) => {
     try {
       const fullDoc = await getExcelDocument(docId);
-      const wb = XLSX.utils.book_new();
+      let fileData = null;
+      let sheets = [];
 
-      fullDoc.content.forEach((sheet) => {
-        const ws = XLSX.utils.aoa_to_sheet(sheet.data);
-        XLSX.utils.book_append_sheet(wb, ws, sheet.name);
-      });
+      if (
+        fullDoc.content &&
+        typeof fullDoc.content === "object" &&
+        !Array.isArray(fullDoc.content)
+      ) {
+        fileData = fullDoc.content.fileData;
+        sheets = fullDoc.content.sheets || [];
+      } else if (Array.isArray(fullDoc.content)) {
+        sheets = fullDoc.content;
+      }
 
-      XLSX.writeFile(wb, `${name || "spreadsheet"}.xlsx`);
+      if (fileData) {
+        // Decode base64 to binary and trigger original file download
+        const binaryString = atob(fileData);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${name || "spreadsheet"}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // Fallback reconstruction for legacy files
+        const wb = XLSX.utils.book_new();
+        sheets.forEach((sheet) => {
+          const ws = XLSX.utils.aoa_to_sheet(sheet.data);
+          XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+        });
+        XLSX.writeFile(wb, `${name || "spreadsheet"}.xlsx`);
+      }
     } catch (err) {
       console.error(err);
       alert("Failed to export Excel document.");
@@ -172,8 +191,7 @@ export default function ExcelArchiveDashboard() {
             Excel Document Archive
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Centrally manage and edit legacy database worksheets and reports
-            offline.
+            Centrally manage and store legacy worksheets and reports.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -186,7 +204,7 @@ export default function ExcelArchiveDashboard() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            <span>{isUploading ? "Importing..." : "Import Excel file"}</span>
+            <span>{isUploading ? "Importing..." : "Attach Excel file"}</span>
             <input
               type="file"
               id="excel-import"
@@ -196,14 +214,6 @@ export default function ExcelArchiveDashboard() {
               disabled={isUploading}
             />
           </label>
-
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-green-700 hover:shadow-md hover:scale-102"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Create new sheet</span>
-          </button>
         </div>
       </div>
 
@@ -328,9 +338,9 @@ export default function ExcelArchiveDashboard() {
                         <Link
                           to={`/excel-archive/edit/${doc.id}`}
                           className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-green-600 hover:border-green-200 shadow-sm"
-                          title="Open Sheet Editor"
+                          title="View sheet content"
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Eye className="h-4 w-4" />
                         </Link>
                         <button
                           onClick={() => handleDownload(doc.id, doc.name)}
@@ -355,53 +365,6 @@ export default function ExcelArchiveDashboard() {
           </div>
         )}
       </div>
-
-      {/* Document Creation Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white border border-gray-150 p-6 shadow-2xl animate-scaleUp">
-            <h2 className="text-lg font-black text-gray-900 font-heading">
-              Create New Spreadsheet
-            </h2>
-            <p className="mt-1 text-xs text-gray-400">
-              Enter a name for the database-backed legacy spreadsheet.
-            </p>
-            <form onSubmit={handleCreateDocument} className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                  Document Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Workers Wage Ledger 2024"
-                  value={newDocName}
-                  onChange={(e) => setNewDocName(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:border-green-600 focus:outline-none placeholder-gray-400"
-                />
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setNewDocName("");
-                  }}
-                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"
-                >
-                  Create Sheet
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
