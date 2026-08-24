@@ -411,10 +411,10 @@ export default function RunPayroll() {
 
   const totalGross = payrollData.reduce((sum, emp) => sum + emp.grossPay, 0);
   const totalDeductions = payrollData.reduce(
-    (sum, emp) => sum + emp.advanceDeducted,
+    (sum, emp) => sum + (emp.advanceOutstanding || emp.advanceDeducted || 0),
     0,
   );
-  const totalNetPayout = payrollData.reduce((sum, emp) => sum + emp.netPay, 0);
+  const totalNetPayout = payrollData.reduce((sum, emp) => sum + (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted || 0)), 0);
 
   const handleFinalizeSingle = (emp) => {
     const rawEmpId = emp.employeeId || emp.empId || emp.id;
@@ -734,10 +734,10 @@ export default function RunPayroll() {
                 path: "M0,40 L0,25 C 20,30 40,10 60,15 C 80,20 90,5 100,5 L100,40 Z",
               },
               {
-                title: "Advances Recovered",
+                title: "Advances Outstanding",
                 amount: `Rs. ${fmt(totalDeductions)}`,
-                badge: "Deductions Map",
-                sub: "From outstanding advances",
+                badge: "Total Owed",
+                sub: "Total advance balance",
                 icon: <Banknote size={14} />,
                 path: "M0,40 L0,20 C 30,35 50,15 70,25 C 85,30 95,10 100,10 L100,40 Z",
               },
@@ -998,11 +998,11 @@ export default function RunPayroll() {
                             ...tdStyle(),
                             textAlign: "right",
                             color:
-                              emp.advanceDeducted > 0 ? "#b45309" : "#9ca3af",
+                              (emp.advanceOutstanding || emp.advanceDeducted) > 0 ? "#b45309" : "#9ca3af",
                           }}
                         >
-                          {emp.advanceDeducted > 0
-                            ? `Rs. ${fmt(emp.advanceDeducted)}`
+                          {(emp.advanceOutstanding || emp.advanceDeducted) > 0
+                            ? `Rs. ${fmt(emp.advanceOutstanding || emp.advanceDeducted)}`
                             : "—"}
                         </td>
 
@@ -1011,10 +1011,10 @@ export default function RunPayroll() {
                             ...tdStyle(),
                             textAlign: "right",
                             fontWeight: 900,
-                            color: "#166534",
+                            color: (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted)) < 0 ? "#dc2626" : "#166534",
                           }}
                         >
-                          Rs. {fmt(emp.netPay)}
+                          Rs. {fmt(emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted))}
                         </td>
 
                         <td style={tdStyle()}>
@@ -1126,7 +1126,7 @@ export default function RunPayroll() {
                         Rs.{" "}
                         {fmt(
                           filtered.reduce(
-                            (s, e) => s + (e.advanceDeducted || 0),
+                            (s, e) => s + (e.advanceOutstanding || e.advanceDeducted || 0),
                             0,
                           ),
                         )}
@@ -1136,11 +1136,11 @@ export default function RunPayroll() {
                           ...tdStyle(),
                           textAlign: "right",
                           fontWeight: 900,
-                          color: "#166534",
+                          color: filtered.reduce((s, e) => s + (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0)), 0) < 0 ? "#dc2626" : "#166534",
                         }}
                       >
                         Rs.{" "}
-                        {fmt(filtered.reduce((s, e) => s + (e.netPay || 0), 0))}
+                        {fmt(filtered.reduce((s, e) => s + (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0)), 0))}
                       </td>
                       <td style={tdStyle()}></td>
                     </tr>
@@ -1816,8 +1816,8 @@ export default function RunPayroll() {
 
             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-white overflow-y-auto flex-1 min-h-0 items-start content-start">
               {/* Salary composition for EPF/ETF: Basic + Allowance = Gross */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider rounded-t-xl">
                   Salary &amp; Wage Composition
                 </div>
                 <div className="p-4 grid grid-cols-3 divide-x divide-gray-100 text-center">
@@ -1853,8 +1853,8 @@ export default function RunPayroll() {
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider rounded-t-xl">
                   Attendance
                 </div>
                 <div className="p-4 grid grid-cols-3 divide-x divide-gray-100 text-center">
@@ -1886,8 +1886,8 @@ export default function RunPayroll() {
               </div>
 
               {/* Advance deductions — per date, mirroring the Cash Advances screen */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider flex justify-between">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider flex justify-between rounded-t-xl">
                   <span>Advance Deductions</span>
                   <span className="text-orange-700">
                     −Rs. {fmt(breakdownEmp.advanceDeducted)}
@@ -1899,7 +1899,7 @@ export default function RunPayroll() {
                     No advances deducted for this period.
                   </div>
                 ) : (
-                  <ul className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                  <ul className="divide-y divide-gray-50">
                     {breakdownEmp.advanceDetails.map((adv) => {
                       const deducted = Number(adv.amount || 0);
                       const original = Number(adv.originalAmount || 0);
@@ -1938,7 +1938,7 @@ export default function RunPayroll() {
               </div>
 
               {/* Payment summary — what we owed, what we recovered, what we paid */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex justify-between items-center text-sm">
                     <span className="font-bold text-gray-500">
@@ -1968,7 +1968,7 @@ export default function RunPayroll() {
               </div>
 
               {breakdownEmp.itemId && (
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm sm:col-span-2">
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm sm:col-span-2">
                   <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-black text-gray-600 uppercase tracking-wider">
                     Employee Signature
                   </div>

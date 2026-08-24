@@ -191,7 +191,8 @@ export default function CoconutSales() {
       setEmpLoading(true);
       try {
         const data = await getEmployees(null, "active");
-        if (active) setEmployees(Array.isArray(data) ? data : []);
+        const filtered = (Array.isArray(data) ? data : []).filter(e => e.farm !== 'Poultry');
+        if (active) setEmployees(filtered);
       } catch {
         if (active) setEmployees([]);
       } finally {

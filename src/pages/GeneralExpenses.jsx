@@ -577,9 +577,18 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   </label>
                   <select
                     value={form.meterId}
-                    onChange={(e) =>
-                      setForm({ ...form, meterId: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const accId = e.target.value;
+                      const updates = { meterId: accId };
+                      if (accId && !editId) {
+                        const prev = data.find((r) => String(r.meterId ?? r.meter_id) === accId);
+                        if (prev) {
+                          if (prev.endDate || prev.end_date) updates.startDate = prev.endDate || prev.end_date;
+                          if (prev.meterEnd ?? prev.meter_end) updates.meterStart = String(prev.meterEnd ?? prev.meter_end);
+                        }
+                      }
+                      setForm({ ...form, ...updates });
+                    }}
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
                   >
                     <option value="">-- Select Account --</option>
