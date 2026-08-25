@@ -411,10 +411,10 @@ export default function RunPayroll() {
 
   const totalGross = payrollData.reduce((sum, emp) => sum + emp.grossPay, 0);
   const totalDeductions = payrollData.reduce(
-    (sum, emp) => sum + (emp.advanceOutstanding || emp.advanceDeducted || 0),
+    (sum, emp) => sum + (finalizedMap[String(emp.empId)] ? (emp.advanceDeducted || 0) : (emp.advanceOutstanding || emp.advanceDeducted || 0)),
     0,
   );
-  const totalNetPayout = payrollData.reduce((sum, emp) => sum + (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted || 0)), 0);
+  const totalNetPayout = payrollData.reduce((sum, emp) => sum + (finalizedMap[String(emp.empId)] ? emp.netPay : (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted || 0))), 0);
 
   const handleFinalizeSingle = (emp) => {
     const rawEmpId = emp.employeeId || emp.empId || emp.id;
@@ -998,11 +998,11 @@ export default function RunPayroll() {
                             ...tdStyle(),
                             textAlign: "right",
                             color:
-                              (emp.advanceOutstanding || emp.advanceDeducted) > 0 ? "#b45309" : "#9ca3af",
+                              (isItemFinalized ? emp.advanceDeducted : (emp.advanceOutstanding || emp.advanceDeducted)) > 0 ? "#b45309" : "#9ca3af",
                           }}
                         >
-                          {(emp.advanceOutstanding || emp.advanceDeducted) > 0
-                            ? `Rs. ${fmt(emp.advanceOutstanding || emp.advanceDeducted)}`
+                          {(isItemFinalized ? emp.advanceDeducted : (emp.advanceOutstanding || emp.advanceDeducted)) > 0
+                            ? `Rs. ${fmt(isItemFinalized ? emp.advanceDeducted : (emp.advanceOutstanding || emp.advanceDeducted))}`
                             : "—"}
                         </td>
 
@@ -1011,10 +1011,10 @@ export default function RunPayroll() {
                             ...tdStyle(),
                             textAlign: "right",
                             fontWeight: 900,
-                            color: (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted)) < 0 ? "#dc2626" : "#166534",
+                            color: (isItemFinalized ? emp.netPay : (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted))) < 0 ? "#dc2626" : "#166534",
                           }}
                         >
-                          Rs. {fmt(emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted))}
+                          Rs. {fmt(isItemFinalized ? emp.netPay : (emp.grossPay - (emp.advanceOutstanding || emp.advanceDeducted)))}
                         </td>
 
                         <td style={tdStyle()}>
@@ -1126,7 +1126,7 @@ export default function RunPayroll() {
                         Rs.{" "}
                         {fmt(
                           filtered.reduce(
-                            (s, e) => s + (e.advanceOutstanding || e.advanceDeducted || 0),
+                            (s, e) => s + (finalizedMap[String(e.empId)] ? (e.advanceDeducted || 0) : (e.advanceOutstanding || e.advanceDeducted || 0)),
                             0,
                           ),
                         )}
@@ -1136,11 +1136,11 @@ export default function RunPayroll() {
                           ...tdStyle(),
                           textAlign: "right",
                           fontWeight: 900,
-                          color: filtered.reduce((s, e) => s + (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0)), 0) < 0 ? "#dc2626" : "#166534",
+                          color: filtered.reduce((s, e) => s + (finalizedMap[String(e.empId)] ? e.netPay : (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0))), 0) < 0 ? "#dc2626" : "#166534",
                         }}
                       >
                         Rs.{" "}
-                        {fmt(filtered.reduce((s, e) => s + (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0)), 0))}
+                        {fmt(filtered.reduce((s, e) => s + (finalizedMap[String(e.empId)] ? e.netPay : (e.grossPay - (e.advanceOutstanding || e.advanceDeducted || 0))), 0))}
                       </td>
                       <td style={tdStyle()}></td>
                     </tr>
