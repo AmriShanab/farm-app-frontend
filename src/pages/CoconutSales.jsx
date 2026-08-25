@@ -120,8 +120,10 @@ const addDays = (dateStr, n) => {
 // Whole days between two date strings (to − from). "" if either is missing.
 const daysBetween = (from, to) => {
   if (!from || !to) return "";
-  const a = new Date(from); a.setHours(0, 0, 0, 0);
-  const b = new Date(to); b.setHours(0, 0, 0, 0);
+  const a = new Date(from);
+  a.setHours(0, 0, 0, 0);
+  const b = new Date(to);
+  b.setHours(0, 0, 0, 0);
   return Math.round((b - a) / 86400000);
 };
 
@@ -191,7 +193,9 @@ export default function CoconutSales() {
       setEmpLoading(true);
       try {
         const data = await getEmployees(null, "active");
-        const filtered = (Array.isArray(data) ? data : []).filter(e => e.farm !== 'Poultry');
+        const filtered = (Array.isArray(data) ? data : []).filter(
+          (e) => e.farm !== "Poultry",
+        );
         if (active) setEmployees(filtered);
       } catch {
         if (active) setEmployees([]);
@@ -296,13 +300,11 @@ export default function CoconutSales() {
         });
       const selectedEmployees = attendanceRecords;
 
-      const permanentLaborCost = selectedEmployees.reduce(
-        (sum, emp) => {
-          const fraction = emp.status === "full" ? 1 : emp.status === "half" ? 0.5 : 0;
-          return sum + (emp.wagePerDay || 0) * fraction;
-        },
-        0,
-      );
+      const permanentLaborCost = selectedEmployees.reduce((sum, emp) => {
+        const fraction =
+          emp.status === "full" ? 1 : emp.status === "half" ? 0.5 : 0;
+        return sum + (emp.wagePerDay || 0) * fraction;
+      }, 0);
 
       // Mark attendance before creating the separate expense record. If the
       // attendance conflicts with an existing day, roll the new sale back so
@@ -321,7 +323,8 @@ export default function CoconutSales() {
           savedSaleRecord = null;
           savedSalePayload = null;
           throw new Error(
-            attendanceError?.message || "Attendance could not be marked, so the sale was not saved.",
+            attendanceError?.message ||
+              "Attendance could not be marked, so the sale was not saved.",
             { cause: attendanceError },
           );
         }
@@ -376,7 +379,10 @@ export default function CoconutSales() {
       if (savedSaleRecord && savedSalePayload) {
         // The sale and attendance are already durable. Keep the ledger in sync
         // and make it clear that only a related record (normally expenses) failed.
-        const completeRecord = normalizeSaleRecord(savedSaleRecord, savedSalePayload);
+        const completeRecord = normalizeSaleRecord(
+          savedSaleRecord,
+          savedSalePayload,
+        );
         completeRecord.total = calcNet(savedSalePayload);
         setSales((prev) =>
           prev.some((sale) => sale.id === completeRecord.id)
@@ -386,9 +392,13 @@ export default function CoconutSales() {
         setIsAdding(false);
         setNewRow(emptySaleForm());
         setHarvestAtt({});
-        toast.warn(`Sale saved, but a related record failed: ${saveError.message}`);
+        toast.warn(
+          `Sale saved, but a related record failed: ${saveError.message}`,
+        );
       } else {
-        toast.error(saveError?.message || "Failed to save records to database.");
+        toast.error(
+          saveError?.message || "Failed to save records to database.",
+        );
       }
     } finally {
       setIsSaving(false);
@@ -597,7 +607,9 @@ export default function CoconutSales() {
             <div className="md:col-span-4">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
                 Next Harvest
-                <span className="ml-1 text-gray-400 font-bold normal-case">(date or days — either fills the other)</span>
+                <span className="ml-1 text-gray-400 font-bold normal-case">
+                  (date or days — either fills the other)
+                </span>
               </label>
               <div className="flex gap-2">
                 <input
@@ -616,7 +628,12 @@ export default function CoconutSales() {
                   value={daysBetween(newRow.date, newRow.next_harvest_date)}
                   onChange={(e) => {
                     const n = parseInt(e.target.value, 10);
-                    setNewRow((prev) => ({ ...prev, next_harvest_date: Number.isNaN(n) ? "" : addDays(prev.date, n) }));
+                    setNewRow((prev) => ({
+                      ...prev,
+                      next_harvest_date: Number.isNaN(n)
+                        ? ""
+                        : addDays(prev.date, n),
+                    }));
                   }}
                   className="w-20 p-2.5 text-sm border border-gray-300 rounded-lg outline-none font-bold focus:border-green-500 text-center"
                   disabled={isSaving}
@@ -1061,19 +1078,61 @@ export default function CoconutSales() {
               <tfoot>
                 <tr className="border-t-2 border-gray-200 bg-gray-50/80">
                   <td className="p-4"></td>
-                  <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">Totals</td>
-                  <td className="p-4 text-right">
-                    <span className="font-black text-gray-900">{filtered.reduce((s, r) => s + (Number(r.qty1 || 0) - Number(r.free_qty1 || 0)), 0).toLocaleString()}</span>
-                    {filtered.reduce((s, r) => s + Number(r.free_qty1 || 0), 0) > 0 && (
-                      <span className="ml-1 text-[10px] font-bold text-blue-600">+{filtered.reduce((s, r) => s + Number(r.free_qty1 || 0), 0)} free</span>
+                  <td className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider">
+                    Totals
+                  </td>
+                  <td className="p-4 font-black text-gray-900">
+                    <span>
+                      {filtered
+                        .reduce(
+                          (s, r) =>
+                            s +
+                            (Number(r.qty1 || 0) - Number(r.free_qty1 || 0)),
+                          0,
+                        )
+                        .toLocaleString()}
+                    </span>
+                    {filtered.reduce(
+                      (s, r) => s + Number(r.free_qty1 || 0),
+                      0,
+                    ) > 0 && (
+                      <span className="ml-1 text-[10px] font-bold text-blue-600">
+                        +
+                        {filtered.reduce(
+                          (s, r) => s + Number(r.free_qty1 || 0),
+                          0,
+                        )}{" "}
+                        free
+                      </span>
                     )}
                   </td>
-                  <td className="p-4 text-right">
-                    <span className="font-black text-gray-900">{filtered.reduce((s, r) => s + (Number(r.qty2 || 0) - Number(r.free_qty2 || 0)), 0).toLocaleString()}</span>
-                    {filtered.reduce((s, r) => s + Number(r.free_qty2 || 0), 0) > 0 && (
-                      <span className="ml-1 text-[10px] font-bold text-blue-600">+{filtered.reduce((s, r) => s + Number(r.free_qty2 || 0), 0)} free</span>
+                  <td className="p-4"></td>
+                  <td className="p-4 font-black text-gray-600">
+                    <span>
+                      {filtered
+                        .reduce(
+                          (s, r) =>
+                            s +
+                            (Number(r.qty2 || 0) - Number(r.free_qty2 || 0)),
+                          0,
+                        )
+                        .toLocaleString()}
+                    </span>
+                    {filtered.reduce(
+                      (s, r) => s + Number(r.free_qty2 || 0),
+                      0,
+                    ) > 0 && (
+                      <span className="ml-1 text-[10px] font-bold text-blue-600">
+                        +
+                        {filtered.reduce(
+                          (s, r) => s + Number(r.free_qty2 || 0),
+                          0,
+                        )}{" "}
+                        free
+                      </span>
                     )}
                   </td>
+                  <td className="p-4"></td>
                   <td className="p-4 text-right font-black text-gray-900 text-base">
                     Rs. {fmt(totalRevenue)}
                   </td>
@@ -1393,7 +1452,9 @@ export default function CoconutSales() {
                 <div>
                   <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
                     Next Harvest{" "}
-                    <span className="text-gray-400 font-bold normal-case">(date or days)</span>
+                    <span className="text-gray-400 font-bold normal-case">
+                      (date or days)
+                    </span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -1408,10 +1469,18 @@ export default function CoconutSales() {
                       min="0"
                       placeholder="days"
                       title="Days from sale date"
-                      value={daysBetween(editRow.date, editRow.next_harvest_date)}
+                      value={daysBetween(
+                        editRow.date,
+                        editRow.next_harvest_date,
+                      )}
                       onChange={(e) => {
                         const n = parseInt(e.target.value, 10);
-                        setEditRow((prev) => ({ ...prev, next_harvest_date: Number.isNaN(n) ? "" : addDays(prev.date, n) }));
+                        setEditRow((prev) => ({
+                          ...prev,
+                          next_harvest_date: Number.isNaN(n)
+                            ? ""
+                            : addDays(prev.date, n),
+                        }));
                       }}
                       className="w-20 border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:border-green-500 focus:outline-none text-center"
                     />
