@@ -50,6 +50,7 @@ export default function PoultrySettlement() {
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [printActiveSection, setPrintActiveSection] = useState(null);
+  const [previewSection, setPreviewSection] = useState(null);
   const toast = useToast();
 
   const triggerSectionPrint = (section) => {
@@ -288,7 +289,7 @@ export default function PoultrySettlement() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div
-                        onClick={() => triggerSectionPrint("sales")}
+                        onClick={() => setPreviewSection("sales")}
                         className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow transition-all duration-200"
                       >
                         <div className="flex justify-between items-start">
@@ -313,7 +314,7 @@ export default function PoultrySettlement() {
                       </div>
 
                       <div
-                        onClick={() => triggerSectionPrint("costs")}
+                        onClick={() => setPreviewSection("costs")}
                         className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow transition-all duration-200"
                       >
                         <div className="flex justify-between items-start">
@@ -336,7 +337,7 @@ export default function PoultrySettlement() {
                       </div>
 
                       <div
-                        onClick={() => triggerSectionPrint("profit")}
+                        onClick={() => setPreviewSection("profit")}
                         className={`border rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow transition-all duration-200 ${isProfit ? "bg-green-50/50 border-green-200" : "bg-red-50/50 border-red-200"}`}
                       >
                         <div className="flex justify-between items-start">
@@ -379,7 +380,7 @@ export default function PoultrySettlement() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div
-                        onClick={() => triggerSectionPrint("sales")}
+                        onClick={() => setPreviewSection("sales")}
                         className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow transition-all duration-200"
                       >
                         <div className="flex justify-between items-start">
@@ -404,7 +405,7 @@ export default function PoultrySettlement() {
                       </div>
 
                       <div
-                        onClick={() => triggerSectionPrint("payables")}
+                        onClick={() => setPreviewSection("payables")}
                         className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow transition-all duration-200"
                       >
                         <div className="flex justify-between items-start">
@@ -433,7 +434,7 @@ export default function PoultrySettlement() {
                       </div>
 
                       <div
-                        onClick={() => triggerSectionPrint("received")}
+                        onClick={() => setPreviewSection("received")}
                         className={`border rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow transition-all duration-200 ${isFinalReceivedPositive ? "bg-green-50/50 border-green-200" : "bg-red-50/50 border-red-200"}`}
                       >
                         <div className="flex justify-between items-start">
@@ -684,6 +685,27 @@ export default function PoultrySettlement() {
                             </td>
                           </tr>
                         )}
+                        {(settlement.supplierExpenses?.totalCost || 0) > 0 && (
+                          <tr className="border-t border-gray-50 hover:bg-gray-50/50">
+                            <td className="p-4 font-bold text-gray-900 flex items-center gap-2">
+                              <FileText size={14} className="text-amber-600" />{" "}
+                              Supplier Paid Expenses
+                            </td>
+                            <td className="p-4 text-right font-bold">
+                              Rs. {fmt(settlement.supplierExpenses?.totalCost)}
+                            </td>
+                            <td className="p-4 text-right font-bold text-green-700">
+                              Rs. {fmt(settlement.supplierExpenses?.totalPaid)}
+                            </td>
+                            <td className="p-4 text-right font-bold text-gray-400">
+                              —
+                            </td>
+                            <td className="p-4 text-right font-black text-red-600">
+                              Rs.{" "}
+                              {fmt(settlement.supplierExpenses?.totalPayable)}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 border-gray-200 bg-gray-50/80">
@@ -698,7 +720,8 @@ export default function PoultrySettlement() {
                             {fmt(
                               (settlement.batchPaid || 0) +
                                 (settlement.feed?.totalPaid || 0) +
-                                (settlement.medicine?.totalPaid || 0),
+                                (settlement.medicine?.totalPaid || 0) +
+                                (settlement.supplierExpenses?.totalPaid || 0),
                             )}
                           </td>
                           <td className="p-4 text-right font-black text-amber-700">
@@ -925,6 +948,616 @@ export default function PoultrySettlement() {
                     <CheckCircle2 size={16} />
                   )}{" "}
                   Yes, complete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {previewSection && settlement && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 hide-on-print-focus">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setPreviewSection(null)}
+            />
+            <div className="relative z-10 w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-gray-150 animate-scaleUp">
+              {/* Header banner */}
+              <div className="bg-gradient-to-br from-green-50 to-green-150/40 p-5 border-b border-green-200 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                    <FileText size={18} className="text-green-700" />
+                    {previewSection === "sales" && "Detailed Sales Report"}
+                    {previewSection === "costs" &&
+                      "Detailed Batch Costs Report"}
+                    {previewSection === "profit" &&
+                      "Detailed Profitability Report"}
+                    {previewSection === "payables" &&
+                      "Supplier Ledger Account (Payables)"}
+                    {previewSection === "received" &&
+                      "Final Received Settlement Stats"}
+                  </h3>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                    Batch:{" "}
+                    {settlement.batch?.notes || `Batch #${selectedBatchId}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => triggerSectionPrint(previewSection)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-br from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white rounded-xl text-sm font-black shadow-md hover:shadow-lg transition-all"
+                  >
+                    Export PDF
+                  </button>
+                  <button
+                    onClick={() => setPreviewSection(null)}
+                    className="p-2 rounded-full text-gray-400 hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200 bg-white shadow-sm"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body Preview Content */}
+              <div className="p-6 overflow-auto flex-1 space-y-6">
+                {/* Sales Preview */}
+                {previewSection === "sales" && (
+                  <div className="space-y-4">
+                    <table className="w-full text-sm border border-gray-200">
+                      <thead className="bg-gray-100 text-gray-700 font-extrabold text-[11px] uppercase tracking-wider border-b border-gray-200">
+                        <tr>
+                          <th className="p-3 text-left">Date</th>
+                          <th className="p-3 text-left">Category</th>
+                          <th className="p-3 text-right">Quantity</th>
+                          <th className="p-3 text-right">Price (Rs.)</th>
+                          <th className="p-3 text-right">Total Price (Rs.)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-150">
+                        {settlement.salesRows?.map((s) => (
+                          <tr
+                            key={s.id}
+                            className="hover:bg-gray-50/50 transition-colors"
+                          >
+                            <td className="p-3 font-semibold text-gray-700">
+                              {s.date}
+                            </td>
+                            <td className="p-3 font-bold text-gray-905">
+                              {catLabel(s.category)}
+                            </td>
+                            <td className="p-3 text-right text-gray-800">
+                              {s.category === "chicks"
+                                ? `${s.chicks_sold?.toLocaleString() || 0} birds` +
+                                  (s.weight_kilos
+                                    ? ` / ${s.weight_kilos} kg`
+                                    : "")
+                                : s.quantity?.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right text-gray-800 font-bold">
+                              {s.category === "chicks"
+                                ? s.price_per_kg
+                                  ? `Rs. ${fmt(s.price_per_kg)} / kg`
+                                  : "—"
+                                : `Rs. ${fmt(s.rate)}`}
+                            </td>
+                            <td className="p-3 text-right font-black text-green-700">
+                              Rs. {fmt(s.total_price || s.total_amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gray-50 font-black border-t border-gray-205">
+                          <td
+                            colSpan={2}
+                            className="p-3 uppercase tracking-wider text-xs"
+                          >
+                            Total Sales
+                          </td>
+                          <td className="p-3 text-right">—</td>
+                          <td className="p-3 text-right">—</td>
+                          <td className="p-3 text-right text-base text-green-800">
+                            Rs. {fmt(settlement.totalSales)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {/* Costs Preview */}
+                {previewSection === "costs" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        Cost Summaries
+                      </h4>
+                      <table className="w-full text-sm border border-gray-200">
+                        <thead className="bg-gray-100 text-gray-700 font-extrabold text-[11px] uppercase tracking-wider border-b border-gray-200">
+                          <tr>
+                            <th className="p-3 text-left">Cost Category</th>
+                            <th className="p-3 text-right">Total Cost (Rs.)</th>
+                            <th className="p-3 text-right">Paid (Rs.)</th>
+                            <th className="p-3 text-right">Returned (Rs.)</th>
+                            <th className="p-3 text-right">Payable (Rs.)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-150">
+                          <tr className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-3 font-semibold text-gray-800">
+                              Batch Purchase
+                            </td>
+                            <td className="p-3 text-right text-gray-900">
+                              {fmt(settlement.batchCost)}
+                            </td>
+                            <td className="p-3 text-right text-green-700">
+                              {fmt(settlement.batchPaid)}
+                            </td>
+                            <td className="p-3 text-right text-gray-400">—</td>
+                            <td className="p-3 text-right font-black text-red-600">
+                              {fmt(settlement.batchPayable)}
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-3 font-semibold text-gray-800">
+                              Feed Purchases
+                            </td>
+                            <td className="p-3 text-right text-gray-900">
+                              {fmt(settlement.feed?.totalCost)}
+                            </td>
+                            <td className="p-3 text-right text-green-700">
+                              {fmt(settlement.feed?.totalPaid)}
+                            </td>
+                            <td className="p-3 text-right text-amber-700">
+                              {(settlement.feed?.returned || 0) > 0
+                                ? fmt(settlement.feed?.returned)
+                                : "—"}
+                            </td>
+                            <td className="p-3 text-right font-black text-red-600">
+                              {fmt(settlement.feed?.totalPayable)}
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-3 font-semibold text-gray-800">
+                              Medicine Purchases
+                            </td>
+                            <td className="p-3 text-right text-gray-900">
+                              {fmt(settlement.medicine?.totalCost)}
+                            </td>
+                            <td className="p-3 text-right text-green-700">
+                              {fmt(settlement.medicine?.totalPaid)}
+                            </td>
+                            <td className="p-3 text-right text-amber-750">
+                              {(settlement.medicine?.returned || 0) > 0
+                                ? fmt(settlement.medicine?.returned)
+                                : "—"}
+                            </td>
+                            <td className="p-3 text-right font-black text-red-605">
+                              {fmt(settlement.medicine?.totalPayable)}
+                            </td>
+                          </tr>
+                          {settlement.labour > 0 && (
+                            <tr className="hover:bg-gray-50/50 transition-colors">
+                              <td className="p-3 font-semibold text-gray-800">
+                                Poultry Labour
+                              </td>
+                              <td className="p-3 text-right text-gray-900">
+                                {fmt(settlement.labour)}
+                              </td>
+                              <td className="p-3 text-right text-green-700">
+                                {fmt(settlement.labour)}
+                              </td>
+                              <td className="p-3 text-right text-gray-400">
+                                —
+                              </td>
+                              <td className="p-3 text-right text-gray-400">
+                                —
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 font-black border-t-2 border-gray-300">
+                            <td className="p-3 uppercase tracking-wider text-xs">
+                              Total Costs Summary
+                            </td>
+                            <td className="p-3 text-right">
+                              {fmt(totalCosts)}
+                            </td>
+                            <td className="p-3 text-right text-green-800">
+                              {fmt(
+                                (settlement.batchPaid || 0) +
+                                  (settlement.feed?.totalPaid || 0) +
+                                  (settlement.medicine?.totalPaid || 0) +
+                                  (settlement.labour || 0),
+                              )}
+                            </td>
+                            <td className="p-3 text-right text-amber-700">
+                              {fmt(
+                                (settlement.feed?.returned || 0) +
+                                  (settlement.medicine?.returned || 0),
+                              )}
+                            </td>
+                            <td className="p-3 text-right text-red-700">
+                              {fmt(settlement.totalPayables)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {settlement.expenses?.rows?.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                          Additional Farm-Paid Expenses Logs
+                        </h4>
+                        <table className="w-full text-xs border border-gray-200">
+                          <thead className="bg-gray-100 text-[#111827] font-bold uppercase tracking-wider border-b border-gray-200">
+                            <tr>
+                              <th className="p-2.5 text-left">Date</th>
+                              <th className="p-2.5 text-left">Description</th>
+                              <th className="p-2.5 text-right">Amount (Rs.)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-150">
+                            {settlement.expenses.rows.map((row) => (
+                              <tr
+                                key={row.id}
+                                className="hover:bg-gray-50/50 transition-colors"
+                              >
+                                <td className="p-2.5">{row.date}</td>
+                                <td className="p-2.5 font-medium">
+                                  {row.description}
+                                </td>
+                                <td className="p-2.5 text-right font-black text-gray-800">
+                                  {fmt(row.amount)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {settlement.supplierExpenses?.rows?.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                          Supplier-Paid Additional Expenses Logs
+                        </h4>
+                        <table className="w-full text-xs border border-gray-200">
+                          <thead className="bg-gray-100 text-[#111827] font-bold uppercase tracking-wider border-b border-gray-200">
+                            <tr>
+                              <th className="p-2.5 text-left">Date</th>
+                              <th className="p-2.5 text-left">Description</th>
+                              <th className="p-2.5 text-right">Amount (Rs.)</th>
+                              <th className="p-2.5 text-right">Paid (Rs.)</th>
+                              <th className="p-2.5 text-right">Owed (Rs.)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-150">
+                            {settlement.supplierExpenses.rows.map((row) => (
+                              <tr
+                                key={row.id}
+                                className="hover:bg-gray-50/50 transition-colors"
+                              >
+                                <td className="p-2.5">{row.date}</td>
+                                <td className="p-2.5 font-medium">
+                                  {row.description}
+                                </td>
+                                <td className="p-2.5 text-right font-black text-gray-800">
+                                  {fmt(row.amount)}
+                                </td>
+                                <td className="p-2.5 text-right text-green-700 font-bold">
+                                  {fmt(row.paid_amount)}
+                                </td>
+                                <td className="p-2.5 text-right text-red-600 font-bold">
+                                  {fmt(row.payable_balance)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Profitability Preview */}
+                {previewSection === "profit" && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 border border-gray-200 rounded-2xl">
+                      <div>
+                        <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide">
+                          Total Income
+                        </p>
+                        <h3 className="text-xl font-black text-green-750 mt-1">
+                          Rs. {fmt(totalIncome)}
+                        </h3>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide">
+                          Total Combined Cost
+                        </p>
+                        <h3 className="text-xl font-black text-gray-850 mt-1">
+                          Rs. {fmt(totalCosts)}
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="bg-gray-100 p-3.5 font-extrabold text-gray-700 text-xs uppercase tracking-wider border-b border-gray-200">
+                        Financial Statement Summary
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-150">
+                          <tr className="bg-green-50/10">
+                            <td className="p-3.5 font-bold text-gray-750">
+                              Accrued Chick &amp; Products Sales
+                            </td>
+                            <td className="p-3.5 text-right font-black text-green-750">
+                              Rs. {fmt(totalIncome)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-3.5 text-gray-600 font-medium">
+                              Less: batch purchase costs
+                            </td>
+                            <td className="p-3.5 text-right font-bold text-gray-900">
+                              - Rs. {fmt(settlement.batchCost)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-3.5 text-gray-600 font-medium">
+                              Less: feed intake expenses
+                            </td>
+                            <td className="p-3.5 text-right font-bold text-gray-900">
+                              - Rs. {fmt(settlement.feed?.totalCost)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-3.5 text-gray-600 font-medium">
+                              Less: medicine &amp; vaccine costs
+                            </td>
+                            <td className="p-3.5 text-right font-bold text-gray-900">
+                              - Rs. {fmt(settlement.medicine?.totalCost)}
+                            </td>
+                          </tr>
+                          {settlement.expenses?.totalCost > 0 && (
+                            <tr>
+                              <td className="p-3.5 text-gray-600 font-medium">
+                                Less: additional farm operations expenses
+                              </td>
+                              <td className="p-3.5 text-right font-bold text-gray-900">
+                                - Rs. {fmt(settlement.expenses.totalCost)}
+                              </td>
+                            </tr>
+                          )}
+                          {settlement.supplierExpenses?.totalCost > 0 && (
+                            <tr>
+                              <td className="p-3.5 text-gray-600 font-medium">
+                                Less: additional supplier paid expenses
+                              </td>
+                              <td className="p-3.5 text-right font-bold text-gray-900">
+                                - Rs.{" "}
+                                {fmt(settlement.supplierExpenses.totalCost)}
+                              </td>
+                            </tr>
+                          )}
+                          {settlement.labour > 0 && (
+                            <tr>
+                              <td className="p-3.5 text-gray-600 font-medium">
+                                Less: poultry workers labor pay
+                              </td>
+                              <td className="p-3.5 text-right font-bold text-gray-900">
+                                - Rs. {fmt(settlement.labour)}
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            className={`font-black text-white text-base ${isProfit ? "bg-green-600" : "bg-red-600"}`}
+                          >
+                            <td className="p-4 uppercase tracking-wider">
+                              {isProfit ? "NET PROFIT" : "NET LOSS"}
+                            </td>
+                            <td className="p-4 text-right text-lg">
+                              {!isProfit ? "-" : ""}Rs. {fmt(Math.abs(profit))}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payables Preview */}
+                {previewSection === "payables" && (
+                  <div className="space-y-4">
+                    <table className="w-full text-sm border border-gray-200 shadow-sm rounded-xl overflow-hidden">
+                      <thead className="bg-gray-100 text-gray-700 font-extrabold text-[11px] uppercase tracking-wider border-b border-gray-200">
+                        <tr>
+                          <th className="p-4 text-left">Category</th>
+                          <th className="p-4 text-right">Total Cost</th>
+                          <th className="p-4 text-right">Paid</th>
+                          <th className="p-4 text-right">Returned</th>
+                          <th className="p-4 text-right">
+                            Owed (Supplier Payable)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-150">
+                        <tr className="hover:bg-gray-50/50 transition-colors">
+                          <td className="p-4 font-bold text-gray-800">
+                            Batch Purchase
+                          </td>
+                          <td className="p-4 text-right">
+                            {fmt(settlement.batchCost)}
+                          </td>
+                          <td className="p-4 text-right text-green-700 font-bold">
+                            {fmt(settlement.batchPaid)}
+                          </td>
+                          <td className="p-4 text-right text-gray-400">—</td>
+                          <td className="p-4 text-right font-black text-red-650">
+                            {fmt(settlement.batchPayable)}
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-gray-50/50 transition-colors">
+                          <td className="p-4 font-bold text-gray-800">Feed</td>
+                          <td className="p-4 text-right">
+                            {fmt(settlement.feed?.totalCost)}
+                          </td>
+                          <td className="p-4 text-right text-green-700 font-bold">
+                            {fmt(settlement.feed?.totalPaid)}
+                          </td>
+                          <td className="p-4 text-right text-amber-700">
+                            {(settlement.feed?.returned || 0) > 0
+                              ? fmt(settlement.feed?.returned)
+                              : "—"}
+                          </td>
+                          <td className="p-4 text-right font-black text-red-650">
+                            {fmt(settlement.feed?.totalPayable)}
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-gray-50/50 transition-colors">
+                          <td className="p-4 font-bold text-gray-800">
+                            Medicine
+                          </td>
+                          <td className="p-4 text-right">
+                            {fmt(settlement.medicine?.totalCost)}
+                          </td>
+                          <td className="p-4 text-right text-green-700 font-bold">
+                            {fmt(settlement.medicine?.totalPaid)}
+                          </td>
+                          <td className="p-4 text-right text-amber-700">
+                            {(settlement.medicine?.returned || 0) > 0
+                              ? fmt(settlement.medicine?.returned)
+                              : "—"}
+                          </td>
+                          <td className="p-4 text-right font-black text-red-650">
+                            {fmt(settlement.medicine?.totalPayable)}
+                          </td>
+                        </tr>
+                        {settlement.supplierExpenses?.totalCost > 0 && (
+                          <tr className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-4 font-bold text-gray-800">
+                              Supplier Paid Expenses
+                            </td>
+                            <td className="p-4 text-right">
+                              {fmt(settlement.supplierExpenses.totalCost)}
+                            </td>
+                            <td className="p-4 text-right text-green-700 font-bold">
+                              {fmt(settlement.supplierExpenses.totalPaid)}
+                            </td>
+                            <td className="p-4 text-right text-gray-400">—</td>
+                            <td className="p-4 text-right font-black text-red-650">
+                              {fmt(settlement.supplierExpenses.totalPayable)}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gray-50 font-black border-t-2 border-gray-300">
+                          <td className="p-4 uppercase tracking-wider text-xs">
+                            Total Supplier Account
+                          </td>
+                          <td className="p-4 text-right text-gray-800">
+                            {fmt(
+                              totalCosts -
+                                (settlement.expenses?.totalCost || 0) -
+                                settlement.labour,
+                            )}
+                          </td>
+                          <td className="p-4 text-right text-green-800">
+                            {fmt(
+                              (settlement.batchPaid || 0) +
+                                (settlement.feed?.totalPaid || 0) +
+                                (settlement.medicine?.totalPaid || 0) +
+                                (settlement.supplierExpenses?.totalPaid || 0),
+                            )}
+                          </td>
+                          <td className="p-4 text-right text-amber-700">
+                            {fmt(
+                              (settlement.feed?.returned || 0) +
+                                (settlement.medicine?.returned || 0),
+                            )}
+                          </td>
+                          <td className="p-4 text-right text-red-700 text-base">
+                            {fmt(settlement.totalPayables)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {/* Received stats Preview */}
+                {previewSection === "received" && (
+                  <div className="space-y-4">
+                    <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="bg-gray-100 p-3.5 font-extrabold text-gray-700 text-xs uppercase tracking-wider border-b border-gray-200">
+                        Cash Settlement Calculation
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-150">
+                          <tr>
+                            <td className="p-3.5 text-gray-700 font-bold">
+                              Total Accrued Income (A)
+                            </td>
+                            <td className="p-3.5 text-right font-black text-green-755">
+                              Rs. {fmt(totalIncome)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-3.5 text-gray-500 font-medium">
+                              Less: Total Supplier Payables (B)
+                            </td>
+                            <td className="p-3.5 text-right text-red-650 font-black">
+                              - Rs. {fmt(settlement.totalPayables)}
+                            </td>
+                          </tr>
+                          {(settlement.totalReceivables || 0) > 0 && (
+                            <tr>
+                              <td className="p-3.5 text-gray-500 font-medium">
+                                Plus: Refund Receivables from stock returns (C)
+                              </td>
+                              <td className="p-3.5 text-right text-green-600 font-black">
+                                + Rs. {fmt(settlement.totalReceivables)}
+                              </td>
+                            </tr>
+                          )}
+                          <tr className="bg-gray-50 font-black">
+                            <td className="p-4 text-xs uppercase tracking-wider text-gray-750">
+                              Net Payable Cash Settle-up{" "}
+                              {(settlement.totalReceivables || 0) > 0
+                                ? "(A - B + C)"
+                                : "(A - B)"}
+                            </td>
+                            <td className="p-4 text-right text-base text-gray-905">
+                              Rs. {fmt(settlement.netReceived)}
+                            </td>
+                          </tr>
+                          {settlement.status === "completed" && (
+                            <tr className="bg-green-600 text-white font-black">
+                              <td className="p-4 text-xs uppercase tracking-wider">
+                                FINAL REGISTERED RECEIVED AMOUNT
+                              </td>
+                              <td className="p-4 text-right text-base">
+                                Rs. {fmt(settlement.finalReceived)}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer actions */}
+              <div className="px-6 py-4 border-t border-gray-150 bg-gray-50/50 flex justify-end">
+                <button
+                  onClick={() => setPreviewSection(null)}
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-100 transition-all font-heading"
+                >
+                  Close
                 </button>
               </div>
             </div>
