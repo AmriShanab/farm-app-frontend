@@ -10,6 +10,7 @@ import {
   Leaf,
   Loader2,
   RefreshCw,
+  Search,
   Wallet,
   X,
 } from "lucide-react";
@@ -87,7 +88,7 @@ function ProfitCard({ value, onClick }) {
   );
 }
 
-function AmountRows({ rows, totalLabel = "Total" }) {
+function AmountRows({ rows, totalLabel = "Total", onRowClick }) {
   const visibleRows = rows.filter((row) => Number(row.value) !== 0);
   const total = rows.reduce((sum, row) => sum + Number(row.value || 0), 0);
 
@@ -96,17 +97,29 @@ function AmountRows({ rows, totalLabel = "Total" }) {
       {visibleRows.length === 0 && (
         <p className="py-5 text-sm text-gray-400">No records in this cycle.</p>
       )}
-      {visibleRows.map((row) => (
-        <div
-          key={row.label}
-          className="flex items-center justify-between gap-4 py-3 text-sm"
-        >
-          <span className="text-gray-600">{row.label}</span>
-          <span className="font-bold text-gray-900">
-            Rs. {money(row.value)}
-          </span>
-        </div>
-      ))}
+      {visibleRows.map((row) => {
+        const clickable = onRowClick && row.key;
+        return (
+          <div
+            key={row.label}
+            onClick={clickable ? () => onRowClick(row) : undefined}
+            className={`flex items-center justify-between gap-4 py-3 text-sm ${
+              clickable
+                ? "cursor-pointer hover:bg-emerald-50/60 -mx-2 px-2 rounded-lg transition-colors"
+                : ""
+            }`}
+            title={clickable ? "Click to see the records that make up this total" : undefined}
+          >
+            <span className={`flex items-center gap-1.5 ${clickable ? "text-emerald-700 font-semibold" : "text-gray-600"}`}>
+              {row.label}
+              {clickable && <Search size={12} className="opacity-60" />}
+            </span>
+            <span className="font-bold text-gray-900">
+              Rs. {money(row.value)}
+            </span>
+          </div>
+        );
+      })}
       <div className="flex items-center justify-between gap-4 pt-4 text-sm font-black">
         <span>{totalLabel}</span>
         <span>Rs. {money(total)}</span>
@@ -138,14 +151,260 @@ function CyclePicker({ items, value, onChange, type }) {
   );
 }
 
+// Formats a cell based on its column type.
+function formatCell(value, type) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (type === "date") return formatDate(value);
+  if (type === "num") {
+    const n = Number(value);
+    if (Number.isNaN(n)) return value;
+    return n.toLocaleString("en-LK", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+  }
+  return value;
+}
+
+// Generic columns/rows table with a total footer, used for both the main
+// records list and any secondary section (e.g. reclassified harvest labour).
+function DetailTable({ columns, rows, total }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[600px] text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-left text-[11px] uppercase tracking-wider text-gray-400">
+            {columns.map((c) => (
+              <th key={c.key} className={`pb-3 pr-3 ${c.type === "num" ? "text-right" : ""}`}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, idx) => (
+            <tr key={idx} className="border-b border-gray-50 last:border-0">
+              {columns.map((c) => (
+                <td
+                  key={c.key}
+                  className={`py-2.5 pr-3 ${
+                    c.type === "num"
+                      ? "text-right font-bold text-gray-900"
+                      : c.key === "amount"
+                        ? ""
+                        : "text-gray-600"
+                  }`}
+                >
+                  {formatCell(r[c.key], c.type)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-gray-200 font-black">
+            <td className="pt-3" colSpan={columns.length - 1}>
+              Total
+            </td>
+            <td className="pt-3 text-right">Rs. {money(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+// Modal listing every record that makes up one category's cycle total.
+function CycleDetailModal({ cycle, row, onClose }) {
+  const [state, setState] = useState({ loading: true, error: null, data: null });
+
+  useEffect(() => {
+    if (!row) return;
+    let alive = true;
+    setState({ loading: true, error: null, data: null });
+    const params = new URLSearchParams({ farm: cycle.farm, category: row.key });
+    if (cycle.startDate) params.set("startDate", cycle.startDate);
+    if (cycle.endDate) params.set("endDate", cycle.endDate);
+    fetch(`${API_BASE_URL}/dashboard/cycle-detail?${params.toString()}`, {
+      headers: getHeaders(),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load detail");
+        return r.json();
+      })
+      .then((json) => {
+        if (alive) setState({ loading: false, error: null, data: json?.data || json });
+      })
+      .catch(() => {
+        if (alive) setState({ loading: false, error: "Could not load the breakdown detail.", data: null });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cycle, row]);
+
+  if (!row) return null;
+
+  const { loading, error, data } = state;
+  const expected = Number(row.value || 0);
+  const detailTotal = data ? Number(data.total || 0) : null;
+  const diff = detailTotal === null ? null : Math.round((detailTotal - expected) * 100) / 100;
+  const matches = diff !== null && Math.abs(diff) < 0.01;
+
+  // Salary only: roll the per-day rows up per employee (days: full=1, half=0.5).
+  let empSummary = null;
+  if (row.key === "salary" && data && data.rows.length > 0) {
+    const map = {};
+    for (const r of data.rows) {
+      if (!map[r.employee]) map[r.employee] = { employee: r.employee, days: 0, total: 0 };
+      map[r.employee].days += r.status === "full" ? 1 : r.status === "half" ? 0.5 : 0;
+      map[r.employee].total += Number(r.amount || 0);
+    }
+    empSummary = Object.values(map).sort((a, b) => b.total - a.total);
+  }
+
+  // The main table sums to its own rows (the grand total may add an extra section).
+  const mainSubtotal = data
+    ? data.rows.reduce((s, r) => s + Number(r.amount || 0), 0)
+    : 0;
+  const mainLabel = data?.extra
+    ? "Harvest bill (external labour, tractor, food)"
+    : empSummary
+      ? "Day-by-day records"
+      : "Records";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="mt-10 w-full max-w-4xl rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5">
+          <div>
+            <h3 className="text-lg font-black text-gray-900">{row.label} — records</h3>
+            <p className="mt-1 text-xs font-medium text-gray-500">
+              {cycle.farm} · {cycle.startDate ? formatDate(cycle.startDate) : "Start"} →{" "}
+              {cycle.endDate ? formatDate(cycle.endDate) : "Present"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Reconciliation banner */}
+        {!loading && !error && (
+          <div
+            className={`flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm font-bold ${
+              matches ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
+            }`}
+          >
+            <span>
+              {data.count} record{data.count !== 1 ? "s" : ""} · Sum Rs. {money(detailTotal)}
+            </span>
+            <span>
+              Cycle shows Rs. {money(expected)}
+              {matches
+                ? " · ✓ matches"
+                : ` · ⚠ differs by Rs. ${money(Math.abs(diff))}`}
+            </span>
+          </div>
+        )}
+
+        {/* Body */}
+        <div className="max-h-[60vh] overflow-auto p-5">
+          {loading ? (
+            <div className="py-12 text-center">
+              <Loader2 className="mx-auto animate-spin text-green-600" />
+            </div>
+          ) : error ? (
+            <p className="py-8 text-center text-sm font-bold text-red-600">{error}</p>
+          ) : data.rows.length === 0 ? (
+            <p className="py-8 text-center text-sm font-bold text-gray-400">
+              No records in this cycle for {row.label.toLowerCase()}.
+            </p>
+          ) : (
+            <>
+              {empSummary && (
+                <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-emerald-700">
+                    By employee ({empSummary.length})
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[360px] text-sm">
+                      <thead>
+                        <tr className="text-left text-[11px] uppercase tracking-wider text-gray-400">
+                          <th className="pb-2 pr-3">Employee</th>
+                          <th className="pb-2 pr-3 text-right">Days worked</th>
+                          <th className="pb-2 text-right">Total salary</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {empSummary.map((e) => (
+                          <tr key={e.employee} className="border-t border-emerald-100/70">
+                            <td className="py-2 pr-3 font-bold text-gray-800">{e.employee}</td>
+                            <td className="py-2 pr-3 text-right text-gray-700">{e.days}</td>
+                            <td className="py-2 text-right font-black text-gray-900">Rs. {money(e.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-emerald-200 font-black">
+                          <td className="pt-2 pr-3">Total</td>
+                          <td className="pt-2 pr-3 text-right">
+                            {empSummary.reduce((s, e) => s + e.days, 0)}
+                          </td>
+                          <td className="pt-2 text-right">Rs. {money(detailTotal)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+              <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-gray-400">
+                {mainLabel}
+              </p>
+              <DetailTable columns={data.columns} rows={data.rows} total={mainSubtotal} />
+
+              {data.extra && (
+                <div className="mt-6">
+                  <p className="mb-1 text-[11px] font-black uppercase tracking-wider text-emerald-700">
+                    + {data.extra.label}
+                  </p>
+                  {data.extra.note && (
+                    <p className="mb-2 text-xs text-gray-500">{data.extra.note}</p>
+                  )}
+                  <DetailTable
+                    columns={data.extra.columns}
+                    rows={data.extra.rows}
+                    total={data.extra.subtotal}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HarvestBreakdown({ cycle, onCardClick }) {
+  const [detailRow, setDetailRow] = useState(null);
   const incomeRows = [
-    { label: "Coconut sales", value: cycle.income.coconut },
-    { label: "Other income", value: cycle.income.other },
+    { key: "coconut", label: "Coconut sales", value: cycle.income.coconut },
+    { key: "other", label: "Other income", value: cycle.income.other },
   ];
   const expenseRows = Object.entries(cycle.expenses)
     .filter(([key]) => key !== "total")
-    .map(([key, value]) => ({ label: titleCase(key), value }));
+    .map(([key, value]) => ({ key, label: titleCase(key), value }));
 
   return (
     <>
@@ -174,18 +433,22 @@ function HarvestBreakdown({ cycle, onCardClick }) {
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <h2 className="font-black text-gray-900">Income</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Income recorded during this harvest window.
+            Income recorded during this harvest window.{" "}
+            <span className="text-emerald-600 font-semibold">Click a line to see its records.</span>
           </p>
-          <AmountRows rows={incomeRows} totalLabel="Total income" />
+          <AmountRows rows={incomeRows} totalLabel="Total income" onRowClick={setDetailRow} />
         </section>
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <h2 className="font-black text-gray-900">Expenses</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Costs recorded from this harvest up to the next harvest.
+            Costs recorded from this harvest up to the next harvest.{" "}
+            <span className="text-emerald-600 font-semibold">Click a line to see its records.</span>
           </p>
-          <AmountRows rows={expenseRows} totalLabel="Total expenses" />
+          <AmountRows rows={expenseRows} totalLabel="Total expenses" onRowClick={setDetailRow} />
         </section>
       </div>
+
+      <CycleDetailModal cycle={cycle} row={detailRow} onClose={() => setDetailRow(null)} />
 
       <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="font-black text-gray-900">Coconut yield</h2>
@@ -230,7 +493,8 @@ function PoultryBreakdown({ batch, onCardClick }) {
     { label: "Bird purchase", value: batch.expenses.batchPurchase },
     { label: "Feed (net of returns)", value: batch.expenses.feed },
     { label: "Medicine (net of returns)", value: batch.expenses.medicine || 0 },
-    { label: "Other expenses", value: batch.expenses.otherExpenses || 0 },
+    { label: "Farm-paid expenses", value: batch.expenses.otherExpenses || 0 },
+    { label: "Supplier-paid expenses", value: batch.expenses.supplierExpenses || 0 },
     { label: "Poultry labour", value: batch.expenses.labour || 0 },
   ];
 
@@ -318,16 +582,16 @@ const MONTH_NAMES = [
   "December",
 ];
 
-// Plain calendar-month P/L across both coconut farms (no farm selection,
-// poultry excluded). Settlement-style Income | Expenses | P&L.
 function CalendarBreakdown() {
   const now = new Date();
+  const [view, setView] = useState("monthly");
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [farm, setFarm] = useState("both");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [previewSection, setPreviewSection] = useState(null); // 'income' | 'expenses' | 'profit' | null
+  const [previewSection, setPreviewSection] = useState(null);
   const [printActiveSection, setPrintActiveSection] = useState(null);
 
   const triggerSectionPrint = (section) => {
@@ -338,14 +602,20 @@ function CalendarBreakdown() {
     }, 150);
   };
 
+  const periodLabel = view === "yearly"
+    ? `${year}`
+    : `${MONTH_NAMES[month - 1]} ${year}`;
+  const farmLabel = farm === "both" ? "MR1 + MR2" : farm;
+
   useEffect(() => {
     const controller = new AbortController();
     Promise.resolve().then(() => {
       setLoading(true);
       setError("");
     });
+    const params = new URLSearchParams({ view, month, year, farm });
     fetch(
-      `${API_BASE_URL}/dashboard/calendar-breakdown?month=${month}&year=${year}`,
+      `${API_BASE_URL}/dashboard/calendar-breakdown?${params}`,
       {
         headers: getHeaders(),
         signal: controller.signal,
@@ -367,7 +637,7 @@ function CalendarBreakdown() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [month, year]);
+  }, [view, month, year, farm]);
 
   const incomeRows = data
     ? [
@@ -391,20 +661,35 @@ function CalendarBreakdown() {
         <div className="mt-5 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
           <label className="block">
             <span className="mb-2 block text-[11px] font-black uppercase tracking-wider text-gray-500">
-              Month
+              View
             </span>
             <select
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
+              value={view}
+              onChange={(e) => setView(e.target.value)}
               className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-green-600"
             >
-              {MONTH_NAMES.map((m, i) => (
-                <option key={m} value={i + 1}>
-                  {m}
-                </option>
-              ))}
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
             </select>
           </label>
+          {view === "monthly" && (
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+                Month
+              </span>
+              <select
+                value={month}
+                onChange={(e) => setMonth(Number(e.target.value))}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-green-600"
+              >
+                {MONTH_NAMES.map((m, i) => (
+                  <option key={m} value={i + 1}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="mb-2 block text-[11px] font-black uppercase tracking-wider text-gray-500">
               Year
@@ -421,8 +706,22 @@ function CalendarBreakdown() {
               ))}
             </select>
           </label>
+          <label className="block">
+            <span className="mb-2 block text-[11px] font-black uppercase tracking-wider text-gray-500">
+              Farm
+            </span>
+            <select
+              value={farm}
+              onChange={(e) => setFarm(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-green-600"
+            >
+              <option value="both">Both (MR1 + MR2)</option>
+              <option value="MR1">MR1</option>
+              <option value="MR2">MR2</option>
+            </select>
+          </label>
           <p className="ml-auto text-xs font-bold text-gray-400">
-            Both farms combined · poultry excluded
+            {farmLabel} · poultry excluded
           </p>
         </div>
 
@@ -460,14 +759,14 @@ function CalendarBreakdown() {
               <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <h2 className="font-black text-gray-900">Income</h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  {MONTH_NAMES[month - 1]} {year} · MR1 + MR2
+                  {periodLabel} · {farmLabel}
                 </p>
                 <AmountRows rows={incomeRows} totalLabel="Total income" />
               </section>
               <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <h2 className="font-black text-gray-900">Expenses</h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  All costs incl. payroll &amp; fuel
+                  All costs incl. salary &amp; fuel
                 </p>
                 <AmountRows rows={expenseRows} totalLabel="Total expenses" />
               </section>
@@ -489,14 +788,14 @@ function CalendarBreakdown() {
               <div>
                 <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <Bird size={18} className="text-green-700" />
-                  {previewSection === "income" && "Monthly Income Breakdown"}
+                  {previewSection === "income" && `${view === "yearly" ? "Yearly" : "Monthly"} Income Breakdown`}
                   {previewSection === "expenses" &&
-                    "Monthly Expenses Breakdown"}
+                    `${view === "yearly" ? "Yearly" : "Monthly"} Expenses Breakdown`}
                   {previewSection === "profit" &&
-                    "Monthly Profitability Records"}
+                    `${view === "yearly" ? "Yearly" : "Monthly"} Profitability Records`}
                 </h3>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                  Estate: Calendar Breakdown ({MONTH_NAMES[month - 1]} {year})
+                  Estate: Calendar Breakdown ({periodLabel} · {farmLabel})
                 </p>
               </div>
               <div className="flex items-center gap-2.5">
@@ -585,10 +884,10 @@ function CalendarBreakdown() {
         <div className="hidden print:block font-['Nunito'] space-y-6">
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-gray-800 uppercase tracking-widest">
-              MONTHLY CALENDAR INCOME BREAKDOWN
+              {view === "yearly" ? "YEARLY" : "MONTHLY"} CALENDAR INCOME BREAKDOWN
             </h2>
             <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-wider">
-              Calendar month: {MONTH_NAMES[month - 1]} {year}
+              {periodLabel} · {farmLabel}
             </p>
           </div>
           <table className="w-full text-sm border border-gray-200">
@@ -626,10 +925,10 @@ function CalendarBreakdown() {
         <div className="hidden print:block font-['Nunito'] space-y-6">
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-gray-800 uppercase tracking-widest">
-              MONTHLY CALENDAR EXPENSES BREAKDOWN
+              {view === "yearly" ? "YEARLY" : "MONTHLY"} CALENDAR EXPENSES BREAKDOWN
             </h2>
             <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-wider">
-              Calendar month: {MONTH_NAMES[month - 1]} {year}
+              {periodLabel} · {farmLabel}
             </p>
           </div>
           <table className="w-full text-sm border border-gray-200">
@@ -667,10 +966,10 @@ function CalendarBreakdown() {
         <div className="hidden print:block font-['Nunito'] space-y-6">
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-gray-800 uppercase tracking-widest">
-              MONTHLY CALENDAR PROFITABILITY REPORT
+              {view === "yearly" ? "YEARLY" : "MONTHLY"} CALENDAR PROFITABILITY REPORT
             </h2>
             <p className="text-xs text-gray-500 font-bold mt-1 uppercase tracking-wider">
-              Calendar month: {MONTH_NAMES[month - 1]} {year}
+              {periodLabel} · {farmLabel}
             </p>
           </div>
           <table className="w-full text-sm border border-gray-200">
@@ -818,7 +1117,8 @@ export default function MonthlyBreakdown() {
         ["Bird purchase", selection.expenses.batchPurchase],
         ["Feed (net of returns)", selection.expenses.feed],
         ["Medicine (net of returns)", selection.expenses.medicine || 0],
-        ["Other expenses", selection.expenses.otherExpenses || 0],
+        ["Farm-paid expenses", selection.expenses.otherExpenses || 0],
+        ["Supplier-paid expenses", selection.expenses.supplierExpenses || 0],
         ["Poultry labour", selection.expenses.labour || 0],
       );
       rows.push(
@@ -1109,8 +1409,12 @@ export default function MonthlyBreakdown() {
                           value: selection.expenses.medicine || 0,
                         },
                         {
-                          label: "Other expenses",
+                          label: "Farm-paid expenses",
                           value: selection.expenses.otherExpenses || 0,
+                        },
+                        {
+                          label: "Supplier-paid expenses",
+                          value: selection.expenses.supplierExpenses || 0,
                         },
                         {
                           label: "Poultry labour",
@@ -1313,10 +1617,18 @@ export default function MonthlyBreakdown() {
                   </tr>
                   <tr className="border-b border-gray-200">
                     <td className="p-4 font-bold text-gray-700">
-                      Other expenses
+                      Farm-paid expenses
                     </td>
                     <td className="p-4 text-right text-red-650 font-black">
                       Rs. {money(selection.expenses.otherExpenses || 0)}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-200">
+                    <td className="p-4 font-bold text-gray-700">
+                      Supplier-paid expenses
+                    </td>
+                    <td className="p-4 text-right text-red-650 font-black">
+                      Rs. {money(selection.expenses.supplierExpenses || 0)}
                     </td>
                   </tr>
                   <tr className="border-b border-gray-200">

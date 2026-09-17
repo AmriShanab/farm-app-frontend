@@ -508,6 +508,26 @@ export const getAttendanceHistory = async (employeeId, startDate, endDate) => {
   }
 };
 
+// Attendance summary for ALL employees over a farm + date window.
+export const getAttendanceSummary = async (farm, startDate, endDate) => {
+  try {
+    const params = [
+      `startDate=${encodeURIComponent(startDate)}`,
+      `endDate=${encodeURIComponent(endDate)}`,
+    ];
+    if (farm && farm !== "All") params.push(`farm=${encodeURIComponent(farm)}`);
+    const response = await fetch(
+      `${BASE_URL}/hr/attendance/summary?${params.join("&")}`,
+      { method: "GET", headers: getHeaders() },
+    );
+    if (!response.ok) throw new Error("Failed to fetch attendance summary");
+    return unwrapApiData(await response.json()) || {};
+  } catch (error) {
+    console.error("API Error (getAttendanceSummary):", error);
+    throw error;
+  }
+};
+
 // Full per-employee history (attendance + advances + payroll) in a date window.
 export const getEmployeeHistory = async (id, { from, to } = {}) => {
   try {
@@ -1610,8 +1630,8 @@ export const searchCheques = async (chequeNo) => {
     id: item.id,
     chequeNo: item.cheque_no,
     cheque_date: item.cheque_date,
-    payee: item.description,
-    category: item.source,
+    payee: item.payee || item.description,
+    category: item.category || item.source,
     amount: item.amount,
     status: item.status || "Pending",
   }));
@@ -1644,8 +1664,8 @@ export const createCheque = async (data) => {
     id: item.id,
     chequeNo: item.cheque_no,
     cheque_date: item.cheque_date,
-    payee: item.description,
-    category: item.source,
+    payee: item.payee || item.description,
+    category: item.category || item.source,
     amount: item.amount,
     status: item.status || "Pending",
   };
@@ -2063,7 +2083,11 @@ export const createExcelDocument = async (data) => {
     headers: getHeaders(),
     body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error("Failed to create excel document");
+  if (!response.ok) {
+    const err = new Error("Failed to create excel document");
+    err.status = response.status;
+    throw err;
+  }
   return unwrapApiData(await response.json());
 };
 
@@ -2101,5 +2125,53 @@ export const deleteExcelDocument = async (id) => {
     headers: getHeaders(),
   });
   return response.ok;
+};
+
+export const moveExcelDocument = async (id, folderId) => {
+  const response = await fetch(`${BASE_URL}/excel-documents/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify({ folderId }),
+  });
+  if (!response.ok) throw new Error("Failed to move document");
+  return (await response.json())?.data;
+};
+
+export const getExcelFolders = async () => {
+  const response = await fetch(`${BASE_URL}/excel-folders`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to load folders");
+  const payload = await response.json();
+  return payload?.data || [];
+};
+
+export const createExcelFolder = async (name) => {
+  const response = await fetch(`${BASE_URL}/excel-folders`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error("Failed to create folder");
+  return (await response.json())?.data;
+};
+
+export const renameExcelFolder = async (id, name) => {
+  const response = await fetch(`${BASE_URL}/excel-folders/${id}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error("Failed to rename folder");
+  return (await response.json())?.data;
+};
+
+export const deleteExcelFolder = async (id) => {
+  const response = await fetch(`${BASE_URL}/excel-folders/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete folder");
+  return (await response.json())?.data;
 };
 

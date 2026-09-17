@@ -26,6 +26,8 @@ import {
   updateCoconutSale,
   deleteCoconutSale,
   createHarvestExpense,
+  getHarvestExpenses,
+  updateHarvestExpense,
   getEmployees,
   markHarvestAttendanceBulk,
 } from "../services/api";
@@ -81,8 +83,10 @@ const saleToForm = (sale) => ({
   qty2: sale?.qty2 ?? "",
   rate2: sale?.rate2 ?? "",
   free_qty2: sale?.free_qty2 ?? "",
-  // Expenses aren't loaded into the edit form by default unless you fetch them,
-  // so we leave them blank for existing records to prevent overwriting.
+  mainLabor: "",
+  collectors: "",
+  tractorDriver: "",
+  foodExpenses: "",
 });
 
 // Days until (or since) a target date. Positive = future, negative = overdue.
@@ -143,6 +147,7 @@ export default function CoconutSales() {
   const [newRow, setNewRow] = useState(emptySaleForm());
   const [editSale, setEditSale] = useState(null);
   const [editRow, setEditRow] = useState(emptySaleForm());
+  const [editExpenseId, setEditExpenseId] = useState(null);
   const [viewSale, setViewSale] = useState(null);
   const toast = useToast();
 
@@ -241,14 +246,33 @@ export default function CoconutSales() {
     setEditRow((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const openEditSale = (sale) => {
-    setEditSale(normalizeSaleRecord(sale));
+  const openEditSale = async (sale) => {
+    const norm = normalizeSaleRecord(sale);
+    setEditSale(norm);
     setEditRow(saleToForm(sale));
+    setEditExpenseId(null);
+    try {
+      const farm = sale.farm || "MR1";
+      const year = new Date(sale.date).getFullYear();
+      const expenses = await getHarvestExpenses(farm, year);
+      const linked = expenses.find((e) => e.date === sale.date && e.farm === farm);
+      if (linked) {
+        setEditExpenseId(linked.id);
+        setEditRow((prev) => ({
+          ...prev,
+          mainLabor: linked.main_labor || "",
+          collectors: linked.collectors || "",
+          tractorDriver: linked.tractor_driver || "",
+          foodExpenses: linked.food_expenses || "",
+        }));
+      }
+    } catch {}
   };
 
   const closeEditSale = () => {
     setEditSale(null);
     setEditRow(emptySaleForm());
+    setEditExpenseId(null);
     setIsSaving(false);
   };
 
@@ -434,6 +458,25 @@ export default function CoconutSales() {
         },
       );
       updatedRecord.total = updatedRecord.total || calcNet(payload);
+
+      const hasExpenses =
+        editRow.mainLabor || editRow.collectors || editRow.tractorDriver || editRow.foodExpenses;
+      if (hasExpenses) {
+        const expPayload = {
+          date: editRow.date,
+          farm: editRow.farm,
+          mainLabor: parseFloat(editRow.mainLabor) || 0,
+          collectors: parseFloat(editRow.collectors) || 0,
+          tractorDriver: parseFloat(editRow.tractorDriver) || 0,
+          foodExpenses: parseFloat(editRow.foodExpenses) || 0,
+          notes: "Linked to Coconut Sale",
+        };
+        if (editExpenseId) {
+          await updateHarvestExpense(editExpenseId, expPayload);
+        } else {
+          await createHarvestExpense(expPayload);
+        }
+      }
 
       setSales((prev) =>
         prev.map((sale) => (sale.id === editSale.id ? updatedRecord : sale)),
@@ -1574,6 +1617,31 @@ export default function CoconutSales() {
                       onChange={handleEditRowChange}
                       className="w-full border border-blue-200 bg-blue-50 text-sm font-bold focus:border-blue-500 focus:outline-none text-blue-700"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Linked Harvest Expenses */}
+              <div className="p-4 rounded-xl border border-amber-100 bg-amber-50/20 space-y-3">
+                <h3 className="text-sm font-black text-amber-800 flex items-center gap-2">
+                  <Leaf size={16} className="text-amber-600" /> Linked Harvest Expenses
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Main Labor</label>
+                    <input type="number" name="mainLabor" value={editRow.mainLabor} onChange={handleEditRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Collectors</label>
+                    <input type="number" name="collectors" value={editRow.collectors} onChange={handleEditRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Tractor</label>
+                    <input type="number" name="tractorDriver" value={editRow.tractorDriver} onChange={handleEditRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Food Expenses</label>
+                    <input type="number" name="foodExpenses" value={editRow.foodExpenses} onChange={handleEditRowChange} placeholder="Rs." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-green-500 focus:outline-none" />
                   </div>
                 </div>
               </div>

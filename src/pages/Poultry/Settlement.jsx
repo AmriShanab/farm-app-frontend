@@ -665,26 +665,6 @@ export default function PoultrySettlement() {
                             Rs. {fmt(settlement.medicine?.totalPayable)}
                           </td>
                         </tr>
-                        {(settlement.expenses?.totalCost || 0) > 0 && (
-                          <tr className="border-t border-gray-50 hover:bg-gray-50/50">
-                            <td className="p-4 font-bold text-gray-900 flex items-center gap-2">
-                              <FileText size={14} className="text-orange-600" />{" "}
-                              Additional Expenses
-                            </td>
-                            <td className="p-4 text-right font-bold">
-                              Rs. {fmt(settlement.expenses?.totalCost)}
-                            </td>
-                            <td className="p-4 text-right font-bold text-gray-400">
-                              —
-                            </td>
-                            <td className="p-4 text-right font-bold text-gray-400">
-                              —
-                            </td>
-                            <td className="p-4 text-right font-bold text-gray-400">
-                              —
-                            </td>
-                          </tr>
-                        )}
                         {(settlement.supplierExpenses?.totalCost || 0) > 0 && (
                           <tr className="border-t border-gray-50 hover:bg-gray-50/50">
                             <td className="p-4 font-bold text-gray-900 flex items-center gap-2">
@@ -740,59 +720,6 @@ export default function PoultrySettlement() {
                   </div>
                 </div>
 
-                {/* ── Additional Expense Details ── */}
-                {settlement.expenses?.rows?.length > 0 && (
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-orange-50/50 flex items-center gap-2">
-                      <FileText size={16} className="text-orange-600" />
-                      <h2 className="font-bold text-gray-800">
-                        Additional Expense Details
-                      </h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider">
-                          <tr>
-                            <th className="p-4 text-left">Date</th>
-                            <th className="p-4 text-left">Description</th>
-                            <th className="p-4 text-right">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {settlement.expenses.rows.map((e) => (
-                            <tr
-                              key={e.id}
-                              className="border-t border-gray-50 hover:bg-gray-50/50"
-                            >
-                              <td className="p-4 font-bold text-gray-900">
-                                {e.date}
-                              </td>
-                              <td className="p-4 font-bold text-gray-700">
-                                {e.description}
-                              </td>
-                              <td className="p-4 text-right font-black text-gray-900">
-                                Rs. {fmt(e.amount)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-gray-200 bg-gray-50/80">
-                            <td
-                              colSpan={2}
-                              className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider"
-                            >
-                              Total
-                            </td>
-                            <td className="p-4 text-right font-black text-gray-900">
-                              Rs. {fmt(settlement.expenses?.totalCost)}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
 
                 {/* ── Batch Info ── */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
@@ -1135,6 +1062,36 @@ export default function PoultrySettlement() {
                               {fmt(settlement.medicine?.totalPayable)}
                             </td>
                           </tr>
+                          {(settlement.expenses?.totalCost || 0) > 0 && (
+                            <tr className="hover:bg-gray-50/50 transition-colors">
+                              <td className="p-3 font-semibold text-gray-800">
+                                Farm-Paid Expenses
+                              </td>
+                              <td className="p-3 text-right text-gray-900">
+                                {fmt(settlement.expenses.totalCost)}
+                              </td>
+                              <td className="p-3 text-right text-gray-400">—</td>
+                              <td className="p-3 text-right text-gray-400">—</td>
+                              <td className="p-3 text-right text-gray-400">—</td>
+                            </tr>
+                          )}
+                          {(settlement.supplierExpenses?.totalCost || 0) > 0 && (
+                            <tr className="hover:bg-gray-50/50 transition-colors">
+                              <td className="p-3 font-semibold text-gray-800">
+                                Supplier-Paid Expenses
+                              </td>
+                              <td className="p-3 text-right text-gray-900">
+                                {fmt(settlement.supplierExpenses.totalCost)}
+                              </td>
+                              <td className="p-3 text-right text-green-700">
+                                {fmt(settlement.supplierExpenses.totalPaid)}
+                              </td>
+                              <td className="p-3 text-right text-gray-400">—</td>
+                              <td className="p-3 text-right font-black text-red-600">
+                                {fmt(settlement.supplierExpenses.totalPayable)}
+                              </td>
+                            </tr>
+                          )}
                           {settlement.labour > 0 && (
                             <tr className="hover:bg-gray-50/50 transition-colors">
                               <td className="p-3 font-semibold text-gray-800">
@@ -1168,6 +1125,7 @@ export default function PoultrySettlement() {
                                 (settlement.batchPaid || 0) +
                                   (settlement.feed?.totalPaid || 0) +
                                   (settlement.medicine?.totalPaid || 0) +
+                                  (settlement.supplierExpenses?.totalPaid || 0) +
                                   (settlement.labour || 0),
                               )}
                             </td>
@@ -1185,79 +1143,6 @@ export default function PoultrySettlement() {
                       </table>
                     </div>
 
-                    {settlement.expenses?.rows?.length > 0 && (
-                      <div>
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                          Additional Farm-Paid Expenses Logs
-                        </h4>
-                        <table className="w-full text-xs border border-gray-200">
-                          <thead className="bg-gray-100 text-[#111827] font-bold uppercase tracking-wider border-b border-gray-200">
-                            <tr>
-                              <th className="p-2.5 text-left">Date</th>
-                              <th className="p-2.5 text-left">Description</th>
-                              <th className="p-2.5 text-right">Amount (Rs.)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-150">
-                            {settlement.expenses.rows.map((row) => (
-                              <tr
-                                key={row.id}
-                                className="hover:bg-gray-50/50 transition-colors"
-                              >
-                                <td className="p-2.5">{row.date}</td>
-                                <td className="p-2.5 font-medium">
-                                  {row.description}
-                                </td>
-                                <td className="p-2.5 text-right font-black text-gray-800">
-                                  {fmt(row.amount)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {settlement.supplierExpenses?.rows?.length > 0 && (
-                      <div>
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                          Supplier-Paid Additional Expenses Logs
-                        </h4>
-                        <table className="w-full text-xs border border-gray-200">
-                          <thead className="bg-gray-100 text-[#111827] font-bold uppercase tracking-wider border-b border-gray-200">
-                            <tr>
-                              <th className="p-2.5 text-left">Date</th>
-                              <th className="p-2.5 text-left">Description</th>
-                              <th className="p-2.5 text-right">Amount (Rs.)</th>
-                              <th className="p-2.5 text-right">Paid (Rs.)</th>
-                              <th className="p-2.5 text-right">Owed (Rs.)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-150">
-                            {settlement.supplierExpenses.rows.map((row) => (
-                              <tr
-                                key={row.id}
-                                className="hover:bg-gray-50/50 transition-colors"
-                              >
-                                <td className="p-2.5">{row.date}</td>
-                                <td className="p-2.5 font-medium">
-                                  {row.description}
-                                </td>
-                                <td className="p-2.5 text-right font-black text-gray-800">
-                                  {fmt(row.amount)}
-                                </td>
-                                <td className="p-2.5 text-right text-green-700 font-bold">
-                                  {fmt(row.paid_amount)}
-                                </td>
-                                <td className="p-2.5 text-right text-red-600 font-bold">
-                                  {fmt(row.payable_balance)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1698,6 +1583,32 @@ export default function PoultrySettlement() {
                   {fmt(settlement.medicine?.totalPayable)}
                 </td>
               </tr>
+              {(settlement.expenses?.totalCost || 0) > 0 && (
+                <tr className="border-b border-gray-200">
+                  <td className="p-3 font-semibold">Farm-Paid Expenses</td>
+                  <td className="p-3 text-right">
+                    {fmt(settlement.expenses.totalCost)}
+                  </td>
+                  <td className="p-3 text-right text-gray-400">—</td>
+                  <td className="p-3 text-right text-gray-400">—</td>
+                  <td className="p-3 text-right text-gray-400">—</td>
+                </tr>
+              )}
+              {(settlement.supplierExpenses?.totalCost || 0) > 0 && (
+                <tr className="border-b border-gray-200">
+                  <td className="p-3 font-semibold">Supplier-Paid Expenses</td>
+                  <td className="p-3 text-right">
+                    {fmt(settlement.supplierExpenses.totalCost)}
+                  </td>
+                  <td className="p-3 text-right text-green-700">
+                    {fmt(settlement.supplierExpenses.totalPaid)}
+                  </td>
+                  <td className="p-3 text-right text-gray-400">—</td>
+                  <td className="p-3 text-right font-black text-red-600">
+                    {fmt(settlement.supplierExpenses.totalPayable)}
+                  </td>
+                </tr>
+              )}
               {settlement.labour > 0 && (
                 <tr className="border-b border-gray-200">
                   <td className="p-3 font-semibold">Poultry Labour</td>
@@ -1721,6 +1632,7 @@ export default function PoultrySettlement() {
                     (settlement.batchPaid || 0) +
                       (settlement.feed?.totalPaid || 0) +
                       (settlement.medicine?.totalPaid || 0) +
+                      (settlement.supplierExpenses?.totalPaid || 0) +
                       (settlement.labour || 0),
                   )}
                 </td>
@@ -1737,69 +1649,6 @@ export default function PoultrySettlement() {
             </tfoot>
           </table>
 
-          {settlement.expenses?.rows?.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
-                Additional Farm-Paid Expenses Logs
-              </h3>
-              <table className="w-full text-xs border border-gray-200">
-                <thead className="bg-gray-100 text-[#111827] font-bold uppercase tracking-wider border-b border-gray-200">
-                  <tr>
-                    <th className="p-2 text-left">Date</th>
-                    <th className="p-2 text-left">Description</th>
-                    <th className="p-2 text-right">Amount (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {settlement.expenses.rows.map((row) => (
-                    <tr key={row.id} className="border-b border-gray-200">
-                      <td className="p-2">{row.date}</td>
-                      <td className="p-2">{row.description}</td>
-                      <td className="p-2 text-right font-semibold">
-                        {fmt(row.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {settlement.supplierExpenses?.rows?.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
-                Supplier-Paid Additional Expenses Logs
-              </h3>
-              <table className="w-full text-xs border border-gray-200">
-                <thead className="bg-gray-100 text-[#111827] font-bold uppercase tracking-wider border-b border-gray-200">
-                  <tr>
-                    <th className="p-2 text-left">Date</th>
-                    <th className="p-2 text-left">Description</th>
-                    <th className="p-2 text-right">Amount (Rs.)</th>
-                    <th className="p-2 text-right">Paid (Rs.)</th>
-                    <th className="p-2 text-right">Owed (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {settlement.supplierExpenses.rows.map((row) => (
-                    <tr key={row.id} className="border-b border-gray-200">
-                      <td className="p-2">{row.date}</td>
-                      <td className="p-2">{row.description}</td>
-                      <td className="p-2 text-right font-semibold">
-                        {fmt(row.amount)}
-                      </td>
-                      <td className="p-2 text-right text-green-700 font-semibold">
-                        {fmt(row.paid_amount)}
-                      </td>
-                      <td className="p-2 text-right text-red-600 font-semibold">
-                        {fmt(row.payable_balance)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
 

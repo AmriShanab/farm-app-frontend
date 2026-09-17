@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import {
   ClipboardList, Calendar, CheckCircle2, AlertCircle,
-  Users, Minus, MapPin, ChevronDown, Search, TrendingUp, SplitSquareHorizontal
+  Users, Minus, MapPin, ChevronDown, ChevronRight, Search, TrendingUp,
+  SplitSquareHorizontal, Loader2
 } from 'lucide-react';
-import { getEmployees, getAttendanceHistory } from '../services/api';
+import { getEmployees, getAttendanceHistory, getAttendanceSummary } from '../services/api';
 import { useToast } from '../components/ToastProvider';
 
 const FARMS = ['All', 'MR1', 'MR2', 'Poultry'];
@@ -50,6 +51,170 @@ const StatCard = ({ title, value, sub, color, icon }) => {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Group records sharing a date (a split day) so they render as one row.
+const groupRecordsByDate = (records) => {
+  const groups = [];
+  for (let i = 0; i < records.length;) {
+    const date = records[i].date;
+    const group = [records[i]];
+    let j = i + 1;
+    while (j < records.length && records[j].date === date) {
+      group.push(records[j]);
+      j++;
+    }
+    groups.push(group);
+    i = j;
+  }
+  return groups;
+};
+
+// The day-by-day attendance table — reused by the single-employee view and by
+// each expanded row of the All-Employees summary. `homeFarm` drives the
+// cross-farm highlight on the Location column.
+function DetailRecordsTable({ records, homeFarm, compact = false }) {
+  if (!records || records.length === 0) {
+    return (
+      <div className="p-8 text-center text-gray-400">
+        <ClipboardList size={28} className="mx-auto mb-2 opacity-40" />
+        <p className="text-sm font-bold">No attendance records found for this period.</p>
+      </div>
+    );
+  }
+  const recordGroups = groupRecordsByDate(records);
+  return (
+    <table className={`w-full text-left border-collapse whitespace-nowrap ${compact ? 'min-w-[520px]' : 'min-w-[600px]'}`}>
+      <thead>
+        <tr className="bg-gray-50 border-b border-gray-100">
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[15%]">Day</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">Date</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">Status</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">
+            <div className="flex items-center gap-1"><MapPin size={11} /> Location</div>
+          </th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500">Task</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-50">
+        {recordGroups.map(group => {
+          const rec = group[0];
+          const isSplit = group.length > 1;
+          const d = new Date(rec.date + 'T00:00:00');
+          const dayName = DAY_NAMES[d.getDay()];
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+          const formatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+          return (
+            <tr key={rec.id} className={`hover:bg-gray-50/80 transition-colors ${isWeekend ? 'bg-blue-50/30' : ''} ${isSplit ? 'bg-blue-50/40' : ''}`}>
+              <td className="py-3 px-5">
+                <span className={`text-xs font-black ${isWeekend ? 'text-blue-500' : 'text-gray-500'}`}>
+                  {dayName}
+                </span>
+              </td>
+              <td className="py-3 px-5 text-sm font-bold text-gray-800">
+                {formatted}
+                {isSplit && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                    <SplitSquareHorizontal size={10} /> Split Day
+                  </span>
+                )}
+              </td>
+              <td className="py-3 px-5">
+                <div className="flex flex-col gap-1">
+                  {group.map(g => <StatusBadge key={g.id} status={g.status} />)}
+                </div>
+              </td>
+              <td className="py-3 px-5">
+                <div className="flex flex-col gap-1">
+                  {group.map(g => {
+                    const crossFarm = g.location_worked && g.location_worked !== homeFarm;
+                    return g.location_worked ? (
+                      <span key={g.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border w-fit ${
+                        crossFarm
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-gray-100 text-gray-600 border-gray-200'
+                      }`}>
+                        <MapPin size={10} />
+                        {g.location_worked}
+                        {crossFarm && <span className="text-blue-400 ml-0.5">↗</span>}
+                      </span>
+                    ) : (
+                      <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
+                    );
+                  })}
+                </div>
+              </td>
+              <td className="py-3 px-5">
+                <div className="flex flex-col gap-1">
+                  {group.map(g => g.task_type ? (
+                    <span key={g.id} className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg w-fit">
+                      {g.task_type}
+                    </span>
+                  ) : (
+                    <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
+                  ))}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Days-worked breakdown for an employee's records: per location (MR1/MR2/…)
+// and per harvest task. A full day counts as 1, a half day as 0.5.
+function LocationTaskSummary({ records }) {
+  const weight = (s) => (s === 'full' ? 1 : s === 'half' ? 0.5 : 0);
+  const locations = {};
+  const tasks = {};
+  let total = 0;
+  for (const r of records || []) {
+    const w = weight(r.status);
+    if (w === 0) continue;
+    total += w;
+    if (r.location_worked) locations[r.location_worked] = (locations[r.location_worked] || 0) + w;
+    if (r.task_type) tasks[r.task_type] = (tasks[r.task_type] || 0) + w;
+  }
+  const locEntries = Object.entries(locations);
+  const taskEntries = Object.entries(tasks);
+  const locatedDays = locEntries.reduce((s, [, n]) => s + n, 0);
+  const unspecified = total - locatedDays; // worked days with no location recorded
+  if (total === 0) return null;
+
+  const dayLbl = (n) => `${n} day${n === 1 ? '' : 's'}`;
+
+  return (
+    <div className="p-3 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-2">
+      <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 mr-1">
+        Days worked
+      </span>
+      {locEntries.map(([loc, n]) => (
+        <span key={loc} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-gray-200 text-gray-700">
+          <MapPin size={10} className="text-green-600" />
+          {loc}
+          <strong className="text-green-700">{dayLbl(n)}</strong>
+        </span>
+      ))}
+      {unspecified > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-gray-200 text-gray-400">
+          No location
+          <strong className="text-gray-500">{dayLbl(unspecified)}</strong>
+        </span>
+      )}
+      {taskEntries.map(([task, n]) => (
+        <span key={task} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 border border-amber-200 text-amber-800">
+          {task}
+          <strong>{dayLbl(n)}</strong>
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-green-600 text-white ml-auto">
+        Total {dayLbl(total)}
+      </span>
+    </div>
+  );
+}
+
 export default function AttendanceRecord() {
   const today = new Date().toISOString().split('T')[0];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -60,6 +225,8 @@ export default function AttendanceRecord() {
   const [startDate, setStartDate] = useState(thirtyDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [result, setResult] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [expandedRows, setExpandedRows] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [empsLoading, setEmpsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -72,6 +239,8 @@ export default function AttendanceRecord() {
         setEmployees(data);
         setSelectedEmpId('');
         setResult(null);
+        setSummary(null);
+        setExpandedRows({});
       })
       .catch(() => toast.error('Failed to load employees.'))
       .finally(() => setEmpsLoading(false));
@@ -85,8 +254,32 @@ export default function AttendanceRecord() {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setSummary(null);
+    setExpandedRows({});
     try {
-      const data = await getAttendanceHistory(selectedEmpId, startDate, endDate);
+      if (selectedEmpId === 'all') {
+        const data = await getAttendanceSummary(farmFilter, startDate, endDate);
+        setSummary(data);
+      } else {
+        const data = await getAttendanceHistory(selectedEmpId, startDate, endDate);
+        setResult(data);
+      }
+    } catch {
+      setError('Failed to load attendance records.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Drill from the all-employees summary into a single employee's detail.
+  const viewOne = async (empId) => {
+    setSelectedEmpId(String(empId));
+    setIsLoading(true);
+    setError(null);
+    setResult(null);
+    setSummary(null);
+    try {
+      const data = await getAttendanceHistory(empId, startDate, endDate);
       setResult(data);
     } catch {
       setError('Failed to load attendance records.');
@@ -95,22 +288,28 @@ export default function AttendanceRecord() {
     }
   };
 
-  const filteredRecords = result?.records ?? [];
-
-  // Records sharing the same date are segments of one split day (e.g. half
-  // at MR1 + half at MR2) — group them so they render as a single row.
-  const recordGroups = [];
-  for (let i = 0; i < filteredRecords.length;) {
-    const date = filteredRecords[i].date;
-    const group = [filteredRecords[i]];
-    let j = i + 1;
-    while (j < filteredRecords.length && filteredRecords[j].date === date) {
-      group.push(filteredRecords[j]);
-      j++;
+  // Expand/collapse an employee's day-by-day records inside the summary table.
+  // Records are fetched once on first expand and cached.
+  const toggleRow = async (empId) => {
+    const current = expandedRows[empId];
+    if (current?.open) {
+      setExpandedRows(prev => ({ ...prev, [empId]: { ...prev[empId], open: false } }));
+      return;
     }
-    recordGroups.push(group);
-    i = j;
-  }
+    if (current?.records) {
+      setExpandedRows(prev => ({ ...prev, [empId]: { ...prev[empId], open: true } }));
+      return;
+    }
+    setExpandedRows(prev => ({ ...prev, [empId]: { open: true, loading: true, records: null, error: null } }));
+    try {
+      const data = await getAttendanceHistory(empId, startDate, endDate);
+      setExpandedRows(prev => ({ ...prev, [empId]: { open: true, loading: false, records: data.records ?? [], error: null } }));
+    } catch {
+      setExpandedRows(prev => ({ ...prev, [empId]: { open: true, loading: false, records: null, error: 'Failed to load records.' } }));
+    }
+  };
+
+  const filteredRecords = result?.records ?? [];
 
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif", maxWidth: '1200px', margin: '0 auto', paddingBottom: '40px' }}>
@@ -151,11 +350,12 @@ export default function AttendanceRecord() {
             <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Employee</label>
             <select
               value={selectedEmpId}
-              onChange={e => { setSelectedEmpId(e.target.value); setResult(null); }}
+              onChange={e => { setSelectedEmpId(e.target.value); setResult(null); setSummary(null); setExpandedRows({}); }}
               disabled={empsLoading}
               className="text-sm font-bold border border-gray-200 bg-white rounded-xl px-3 py-2 outline-none shadow-sm cursor-pointer disabled:opacity-60"
             >
               <option value="">— Select employee —</option>
+              <option value="all">All Employees</option>
               {employees.map(e => (
                 <option key={e.id} value={e.id}>{e.name} ({e.farm})</option>
               ))}
@@ -268,89 +468,135 @@ export default function AttendanceRecord() {
             </div>
 
             <div className="overflow-x-auto">
-              {filteredRecords.length === 0 ? (
+              <DetailRecordsTable records={filteredRecords} homeFarm={result.employee.farm} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ALL-EMPLOYEES SUMMARY */}
+      {summary && (
+        <>
+          <div className="flex items-center gap-3 mb-5 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center text-green-700 border border-green-200 shrink-0">
+              <Users size={20} />
+            </div>
+            <div>
+              <p className="text-base font-black text-gray-900">
+                All Employees{summary.farm && summary.farm !== 'all' ? ` · ${summary.farm}` : ''}
+              </p>
+              <p className="text-xs text-gray-500 font-medium">
+                {summary.employees.length} employee{summary.employees.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="ml-auto text-xs font-bold text-gray-400 hidden sm:block">
+              {summary.startDate} → {summary.endDate}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              {summary.employees.length === 0 ? (
                 <div className="p-12 text-center text-gray-400">
-                  <ClipboardList size={36} className="mx-auto mb-3 opacity-40" />
-                  <p className="text-sm font-bold">No attendance records found for this period.</p>
-                  <p className="text-xs mt-1">Try adjusting the date range or check if attendance was marked.</p>
+                  <Users size={36} className="mx-auto mb-3 opacity-40" />
+                  <p className="text-sm font-bold">No employees found for this selection.</p>
                 </div>
               ) : (
-                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">
+                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[760px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[15%]">Day</th>
-                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">Date</th>
-                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">Status</th>
-                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">
-                        <div className="flex items-center gap-1"><MapPin size={11} /> Location</div>
-                      </th>
-                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500">Task</th>
+                      <th className="py-3 pl-5 pr-2 w-8"></th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500">Employee</th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500">Home Farm</th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-center">Full</th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-center">Half</th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-center">Absent</th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-center">Split</th>
+                      <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-right">Gross</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {recordGroups.map(group => {
-                      const rec = group[0];
-                      const isSplit = group.length > 1;
-                      const d = new Date(rec.date + 'T00:00:00');
-                      const dayName = DAY_NAMES[d.getDay()];
-                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                      const formatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-
+                    {summary.employees.map(emp => {
+                      const row = expandedRows[emp.id];
+                      const isOpen = !!row?.open;
                       return (
-                        <tr key={rec.id} className={`hover:bg-gray-50/80 transition-colors ${isWeekend ? 'bg-blue-50/30' : ''} ${isSplit ? 'bg-blue-50/40' : ''}`}>
-                          <td className="py-3 px-5">
-                            <span className={`text-xs font-black ${isWeekend ? 'text-blue-500' : 'text-gray-500'}`}>
-                              {dayName}
-                            </span>
-                          </td>
-                          <td className="py-3 px-5 text-sm font-bold text-gray-800">
-                            {formatted}
-                            {isSplit && (
-                              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                                <SplitSquareHorizontal size={10} /> Split Day
+                        <Fragment key={emp.id}>
+                          <tr
+                            className={`hover:bg-gray-50/80 transition-colors cursor-pointer ${isOpen ? 'bg-green-50/40' : ''}`}
+                            onClick={() => toggleRow(emp.id)}
+                          >
+                            <td className="py-3 pl-5 pr-2 text-gray-400">
+                              {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </td>
+                            <td className="py-3 px-5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); viewOne(emp.id); }}
+                                className="text-sm font-black text-green-700 hover:text-green-800 hover:underline text-left"
+                                title="Open full-page record"
+                              >
+                                {emp.name}
+                              </button>
+                              {emp.role && <div className="text-[11px] text-gray-400 font-semibold">{emp.role}</div>}
+                            </td>
+                            <td className="py-3 px-5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                                <MapPin size={10} /> {emp.farm}
                               </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-5">
-                            <div className="flex flex-col gap-1">
-                              {group.map(g => <StatusBadge key={g.id} status={g.status} />)}
-                            </div>
-                          </td>
-                          <td className="py-3 px-5">
-                            <div className="flex flex-col gap-1">
-                              {group.map(g => {
-                                const crossFarm = g.location_worked && g.location_worked !== result.employee.farm;
-                                return g.location_worked ? (
-                                  <span key={g.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border w-fit ${
-                                    crossFarm
-                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                      : 'bg-gray-100 text-gray-600 border-gray-200'
-                                  }`}>
-                                    <MapPin size={10} />
-                                    {g.location_worked}
-                                    {crossFarm && <span className="text-blue-400 ml-0.5">↗</span>}
-                                  </span>
-                                ) : (
-                                  <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
-                                );
-                              })}
-                            </div>
-                          </td>
-                          <td className="py-3 px-5">
-                            <div className="flex flex-col gap-1">
-                              {group.map(g => g.task_type ? (
-                                <span key={g.id} className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg w-fit">
-                                  {g.task_type}
-                                </span>
-                              ) : (
-                                <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="py-3 px-5 text-center text-sm font-black text-green-700">{emp.fullDays}</td>
+                            <td className="py-3 px-5 text-center text-sm font-black text-amber-600">{emp.halfDays}</td>
+                            <td className="py-3 px-5 text-center text-sm font-black text-red-600">{emp.absentDays}</td>
+                            <td className="py-3 px-5 text-center text-sm font-black text-blue-600">{emp.splitDays}</td>
+                            <td className="py-3 px-5 text-right text-sm font-black text-gray-900">₹{Number(emp.grossPay).toLocaleString()}</td>
+                          </tr>
+                          {isOpen && (
+                            <tr className="bg-gray-50/40">
+                              <td colSpan={8} className="px-3 sm:px-5 pb-4 pt-1">
+                                <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
+                                  {row.loading ? (
+                                    <div className="p-8 text-center text-gray-400">
+                                      <Loader2 size={22} className="animate-spin mx-auto" />
+                                    </div>
+                                  ) : row.error ? (
+                                    <div className="p-6 text-center text-red-600 text-sm font-bold">{row.error}</div>
+                                  ) : (
+                                    <>
+                                      <LocationTaskSummary records={row.records} />
+                                      <div className="overflow-x-auto">
+                                        <DetailRecordsTable records={row.records} homeFarm={emp.farm} compact />
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50/80">
+                      <td className="py-3 px-5 text-xs font-black uppercase tracking-wider text-gray-700" colSpan={3}>
+                        Totals ({summary.employees.length})
+                      </td>
+                      <td className="py-3 px-5 text-center text-sm font-black text-green-700">
+                        {summary.employees.reduce((s, e) => s + e.fullDays, 0)}
+                      </td>
+                      <td className="py-3 px-5 text-center text-sm font-black text-amber-600">
+                        {summary.employees.reduce((s, e) => s + e.halfDays, 0)}
+                      </td>
+                      <td className="py-3 px-5 text-center text-sm font-black text-red-600">
+                        {summary.employees.reduce((s, e) => s + e.absentDays, 0)}
+                      </td>
+                      <td className="py-3 px-5 text-center text-sm font-black text-blue-600">
+                        {summary.employees.reduce((s, e) => s + e.splitDays, 0)}
+                      </td>
+                      <td className="py-3 px-5 text-right text-sm font-black text-gray-900">
+                        ₹{summary.employees.reduce((s, e) => s + Number(e.grossPay), 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               )}
             </div>
@@ -359,7 +605,7 @@ export default function AttendanceRecord() {
       )}
 
       {/* Empty state before search */}
-      {!result && !isLoading && !error && (
+      {!result && !summary && !isLoading && !error && (
         <div className="p-16 text-center text-gray-400">
           <ClipboardList size={48} className="mx-auto mb-4 opacity-30" />
           <p className="text-sm font-bold text-gray-500">Select an employee and date range, then click View Record.</p>

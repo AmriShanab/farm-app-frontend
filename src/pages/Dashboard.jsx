@@ -13,6 +13,8 @@ import {
   Egg,
   X,
   FileText,
+  BellRing,
+  ShieldAlert,
 } from "lucide-react";
 import { getHeaders } from "../services/api";
 
@@ -116,6 +118,7 @@ export default function Dashboard() {
     nextHarvests: [],
     activeBatches: [],
   });
+  const [alerts, setAlerts] = useState({ cheques: [], warranties: [] });
   const [currentMonth, setCurrentMonth] = useState("May 2026");
   const [previewSection, setPreviewSection] = useState(null); // 'income' | 'expenses' | 'profit' | 'payroll' | null
   const [printActiveSection, setPrintActiveSection] = useState(null);
@@ -148,6 +151,7 @@ export default function Dashboard() {
           expensesRes,
           profitabilityRes,
           highlightsRes,
+          alertsRes,
         ] = await Promise.all([
           fetchDashboardResource(
             `${apiBaseUrl}/dashboard/summary?month=${currentMonthNumber}&year=${currentYearNumber}`,
@@ -163,6 +167,9 @@ export default function Dashboard() {
             { headers },
           ),
           fetchDashboardResource(`${apiBaseUrl}/dashboard/highlights`, {
+            headers,
+          }),
+          fetchDashboardResource(`${apiBaseUrl}/dashboard/alerts`, {
             headers,
           }),
         ]);
@@ -246,6 +253,20 @@ export default function Dashboard() {
             ? hlPayload.activeBatches
             : [],
         });
+
+        // Alerts are best-effort — never block the dashboard if they fail.
+        if (alertsRes && alertsRes.ok) {
+          const alertsData = await alertsRes.json();
+          const alertsPayload = alertsData?.data || alertsData;
+          setAlerts({
+            cheques: Array.isArray(alertsPayload?.cheques)
+              ? alertsPayload.cheques
+              : [],
+            warranties: Array.isArray(alertsPayload?.warranties)
+              ? alertsPayload.warranties
+              : [],
+          });
+        }
       } catch (err) {
         console.error("API Error:", err);
         setError(err.message);
@@ -404,6 +425,113 @@ export default function Dashboard() {
                 </h3>
               </div>
             </div>
+
+            {/* ── REMINDERS / ALERTS ── */}
+            {(alerts.cheques.length > 0 || alerts.warranties.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {/* Upcoming Cheques (next 3 days) */}
+                {alerts.cheques.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-orange-100 bg-orange-50/60 flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                        <BellRing size={16} className="text-orange-700" />
+                      </div>
+                      <h2 className="text-sm font-black text-gray-900">
+                        Cheques Due Soon
+                      </h2>
+                      <span className="ml-auto text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+                        Next 3 days
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {alerts.cheques.map((c, idx) => {
+                        const days = asNumber(c.daysUntil);
+                        return (
+                          <div
+                            key={`${c.chequeNo}-${idx}`}
+                            className="rounded-xl border border-orange-200 bg-orange-50/50 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-gray-900 truncate">
+                                  {c.description || "Cheque"}
+                                </p>
+                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                  #{c.chequeNo} ·{" "}
+                                  {new Date(
+                                    c.chequeDate + "T00:00:00",
+                                  ).toLocaleDateString("en-GB", {
+                                    day: "numeric",
+                                    month: "short",
+                                  })}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-sm font-black text-gray-900">
+                                  Rs. {fmt(c.amount)}
+                                </p>
+                                <span className="inline-block mt-0.5 px-2 py-0.5 rounded-lg text-[10px] font-black bg-orange-100 text-orange-800">
+                                  {days <= 1 ? "Tomorrow" : `In ${days}d`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Warranties expiring (next 7 days) */}
+                {alerts.warranties.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-red-100 bg-red-50/60 flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                        <ShieldAlert size={16} className="text-red-700" />
+                      </div>
+                      <h2 className="text-sm font-black text-gray-900">
+                        Warranties Ending
+                      </h2>
+                      <span className="ml-auto text-[10px] font-bold text-red-600 uppercase tracking-wider">
+                        Next 7 days
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {alerts.warranties.map((w) => {
+                        const days = asNumber(w.daysUntil);
+                        return (
+                          <div
+                            key={w.id}
+                            className="rounded-xl border border-red-200 bg-red-50/50 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-gray-900 truncate">
+                                  {w.name}
+                                </p>
+                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                  {w.farm} · expires{" "}
+                                  {new Date(
+                                    w.warrantyExpiryDate + "T00:00:00",
+                                  ).toLocaleDateString("en-GB", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}
+                                </p>
+                              </div>
+                              <span className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-black bg-red-100 text-red-800">
+                                {days <= 1 ? "1d left" : `${days}d left`}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── OPERATIONAL HIGHLIGHTS ── */}
             {(highlights.nextHarvests.length > 0 ||

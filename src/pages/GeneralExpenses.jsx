@@ -329,6 +329,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
         date: form.date,
         startDate: form.startDate || null,
         endDate: form.endDate || null,
+        farm: "MR1",
         meter_id: form.meterId || null,
         billAmount: parseFloat(form.billAmount || 0),
         unitsUsed: derivedUnits,

@@ -29,6 +29,7 @@ import {
   Skull,
   Download,
   FileSpreadsheet,
+  AlertTriangle,
 } from "lucide-react";
 import { clearStoredAuth } from "../services/api";
 export default function Layout() {
@@ -325,6 +326,18 @@ export default function Layout() {
             </button> */}
           </div>
         </header>
+
+        {/* Outstanding-payment banner (live host only, hidden in print) */}
+        {typeof window !== "undefined" &&
+          window.location.hostname === "mrfarm.skbahmd.dev" && (
+            <div className="print:hidden bg-amber-500 text-white px-4 py-2 text-center text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm">
+              <AlertTriangle size={16} className="shrink-0" />
+              <span>
+                Payment Pending: LKR 10,000 — please settle the outstanding
+                balance to avoid service interruption.
+              </span>
+            </div>
+          )}
 
         {/* Dynamic Page Content */}
         <main

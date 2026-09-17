@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import {
   Landmark,
   ReceiptText,
@@ -133,6 +133,7 @@ function OwnerFinancialsTab({
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
   const [newRow, setNewRow] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -155,6 +156,10 @@ function OwnerFinancialsTab({
     amount: "",
     accountNo: "",
     referenceNo: "",
+    chequeNo: "",
+    chequeDate: "",
+    chequePayee: "",
+    chequeStatus: "Pending",
   });
 
   const totalLeasing = data
@@ -163,6 +168,24 @@ function OwnerFinancialsTab({
   const totalOther = data
     .filter((d) => d.type !== "leasing")
     .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? data.filter((r) =>
+        [
+          r.date,
+          r.type,
+          r.description,
+          r.account_no || r.accountNo,
+          r.reference_no || r.referenceNo,
+          r.amount,
+        ].some((v) => (v ?? "").toString().toLowerCase().includes(q)),
+      )
+    : data;
+  const filteredTotal = filtered.reduce(
+    (acc, curr) => acc + parseFloat(curr.amount || 0),
+    0,
+  );
 
   const handleSave = async () => {
     if (!newRow.description || !newRow.amount)
@@ -227,6 +250,10 @@ function OwnerFinancialsTab({
       amount: record.amount ?? "",
       accountNo: record.accountNo || record.account_no || "",
       referenceNo: record.referenceNo || record.reference_no || "",
+      chequeNo: record.chequeNo || record.cheque_no || "",
+      chequeDate: record.chequeDate || record.cheque_date || "",
+      chequePayee: record.chequePayee || record.cheque_payee || "",
+      chequeStatus: record.chequeStatus || record.cheque_status || "Pending",
     });
   };
 
@@ -239,6 +266,10 @@ function OwnerFinancialsTab({
       amount: "",
       accountNo: "",
       referenceNo: "",
+      chequeNo: "",
+      chequeDate: "",
+      chequePayee: "",
+      chequeStatus: "Pending",
     });
   };
 
@@ -311,13 +342,37 @@ function OwnerFinancialsTab({
           <h2 className="font-bold text-gray-800 flex items-center gap-2">
             Financial Ledger
           </h2>
-          <button
-            onClick={() => setIsAdding(true)}
-            disabled={isAdding}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
-          >
-            <Plus size={14} /> Add Record
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative w-full sm:w-64">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                placeholder="Search description, ref, amount..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-white border border-gray-300 rounded-xl text-sm font-bold outline-none focus:border-green-500 shadow-sm"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Clear"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setIsAdding(true)}
+              disabled={isAdding}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors whitespace-nowrap"
+            >
+              <Plus size={14} /> Add Record
+            </button>
+          </div>
         </div>
 
         {isAdding && (
@@ -383,8 +438,8 @@ function OwnerFinancialsTab({
                       disabled={isSaving}
                     >
                       <option value="leasing">Leasing</option>
-                      <option value="loan_repayment">Loan Repayment</option>
-                      <option value="other">Other</option>
+                      <option value="speed-draft">Speed Draft</option>
+                      <option value="master-account">Master Account</option>
                     </select>
                   </div>
                 </div>
@@ -505,11 +560,23 @@ function OwnerFinancialsTab({
                 </tr>
               </thead>
               <tbody>
-                {data.map((record) =>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-10 text-center text-gray-400 font-bold text-sm"
+                    >
+                      {q
+                        ? "No records match your search."
+                        : "No records yet."}
+                    </td>
+                  </tr>
+                )}
+                {filtered.map((record) =>
                   editingId === record.id ? (
+                    <Fragment key={record.id}>
                     <tr
-                      key={record.id}
-                      className="bg-blue-50/30 border-b border-blue-100"
+                      className="bg-blue-50/30 border-b-0 border-blue-100"
                     >
                       <td className="p-2">
                         <input
@@ -532,8 +599,8 @@ function OwnerFinancialsTab({
                           disabled={isSaving}
                         >
                           <option value="leasing">Leasing</option>
-                          <option value="loan_repayment">Loan Repayment</option>
-                          <option value="other">Other</option>
+                          <option value="speed-draft">Speed Draft</option>
+                          <option value="master-account">Master Account</option>
                         </select>
                       </td>
                       <td className="p-2">
@@ -561,6 +628,7 @@ function OwnerFinancialsTab({
                             })
                           }
                           className="w-full p-2 text-xs border border-gray-300 rounded outline-none"
+                          placeholder="Account No"
                           disabled={isSaving}
                         />
                       </td>
@@ -598,6 +666,29 @@ function OwnerFinancialsTab({
                         </div>
                       </td>
                     </tr>
+                    <tr key={`${record.id}-extra`} className="bg-blue-50/30 border-b border-blue-100">
+                      <td colSpan={6} className="px-2 pb-3 pt-0">
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Ref No</label>
+                            <input type="text" value={editRow.referenceNo} onChange={(e) => setEditRow({ ...editRow, referenceNo: e.target.value })} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" placeholder="Reference No" disabled={isSaving} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Cheque No</label>
+                            <input type="text" value={editRow.chequeNo} onChange={(e) => setEditRow({ ...editRow, chequeNo: e.target.value })} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" placeholder="Cheque No" disabled={isSaving} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Cheque Date</label>
+                            <input type="date" value={editRow.chequeDate} onChange={(e) => setEditRow({ ...editRow, chequeDate: e.target.value })} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" disabled={isSaving} />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Cheque Payee</label>
+                            <input type="text" value={editRow.chequePayee} onChange={(e) => setEditRow({ ...editRow, chequePayee: e.target.value })} className="w-full p-2 text-xs border border-gray-300 rounded outline-none" placeholder="Payee" disabled={isSaving} />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    </Fragment>
                   ) : (
                     <tr
                       key={record.id}
@@ -617,7 +708,7 @@ function OwnerFinancialsTab({
                         {record.description}
                       </td>
                       <td className="p-4 text-xs text-gray-500 font-bold uppercase">
-                        {record.accountNo || "N/A"}
+                        {record.account_no || record.accountNo || "N/A"}
                       </td>
                       <td className="p-4 text-right font-black text-gray-900">
                         Rs. {fmt(record.amount)}
@@ -644,17 +735,19 @@ function OwnerFinancialsTab({
                   ),
                 )}
               </tbody>
-              {data.length > 0 && (
+              {filtered.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-gray-200 bg-gray-50/80">
                     <td
                       className="p-4 font-black text-gray-700 text-xs uppercase tracking-wider"
                       colSpan={4}
                     >
-                      Totals ({data.length} entries)
+                      {q
+                        ? `Filtered (${filtered.length} of ${data.length})`
+                        : `Totals (${data.length} entries)`}
                     </td>
                     <td className="p-4 text-right font-black text-gray-900">
-                      Rs. {fmt(totalLeasing + totalOther)}
+                      Rs. {fmt(q ? filteredTotal : totalLeasing + totalOther)}
                     </td>
                     <td className="p-4"></td>
                   </tr>

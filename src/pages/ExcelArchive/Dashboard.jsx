@@ -11,25 +11,47 @@ import {
   Loader2,
   Calendar,
   Layers,
+  FolderPlus,
+  FolderOpen,
+  Folder,
+  ArrowLeft,
+  MoveRight,
+  Pencil,
 } from "lucide-react";
 import {
   getExcelDocuments,
   createExcelDocument,
   deleteExcelDocument,
   getExcelDocument,
+  getExcelFolders,
+  createExcelFolder,
+  deleteExcelFolder,
+  renameExcelFolder,
+  moveExcelDocument,
 } from "../../services/api";
 
 export default function ExcelArchiveDashboard() {
   const [documents, setDocuments] = useState([]);
+  const [folders, setFolders] = useState([]);
+  const [currentFolder, setCurrentFolder] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState(null);
+  const [renameFolderName, setRenameFolderName] = useState("");
+  const [moveTarget, setMoveTarget] = useState(null);
 
-  const loadDocuments = async () => {
+  const loadAll = async () => {
     try {
-      const docs = await getExcelDocuments();
+      const [docs, flds] = await Promise.all([
+        getExcelDocuments(),
+        getExcelFolders(),
+      ]);
       setDocuments(docs);
+      setFolders(flds);
       setError("");
     } catch (err) {
       console.error(err);
@@ -40,10 +62,7 @@ export default function ExcelArchiveDashboard() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadDocuments();
-    }, 0);
-    return () => clearTimeout(timer);
+    loadAll();
   }, []);
 
   const handleFileUpload = async (e) => {
@@ -57,7 +76,6 @@ export default function ExcelArchiveDashboard() {
     reader.onload = async (evt) => {
       try {
         const arrayBuffer = evt.target.result;
-        // Parse with XLSX to generate visual grid for see-only viewer
         const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
         const sheets = wb.SheetNames.map((sheetName) => {
           const ws = wb.Sheets[sheetName];
@@ -75,7 +93,6 @@ export default function ExcelArchiveDashboard() {
           return { name: sheetName, data };
         });
 
-        // Convert the complete binary file to a base64 string
         const base64 = btoa(
           new Uint8Array(arrayBuffer).reduce(
             (data, byte) => data + String.fromCharCode(byte),
@@ -84,18 +101,35 @@ export default function ExcelArchiveDashboard() {
         );
 
         const docName = file.name.replace(/\.[^/.]+$/, "");
-        const content = {
-          sheets,
-          fileData: base64,
-        };
+        const content = { sheets, fileData: base64 };
+        const payload = { name: docName, content };
+        if (currentFolder) payload.folderId = currentFolder.id;
 
-        await createExcelDocument({ name: docName, content });
-        await loadDocuments();
+        try {
+          await createExcelDocument(payload);
+        } catch (uploadErr) {
+          if (uploadErr?.status === 409) {
+            const action = window.confirm(
+              `"${docName}" already exists here.\n\nOK = Overwrite\nCancel = Rename`,
+            );
+            if (action) {
+              await createExcelDocument({ ...payload, overwrite: true });
+            } else {
+              const newName = window.prompt("Enter new name:", docName + " (copy)");
+              if (newName && newName.trim()) {
+                await createExcelDocument({ ...payload, name: newName.trim() });
+              }
+            }
+          } else {
+            throw uploadErr;
+          }
+        }
+        await loadAll();
       } catch (err) {
         console.error(err);
-        setError(
-          "Error importing Excel file. Please ensure it is a valid xlsx/xls format.",
-        );
+        if (!err.handled) {
+          setError("Error importing Excel file. Please ensure it is a valid xlsx/xls format.");
+        }
       } finally {
         setIsUploading(false);
         e.target.value = "";
@@ -111,13 +145,7 @@ export default function ExcelArchiveDashboard() {
   };
 
   const handleDelete = async (id) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this document from the archive?",
-      )
-    )
-      return;
-
+    if (!window.confirm("Are you sure you want to delete this document from the archive?")) return;
     try {
       await deleteExcelDocument(id);
       setDocuments(documents.filter((doc) => doc.id !== id));
@@ -133,11 +161,7 @@ export default function ExcelArchiveDashboard() {
       let fileData = null;
       let sheets = [];
 
-      if (
-        fullDoc.content &&
-        typeof fullDoc.content === "object" &&
-        !Array.isArray(fullDoc.content)
-      ) {
+      if (fullDoc.content && typeof fullDoc.content === "object" && !Array.isArray(fullDoc.content)) {
         fileData = fullDoc.content.fileData;
         sheets = fullDoc.content.sheets || [];
       } else if (Array.isArray(fullDoc.content)) {
@@ -145,7 +169,6 @@ export default function ExcelArchiveDashboard() {
       }
 
       if (fileData) {
-        // Decode base64 to binary and trigger original file download
         const binaryString = atob(fileData);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -164,7 +187,6 @@ export default function ExcelArchiveDashboard() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } else {
-        // Fallback reconstruction for legacy files
         const wb = XLSX.utils.book_new();
         sheets.forEach((sheet) => {
           const ws = XLSX.utils.aoa_to_sheet(sheet.data);
@@ -178,13 +200,77 @@ export default function ExcelArchiveDashboard() {
     }
   };
 
-  const filteredDocs = documents.filter((doc) =>
-    (doc.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      await createExcelFolder(newFolderName.trim());
+      setNewFolderName("");
+      setShowNewFolder(false);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to create folder.");
+    }
+  };
+
+  const handleDeleteFolder = async (folder) => {
+    if (!window.confirm(`Delete folder "${folder.name}"? Files inside will be moved to root.`)) return;
+    try {
+      await deleteExcelFolder(folder.id);
+      if (currentFolder?.id === folder.id) setCurrentFolder(null);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to delete folder.");
+    }
+  };
+
+  const handleRenameFolder = async () => {
+    if (!renameFolderName.trim() || !renamingFolder) return;
+    try {
+      await renameExcelFolder(renamingFolder.id, renameFolderName.trim());
+      setRenamingFolder(null);
+      setRenameFolderName("");
+      await loadAll();
+      if (currentFolder?.id === renamingFolder.id) {
+        setCurrentFolder((prev) => ({ ...prev, name: renameFolderName.trim() }));
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Failed to rename folder.");
+    }
+  };
+
+  const handleMoveDoc = async (docId, targetFolderId) => {
+    try {
+      await moveExcelDocument(docId, targetFolderId);
+      setMoveTarget(null);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to move document.");
+    }
+  };
+
+  const currentFolderId = currentFolder?.id || null;
+  const filteredDocs = documents
+    .filter((doc) => {
+      const docFolder = doc.folder_id || null;
+      return docFolder === currentFolderId;
+    })
+    .filter((doc) => (doc.name || "").toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const fmtDate = (d) =>
+    new Date(d).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   return (
     <div className="mx-auto space-y-6">
-      {/* Top Banner Header */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight font-heading">
@@ -195,6 +281,13 @@ export default function ExcelArchiveDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowNewFolder(true)}
+            className="flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-200 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-100"
+          >
+            <FolderPlus className="h-4 w-4" />
+            New Folder
+          </button>
           <label
             htmlFor="excel-import"
             className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-orange-50 border border-orange-200 px-4 py-2 text-sm font-bold text-orange-700 shadow-sm transition-all hover:bg-orange-100 hover:shadow-md"
@@ -217,15 +310,56 @@ export default function ExcelArchiveDashboard() {
         </div>
       </div>
 
+      {showNewFolder && (
+        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+          <FolderPlus className="h-5 w-5 text-blue-600" />
+          <input
+            type="text"
+            placeholder="Folder name..."
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+            className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"
+            autoFocus
+          />
+          <button
+            onClick={handleCreateFolder}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+          >
+            Create
+          </button>
+          <button
+            onClick={() => { setShowNewFolder(false); setNewFolderName(""); }}
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 animate-fadeIn">
           {error}
         </div>
       )}
 
-      {/* Database Listing Card */}
+      {/* Breadcrumb / folder nav */}
+      {currentFolder && (
+        <div className="flex items-center gap-2 text-sm">
+          <button
+            onClick={() => setCurrentFolder(null)}
+            className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 font-bold text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Root
+          </button>
+          <span className="text-gray-400">/</span>
+          <span className="flex items-center gap-1.5 font-black text-gray-800">
+            <FolderOpen className="h-4 w-4 text-amber-600" /> {currentFolder.name}
+          </span>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        {/* Controls Bar */}
         <div className="border-b border-gray-100 bg-gray-50/50 p-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="relative flex-1 max-w-md">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
@@ -240,131 +374,215 @@ export default function ExcelArchiveDashboard() {
             />
           </div>
           <div className="text-xs text-gray-400 font-semibold font-heading">
-            Total files: {filteredDocs.length}
+            {currentFolder ? `Files in folder: ${filteredDocs.length}` : `Total files: ${filteredDocs.length} · Folders: ${folders.length}`}
           </div>
         </div>
 
-        {/* Dynamic List */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="h-8 w-8 text-green-600 animate-spin" />
-            <span className="text-sm text-gray-500 font-bold">
-              Retrieving archive modules...
-            </span>
-          </div>
-        ) : filteredDocs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-            <FileSpreadsheet className="h-16 w-16 text-gray-200 mb-4" />
-            <p className="text-lg font-black text-gray-800 font-heading">
-              No archived files found
-            </p>
-            <p className="mt-1 text-sm text-gray-400 max-w-sm">
-              Upload an Excel workbook or create a blank spreadsheet to get
-              started.
-            </p>
+            <span className="text-sm text-gray-500 font-bold">Retrieving archive modules...</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-[10px] text-gray-500 font-black uppercase tracking-wider">
-                <tr>
-                  <th className="p-4 text-left">Document Name</th>
-                  <th className="p-4 text-left hidden md:table-cell">
-                    Import Details
-                  </th>
-                  <th className="p-4 text-left hidden sm:table-cell">
-                    Last Updated
-                  </th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredDocs.map((doc) => (
-                  <tr
-                    key={doc.id}
-                    className="hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600 shadow-sm border border-green-100">
-                          <FileSpreadsheet className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-900 line-clamp-1">
-                            {doc.name}
-                          </p>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                            ID: #{doc.id}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 hidden md:table-cell">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                        <span>
-                          {new Date(doc.uploaded_at).toLocaleDateString(
-                            "en-GB",
-                            {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
+          <>
+            {/* Folders (only shown at root) */}
+            {!currentFolder && folders.length > 0 && (
+              <div className="border-b border-gray-100 p-4">
+                <p className="mb-3 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  Folders
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      className="group relative flex flex-col items-center gap-2 rounded-xl border border-gray-150 bg-white p-4 cursor-pointer hover:border-amber-300 hover:bg-amber-50/30 transition-all shadow-sm"
+                      onClick={() => {
+                        if (renamingFolder?.id !== folder.id) setCurrentFolder(folder);
+                      }}
+                    >
+                      <Folder className="h-8 w-8 text-amber-500" />
+                      {renamingFolder?.id === folder.id ? (
+                        <input
+                          type="text"
+                          value={renameFolderName}
+                          onChange={(e) => setRenameFolderName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleRenameFolder();
+                            if (e.key === "Escape") setRenamingFolder(null);
+                          }}
+                          onBlur={handleRenameFolder}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full text-center text-xs font-bold border border-blue-300 rounded px-1 py-0.5 outline-none"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-gray-700 text-center line-clamp-2">
+                          {folder.name}
                         </span>
-                      </div>
-                    </td>
-                    <td className="p-4 hidden sm:table-cell">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <Layers className="h-3.5 w-3.5 text-gray-400" />
-                        <span>
-                          {new Date(doc.updated_at).toLocaleDateString(
-                            "en-GB",
-                            {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          to={`/excel-archive/edit/${doc.id}`}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-green-600 hover:border-green-200 shadow-sm"
-                          title="View sheet content"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Link>
+                      )}
+                      <span className="text-[10px] text-gray-400 font-semibold">
+                        {folder.file_count || 0} files
+                      </span>
+                      <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
                         <button
-                          onClick={() => handleDownload(doc.id, doc.name)}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-blue-600 hover:border-blue-200 shadow-sm"
-                          title="Export back to Excel (.xlsx)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenamingFolder(folder);
+                            setRenameFolderName(folder.name);
+                          }}
+                          className="p-1 rounded bg-white border border-gray-200 text-gray-400 hover:text-blue-600"
+                          title="Rename"
                         >
-                          <Download className="h-4 w-4" />
+                          <Pencil className="h-3 w-3" />
                         </button>
                         <button
-                          onClick={() => handleDelete(doc.id)}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-red-650 hover:border-red-200 shadow-sm"
-                          title="Delete from database"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFolder(folder);
+                          }}
+                          className="p-1 rounded bg-white border border-gray-200 text-gray-400 hover:text-red-600"
+                          title="Delete folder"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Files */}
+            {filteredDocs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
+                <FileSpreadsheet className="h-16 w-16 text-gray-200 mb-4" />
+                <p className="text-lg font-black text-gray-800 font-heading">
+                  {currentFolder ? "No files in this folder" : "No archived files found"}
+                </p>
+                <p className="mt-1 text-sm text-gray-400 max-w-sm">
+                  Upload an Excel workbook to get started.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-[10px] text-gray-500 font-black uppercase tracking-wider">
+                    <tr>
+                      <th className="p-4 text-left">Document Name</th>
+                      <th className="p-4 text-left hidden md:table-cell">Import Details</th>
+                      <th className="p-4 text-left hidden sm:table-cell">Last Updated</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredDocs.map((doc) => (
+                      <tr key={doc.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600 shadow-sm border border-green-100">
+                              <FileSpreadsheet className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900 line-clamp-1">{doc.name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                ID: #{doc.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 hidden md:table-cell">
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                            <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                            <span>{fmtDate(doc.uploaded_at)}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 hidden sm:table-cell">
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                            <Layers className="h-3.5 w-3.5 text-gray-400" />
+                            <span>{fmtDate(doc.updated_at)}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              to={`/excel-archive/edit/${doc.id}`}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-green-600 hover:border-green-200 shadow-sm"
+                              title="View sheet content"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleDownload(doc.id, doc.name)}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-blue-600 hover:border-blue-200 shadow-sm"
+                              title="Download Excel (.xlsx)"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setMoveTarget(doc)}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-amber-600 hover:border-amber-200 shadow-sm"
+                              title="Move to folder"
+                            >
+                              <MoveRight className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(doc.id)}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-red-650 hover:border-red-200 shadow-sm"
+                              title="Delete from database"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Move-to-folder modal */}
+      {moveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMoveTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h3 className="font-black text-gray-900">Move "{moveTarget.name}"</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {moveTarget.folder_id && (
+                <button
+                  onClick={() => handleMoveDoc(moveTarget.id, null)}
+                  className="w-full flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4 text-gray-400" /> Root (no folder)
+                </button>
+              )}
+              {folders
+                .filter((f) => f.id !== moveTarget.folder_id)
+                .map((folder) => (
+                  <button
+                    key={folder.id}
+                    onClick={() => handleMoveDoc(moveTarget.id, folder.id)}
+                    className="w-full flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm font-bold text-gray-700 hover:bg-amber-50 hover:border-amber-200 transition-colors"
+                  >
+                    <Folder className="h-4 w-4 text-amber-500" /> {folder.name}
+                  </button>
+                ))}
+              {folders.filter((f) => f.id !== moveTarget.folder_id).length === 0 && !moveTarget.folder_id && (
+                <p className="text-sm text-gray-400 text-center py-4">No folders created yet.</p>
+              )}
+            </div>
+            <button
+              onClick={() => setMoveTarget(null)}
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 text-sm font-bold text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
