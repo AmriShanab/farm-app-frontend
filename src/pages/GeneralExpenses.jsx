@@ -255,6 +255,16 @@ function ExpenseCategoryTab({ category, farm, year }) {
     fuelType: "",
   });
 
+  const openAddPanel = () => {
+    setEditingId(null);
+    setForm({
+      ...emptyForm(),
+      farm: farm && farm !== "All" ? farm : "MR1",
+      categoryType: category === "maintenance" ? "cleaning" : category === "machinery" ? "maintenance" : "",
+    });
+    setIsAdding(true);
+  };
+
   const closePanel = () => {
     setIsAdding(false);
     setEditingId(null);
@@ -305,13 +315,39 @@ function ExpenseCategoryTab({ category, farm, year }) {
     let updateFn;
 
     if (category === "maintenance") {
+      if (!form.date) {
+        alert("Please select a date.");
+        setIsSaving(false);
+        return;
+      }
+      if (!form.farm) {
+        alert("Please select an estate location.");
+        setIsSaving(false);
+        return;
+      }
+      if (!form.categoryType) {
+        alert("Please select a maintenance category.");
+        setIsSaving(false);
+        return;
+      }
+      const amt = parseFloat(form.amount);
+      if (isNaN(amt) || amt <= 0) {
+        alert("Please enter a valid amount greater than 0.");
+        setIsSaving(false);
+        return;
+      }
+      if (form.categoryType === "solar" && form.farm !== "MR2") {
+        alert("Solar maintenance can only be logged under farm MR2.");
+        setIsSaving(false);
+        return;
+      }
       payload = {
         date: form.date,
         farm: form.farm,
         category: form.categoryType,
-        description: form.description,
-        amount: parseFloat(form.amount || 0),
-        chequeNo: form.chequeNo || "",
+        description: form.description?.trim() || "",
+        amount: amt,
+        chequeNo: form.chequeNo?.trim() || "",
         chequeDate: form.chequeDate || null,
       };
       createFn = createMaintenanceExpense;
@@ -380,7 +416,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
       closePanel();
     } catch (err) {
       console.error(err);
-      alert(`Failed to save ${category} record.`);
+      alert(err.message || `Failed to save ${category} record.`);
     } finally {
       setIsSaving(false);
     }
@@ -420,6 +456,28 @@ function ExpenseCategoryTab({ category, farm, year }) {
     return colors[type] || "bg-gray-100 text-gray-600";
   };
 
+  const formatCategoryLabel = (rowCat, tabCat) => {
+    if (tabCat === "maintenance") {
+      const map = {
+        cleaning: "Cleaning / Weeding",
+        plumbing: "Plumbing / Irrigation",
+        "fence-repair": "Fence Repair",
+        "new-trees": "New Trees / Planting",
+        solar: "Solar System",
+      };
+      return map[rowCat] || rowCat;
+    }
+    if (tabCat === "machinery") {
+      const map = {
+        maintenance: "Maintenance",
+        parts: "Parts",
+        running: "Running",
+      };
+      return map[rowCat] || rowCat;
+    }
+    return rowCat;
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ── DEDICATED REGISTRATION PANEL (UX Redesign) ── */}
@@ -446,7 +504,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
             {/* Common Fields */}
             <div className="md:col-span-3">
               <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                Date
+                Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
@@ -461,7 +519,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
             {category !== "ceb" && category !== "fuel" && (
               <div className="md:col-span-3">
                 <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                  Estate Location
+                  Estate Location <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={form.farm}
@@ -469,18 +527,52 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
                   disabled={isSaving}
                 >
-                  <option value="MR1">MR1 Farm</option>
+                  <option
+                    value="MR1"
+                    disabled={category === "maintenance" && form.categoryType === "solar"}
+                  >
+                    MR1 Farm {category === "maintenance" && form.categoryType === "solar" ? "(Solar is MR2 only)" : ""}
+                  </option>
                   <option value="MR2">MR2 Farm</option>
                 </select>
               </div>
             )}
 
             {/* Dynamic Fields based on Category */}
-            {(category === "maintenance" || category === "machinery") && (
+            {category === "maintenance" && (
+              <div className="md:col-span-6">
+                <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                  Maintenance Category <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={form.categoryType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const nextFarm = val === "solar" ? "MR2" : form.farm;
+                    setForm({ ...form, categoryType: val, farm: nextFarm });
+                  }}
+                  className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 bg-white font-bold"
+                >
+                  <option value="">-- Select Category --</option>
+                  <option value="cleaning">Cleaning / Weeding</option>
+                  <option value="plumbing">Plumbing / Irrigation</option>
+                  <option value="fence-repair">Fence Repair</option>
+                  <option value="new-trees">New Trees / Planting</option>
+                  <option value="solar">Solar System (MR2 only)</option>
+                </select>
+                {form.categoryType === "solar" && (
+                  <p className="text-[11px] font-semibold text-amber-600 mt-1">
+                    Solar maintenance can only be logged under farm MR2.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {category === "machinery" && (
               <>
                 <div className="md:col-span-6">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                    {category === "machinery" ? "Type" : "Category"}
+                    Expense Type <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={form.categoryType}
@@ -490,28 +582,30 @@ function ExpenseCategoryTab({ category, farm, year }) {
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 bg-white font-bold"
                   >
                     <option value="">-- Select Type --</option>
-
                     <option value="maintenance">Maintenance</option>
                     <option value="parts">Parts</option>
                     <option value="running">Running</option>
                   </select>
                 </div>
-                {category === "machinery" && (
-                  <div className="md:col-span-6">
-                    <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
-                      Machinery Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Tractor, Water Pump"
-                      value={form.machinery}
-                      onChange={(e) =>
-                        setForm({ ...form, machinery: e.target.value })
-                      }
-                      className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold"
-                    />
-                  </div>
-                )}
+                <div className="md:col-span-6">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                    Machinery Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Tractor, Water Pump"
+                    value={form.machinery}
+                    onChange={(e) =>
+                      setForm({ ...form, machinery: e.target.value })
+                    }
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 font-bold"
+                  />
+                </div>
+              </>
+            )}
+
+            {(category === "maintenance" || category === "machinery") && (
+              <>
                 <div className="md:col-span-12">
                   <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
                     Description
@@ -917,7 +1011,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
           </div>
           {!isAdding && (
             <button
-              onClick={() => setIsAdding(true)}
+              onClick={openAddPanel}
               className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:-translate-y-0.5 transition-transform flex items-center gap-2"
             >
               <Plus size={14} /> Add {category}
@@ -1020,7 +1114,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
                           <>
                             <td className="p-4">
                               <span className="text-[10px] uppercase font-black tracking-wider text-green-600 block mb-0.5">
-                                {row.category || row.type}
+                                {formatCategoryLabel(row.category || row.type, category)}
                               </span>
                               <p className="font-bold text-gray-800">
                                 {row.description}

@@ -1847,7 +1847,10 @@ export const createMaintenanceExpense = async (data) => {
     headers: getHeaders(),
     body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error("Failed to create maintenance expense");
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || errData?.message || "Failed to create maintenance expense");
+  }
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const updateMaintenanceExpense = async (id, data) => {
@@ -1856,7 +1859,10 @@ export const updateMaintenanceExpense = async (id, data) => {
     headers: getHeaders(),
     body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error("Failed to update maintenance expense");
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || errData?.message || "Failed to update maintenance expense");
+  }
   return normalizeGeneralExpenseRecord(unwrapApiData(await response.json()));
 };
 export const deleteMaintenanceExpense = async (id) => {
