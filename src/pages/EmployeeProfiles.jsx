@@ -21,6 +21,7 @@ import {
   Play,
   Settings2,
   History,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -30,6 +31,7 @@ import {
   deleteEmployee,
   getBasicRate,
   createBasicRate,
+  getEmployeeSalaryHistory,
 } from "../services/api";
 import { useToast } from "../components/ToastProvider";
 import EmployeeHistoryModal from "../components/EmployeeHistoryModal";
@@ -85,6 +87,9 @@ export default function EmployeeProfiles() {
 
   const [editEmployee, setEditEmployee] = useState(null);
   const [historyEmp, setHistoryEmp] = useState(null);
+  const [salaryHistoryEmp, setSalaryHistoryEmp] = useState(null);
+  const [salaryHistoryList, setSalaryHistoryList] = useState([]);
+  const [isLoadingSalaryHist, setIsLoadingSalaryHist] = useState(false);
   const [editRow, setEditRow] = useState({
     name: "",
     role: "",
@@ -92,6 +97,7 @@ export default function EmployeeProfiles() {
     type: "daily",
     payFrequency: "weekly",
     wage: "",
+    effectiveFrom: new Date().toISOString().split("T")[0],
   });
   const toast = useToast();
 
@@ -174,6 +180,20 @@ export default function EmployeeProfiles() {
     }
   };
 
+  const openSalaryHistoryModal = async (emp) => {
+    setSalaryHistoryEmp(emp);
+    setIsLoadingSalaryHist(true);
+    setSalaryHistoryList([]);
+    try {
+      const res = await getEmployeeSalaryHistory(emp.id);
+      setSalaryHistoryList(Array.isArray(res?.history) ? res.history : []);
+    } catch (err) {
+      toast.error(err?.message || "Failed to load salary history.");
+    } finally {
+      setIsLoadingSalaryHist(false);
+    }
+  };
+
   const filtered = employees.filter(
     (emp) =>
       !search ||
@@ -229,6 +249,7 @@ export default function EmployeeProfiles() {
       type: emp.type || "daily",
       payFrequency: emp.pay_frequency || emp.payFrequency || "weekly", // Map new DB field
       wage: emp.wage_per_day || emp.wagePerDay || "",
+      effectiveFrom: new Date().toISOString().split("T")[0],
     });
   };
 
@@ -241,6 +262,7 @@ export default function EmployeeProfiles() {
       type: "daily",
       payFrequency: "weekly",
       wage: "",
+      effectiveFrom: new Date().toISOString().split("T")[0],
     });
     setIsSaving(false);
   };
@@ -263,6 +285,7 @@ export default function EmployeeProfiles() {
         payFrequency: editRow.payFrequency,
         wagePerDay: parseFloat(editRow.wage) || 0,
         status: editEmployee.status || "active",
+        effectiveFrom: editRow.effectiveFrom || new Date().toISOString().split("T")[0],
       };
 
       const updated = await updateEmployee(editEmployee.id, payload);
@@ -855,8 +878,15 @@ export default function EmployeeProfiles() {
                         <td className="p-4 text-right">
                           <div className="flex justify-end gap-1">
                             <button
+                              onClick={() => openSalaryHistoryModal(emp)}
+                              title="Salary & Wage Adjustment History"
+                              className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                            >
+                              <Banknote size={13} />
+                            </button>
+                            <button
                               onClick={() => setHistoryEmp(emp)}
-                              title="View history"
+                              title="View full history"
                               className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                             >
                               <History size={13} />
@@ -1011,7 +1041,7 @@ export default function EmployeeProfiles() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
                         Wage Type
@@ -1044,16 +1074,33 @@ export default function EmployeeProfiles() {
                       <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
                         Base Rate (Rs.)
                       </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          name="wage"
-                          value={editRow.wage}
-                          onChange={handleEditRowChange}
-                          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all"
-                        />
-                      </div>
+                      <input
+                        type="number"
+                        name="wage"
+                        value={editRow.wage}
+                        onChange={handleEditRowChange}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all"
+                      />
                     </div>
+                    <div>
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                        Effective From
+                      </label>
+                      <input
+                        type="date"
+                        name="effectiveFrom"
+                        value={editRow.effectiveFrom}
+                        onChange={handleEditRowChange}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-800 flex items-start gap-2">
+                    <span className="font-black text-blue-900 shrink-0">Note:</span>
+                    <span>
+                      Salary adjustments will apply from <strong>{editRow.effectiveFrom || 'the selected date'}</strong> forward. Past attendance records, reports, and payroll slips remain safely preserved with their historical rates.
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1219,6 +1266,100 @@ export default function EmployeeProfiles() {
           </div>
         )}
       </div>
+
+      {salaryHistoryEmp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSalaryHistoryEmp(null)}
+          />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-black flex items-center justify-center text-xs">
+                  <Banknote size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">
+                    Salary &amp; Wage History
+                  </h3>
+                  <p className="text-xs font-bold text-gray-500">
+                    {salaryHistoryEmp.name} &middot; {salaryHistoryEmp.role}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSalaryHistoryEmp(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <p className="text-xs text-gray-500 mb-3">
+                Rate changes apply from their effective date forward. Past attendance records and payroll reports always preserve their historical rate.
+              </p>
+
+              {isLoadingSalaryHist ? (
+                <div className="py-12 text-center text-gray-400">
+                  <Loader2 size={24} className="animate-spin mx-auto mb-2 text-emerald-600" />
+                  <span className="text-xs font-bold">Loading rate history...</span>
+                </div>
+              ) : salaryHistoryList.length === 0 ? (
+                <div className="py-8 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl">
+                  No historical rate adjustments recorded yet. Current rate: Rs. {fmt(salaryHistoryEmp.wage_per_day || salaryHistoryEmp.wagePerDay)} / day.
+                </div>
+              ) : (
+                <div className="border border-gray-100 rounded-xl overflow-hidden shadow-xs">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px] border-b border-gray-100">
+                      <tr>
+                        <th className="py-2.5 px-3 text-left">Effective From</th>
+                        <th className="py-2.5 px-3 text-right">Wage Rate</th>
+                        <th className="py-2.5 px-3 text-left">Type</th>
+                        <th className="py-2.5 px-3 text-left">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {salaryHistoryList.map((h, i) => (
+                        <tr key={h.id || i} className={i === 0 ? "bg-emerald-50/30 font-bold" : "hover:bg-gray-50"}>
+                          <td className="py-2.5 px-3 text-gray-900 font-bold">
+                            {h.effective_from || h.effectiveFrom}
+                            {i === 0 && (
+                              <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-emerald-100 text-emerald-800">
+                                Latest
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-gray-900">
+                            Rs. {fmt(h.wage_per_day || h.wagePerDay)}
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-600 capitalize">
+                            {h.type || "daily"}
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-500 truncate max-w-[150px]">
+                            {h.notes || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/60 flex justify-end">
+              <button
+                onClick={() => setSalaryHistoryEmp(null)}
+                className="px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {historyEmp && (
         <EmployeeHistoryModal

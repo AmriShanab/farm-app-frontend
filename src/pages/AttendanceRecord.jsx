@@ -82,16 +82,18 @@ function DetailRecordsTable({ records, homeFarm, compact = false }) {
   }
   const recordGroups = groupRecordsByDate(records);
   return (
-    <table className={`w-full text-left border-collapse whitespace-nowrap ${compact ? 'min-w-[520px]' : 'min-w-[600px]'}`}>
+    <table className={`w-full text-left border-collapse whitespace-nowrap ${compact ? 'min-w-[620px]' : 'min-w-[720px]'}`}>
       <thead>
         <tr className="bg-gray-50 border-b border-gray-100">
-          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[15%]">Day</th>
-          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">Date</th>
-          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">Status</th>
-          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[20%]">
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[12%]">Day</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[15%]">Date</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[14%]">Status</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-right w-[14%]">Applied Rate</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 w-[17%]">
             <div className="flex items-center gap-1"><MapPin size={11} /> Location</div>
           </th>
           <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500">Task</th>
+          <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-wider text-gray-500 text-right w-[14%]">Daily Gross</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-50">
@@ -102,6 +104,7 @@ function DetailRecordsTable({ records, homeFarm, compact = false }) {
           const dayName = DAY_NAMES[d.getDay()];
           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
           const formatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const totalDailyGross = group.reduce((sum, g) => sum + (Number(g.daily_gross) || 0), 0);
 
           return (
             <tr key={rec.id} className={`hover:bg-gray-50/80 transition-colors ${isWeekend ? 'bg-blue-50/30' : ''} ${isSplit ? 'bg-blue-50/40' : ''}`}>
@@ -121,6 +124,15 @@ function DetailRecordsTable({ records, homeFarm, compact = false }) {
               <td className="py-3 px-5">
                 <div className="flex flex-col gap-1">
                   {group.map(g => <StatusBadge key={g.id} status={g.status} />)}
+                </div>
+              </td>
+              <td className="py-3 px-5 text-right font-bold text-xs text-gray-700">
+                <div className="flex flex-col gap-1 items-end">
+                  {group.map(g => (
+                    <span key={g.id}>
+                      {g.wage_applied ? `Rs. ${Number(g.wage_applied).toLocaleString()}` : '—'}
+                    </span>
+                  ))}
                 </div>
               </td>
               <td className="py-3 px-5">
@@ -153,6 +165,9 @@ function DetailRecordsTable({ records, homeFarm, compact = false }) {
                     <span key={g.id} className="text-gray-300 text-xs font-bold">—</span>
                   ))}
                 </div>
+              </td>
+              <td className="py-3 px-5 text-right font-black text-xs text-gray-900">
+                {totalDailyGross > 0 ? `Rs. ${totalDailyGross.toLocaleString()}` : '—'}
               </td>
             </tr>
           );
@@ -451,10 +466,43 @@ export default function AttendanceRecord() {
               />
             )}
             <StatCard
-              title="Gross Earnings" value={`₹${result.summary.grossPay.toLocaleString()}`}
+              title="Gross Earnings" value={`Rs. ${Number(result.summary.grossPay || 0).toLocaleString()}`}
               sub="For this period" color="blue" icon={<TrendingUp size={13} />}
             />
           </div>
+
+          {/* Rate Breakdown Banner (when wage adjustments happened during period) */}
+          {result.summary?.hasMultipleRates && result.summary?.rateBreakdown?.length > 1 && (
+            <div className="mb-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-emerald-50 border border-blue-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-blue-600 text-white shadow-xs">
+                  Salary Adjustment Detected
+                </span>
+                <span className="text-xs font-bold text-blue-900">
+                  Multiple salary rates applied across this attendance period
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {result.summary.rateBreakdown.map((b, idx) => (
+                  <div key={idx} className="bg-white rounded-xl p-3.5 border border-blue-100/80 shadow-xs">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                      Effective: {b.from} &rarr; {b.to}
+                    </p>
+                    <p className="text-lg font-black text-gray-900 mt-0.5">
+                      Rs. {Number(b.rate).toLocaleString()}{" "}
+                      <span className="text-xs font-semibold text-gray-500">/ day</span>
+                    </p>
+                    <p className="text-xs font-bold text-gray-600 mt-1">
+                      {b.totalDays} day{b.totalDays === 1 ? '' : 's'} ({b.fullDays} full, {b.halfDays} half)
+                    </p>
+                    <p className="text-xs font-black text-emerald-700 mt-0.5">
+                      Period Gross: Rs. {Number(b.gross).toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Records table */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -531,10 +579,15 @@ export default function AttendanceRecord() {
                             <td className="py-3 px-5">
                               <button
                                 onClick={(e) => { e.stopPropagation(); viewOne(emp.id); }}
-                                className="text-sm font-black text-green-700 hover:text-green-800 hover:underline text-left"
+                                className="text-sm font-black text-green-700 hover:text-green-800 hover:underline text-left inline-flex items-center gap-1.5"
                                 title="Open full-page record"
                               >
                                 {emp.name}
+                                {emp.hasMultipleRates && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200" title="Multiple salary rates applied in this period">
+                                    Split Rates
+                                  </span>
+                                )}
                               </button>
                               {emp.role && <div className="text-[11px] text-gray-400 font-semibold">{emp.role}</div>}
                             </td>
@@ -547,7 +600,7 @@ export default function AttendanceRecord() {
                             <td className="py-3 px-5 text-center text-sm font-black text-amber-600">{emp.halfDays}</td>
                             <td className="py-3 px-5 text-center text-sm font-black text-red-600">{emp.absentDays}</td>
                             <td className="py-3 px-5 text-center text-sm font-black text-blue-600">{emp.splitDays}</td>
-                            <td className="py-3 px-5 text-right text-sm font-black text-gray-900">₹{Number(emp.grossPay).toLocaleString()}</td>
+                            <td className="py-3 px-5 text-right text-sm font-black text-gray-900">Rs. {Number(emp.grossPay).toLocaleString()}</td>
                           </tr>
                           {isOpen && (
                             <tr className="bg-gray-50/40">

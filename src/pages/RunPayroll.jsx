@@ -219,7 +219,7 @@ export default function RunPayroll() {
           <div class="card-bd tri">
             <div>
               <span class="big" style="color:#374151">${money(emp.wagePerDay)}</span>
-              <span class="lbl">Wage / Day</span>
+              <span class="lbl">${emp.hasMultipleRates ? 'Latest Rate' : 'Wage / Day'}</span>
             </div>
             <div>
               <span class="big">${money(emp.basicPay)}</span>
@@ -231,6 +231,23 @@ export default function RunPayroll() {
               <span class="lbl">Allowance</span>
             </div>
           </div>
+          ${emp.hasMultipleRates && Array.isArray(emp.rateBreakdown) && emp.rateBreakdown.length > 1 ? `
+            <div style="border-top:1px solid #e2e8f0;padding:8px 12px;background:#f8fafc">
+              <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:4px">
+                Wage Adjustment Breakdown (Separate Rates Applied)
+              </div>
+              <table style="width:100%;font-size:11px;border-collapse:collapse">
+                ${emp.rateBreakdown.map(rb => `
+                  <tr>
+                    <td style="padding:2px 0;color:#475569">${rb.from} → ${rb.to}</td>
+                    <td style="padding:2px 0;text-align:center;color:#64748b">${rb.totalDays} days (${rb.fullDays} full, ${rb.halfDays} half)</td>
+                    <td style="padding:2px 0;text-align:right;color:#334155">@ ${money(rb.rate)}</td>
+                    <td style="padding:2px 0;text-align:right;font-weight:bold;color:#0f172a">${money(rb.gross)}</td>
+                  </tr>
+                `).join('')}
+              </table>
+            </div>
+          ` : ''}
         </div>
 
         <div class="card">
@@ -966,7 +983,21 @@ export default function RunPayroll() {
                         </td>
 
                         <td style={{ ...tdStyle(), textAlign: "right" }}>
-                          Rs. {fmt(emp.wagePerDay)}
+                          {emp.hasMultipleRates ? (
+                            <div className="flex flex-col items-end">
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 mb-0.5 cursor-help"
+                                title={emp.rateBreakdown?.map(r => `${r.from}→${r.to}: Rs. ${fmt(r.rate)} (${r.totalDays}d = Rs. ${fmt(r.gross)})`).join('\n')}
+                              >
+                                Split Rates
+                              </span>
+                              <span className="text-xs text-gray-500 font-semibold">
+                                Rs. {fmt(emp.wagePerDay)}
+                              </span>
+                            </div>
+                          ) : (
+                            `Rs. ${fmt(emp.wagePerDay)}`
+                          )}
                         </td>
 
                         <td style={{ ...tdStyle(), textAlign: "right" }}>
@@ -1851,6 +1882,24 @@ export default function RunPayroll() {
                     </span>
                   </div>
                 </div>
+                {breakdownEmp.hasMultipleRates && Array.isArray(breakdownEmp.rateBreakdown) && breakdownEmp.rateBreakdown.length > 1 && (
+                  <div className="px-4 py-3 bg-blue-50/50 border-t border-gray-100 rounded-b-xl text-xs">
+                    <span className="font-bold text-blue-900 block mb-1 text-[11px] uppercase tracking-wider">
+                      Rate Adjustment Breakdown (Period Slices)
+                    </span>
+                    <div className="space-y-1">
+                      {breakdownEmp.rateBreakdown.map((rb, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-gray-700">
+                          <span>
+                            {rb.from} &rarr; {rb.to}{" "}
+                            <span className="text-gray-400">({rb.totalDays} days @ Rs. {fmt(rb.rate)})</span>
+                          </span>
+                          <strong className="text-gray-900">Rs. {fmt(rb.gross)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm">

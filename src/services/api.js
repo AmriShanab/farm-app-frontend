@@ -394,6 +394,40 @@ export const updateEmployee = async (id, employeeData) => {
   }
 };
 
+export const getEmployeeSalaryHistory = async (id) => {
+  try {
+    const response = await fetch(`${BASE_URL}/hr/employees/${id}/salary-history`, {
+      headers: getHeaders(),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || "Failed to fetch salary history");
+    }
+    return unwrapApiData(payload) || { history: [] };
+  } catch (error) {
+    console.error("API Error (getEmployeeSalaryHistory):", error);
+    throw error;
+  }
+};
+
+export const addSalaryAdjustment = async (id, data) => {
+  try {
+    const response = await fetch(`${BASE_URL}/hr/employees/${id}/salary-history`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || "Failed to record salary adjustment");
+    }
+    return unwrapApiData(payload) || {};
+  } catch (error) {
+    console.error("API Error (addSalaryAdjustment):", error);
+    throw error;
+  }
+};
+
 export const deleteEmployee = async (id) => {
   try {
     const response = await fetch(`${BASE_URL}/hr/employees/${id}`, {
