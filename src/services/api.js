@@ -1662,6 +1662,7 @@ export const searchCheques = async (chequeNo) => {
 
   return result.map((item) => ({
     id: item.id,
+    sourceTable: item.source_table || (item.source === 'advances' || item.source === 'manager_salaries' || item.source === 'maintenance_expenses' || item.source === 'ceb_bills' || item.source === 'machinery_expenses' || item.source === 'poultry_feed' ? item.source : 'cheques'),
     chequeNo: item.cheque_no,
     cheque_date: item.cheque_date,
     payee: item.payee || item.description,
@@ -1682,6 +1683,7 @@ export const createCheque = async (data) => {
       category: data.category,
       amount: data.amount,
       status: data.status || "Pending",
+      sourceTable: "cheques",
     };
     mock.push(newCheque);
     localStorage.setItem("mock_cheques", JSON.stringify(mock));
@@ -1696,6 +1698,7 @@ export const createCheque = async (data) => {
   const item = unwrapApiData(await response.json());
   return {
     id: item.id,
+    sourceTable: "cheques",
     chequeNo: item.cheque_no,
     cheque_date: item.cheque_date,
     payee: item.payee || item.description,
@@ -1703,6 +1706,37 @@ export const createCheque = async (data) => {
     amount: item.amount,
     status: item.status || "Pending",
   };
+};
+
+export const updateCheque = async (id, data, sourceTable = "cheques") => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_cheques") || "[]");
+    const updated = mock.map((c) => (c.id === id ? { ...c, ...data } : c));
+    localStorage.setItem("mock_cheques", JSON.stringify(updated));
+    return data;
+  }
+  const response = await fetch(`${BASE_URL}/finance/cheques/${id}?sourceTable=${sourceTable}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error("Failed to update cheque");
+  return unwrapApiData(await response.json());
+};
+
+export const deleteCheque = async (id, sourceTable = "cheques") => {
+  if (USE_MOCK_DATA) {
+    const mock = JSON.parse(localStorage.getItem("mock_cheques") || "[]");
+    const filtered = mock.filter((c) => c.id !== id);
+    localStorage.setItem("mock_cheques", JSON.stringify(filtered));
+    return true;
+  }
+  const response = await fetch(`${BASE_URL}/finance/cheques/${id}?sourceTable=${sourceTable}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to delete cheque");
+  return true;
 };
 
 // --- ASSET & WARRANTY ENDPOINTS ---

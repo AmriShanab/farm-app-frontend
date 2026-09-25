@@ -230,15 +230,15 @@ function LocationTaskSummary({ records }) {
   );
 }
 
-export default function AttendanceRecord() {
-  const today = new Date().toISOString().split('T')[0];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+const getToday = () => new Date().toISOString().split('T')[0];
+const getThirtyDaysAgo = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+export default function AttendanceRecord() {
   const [employees, setEmployees] = useState([]);
   const [farmFilter, setFarmFilter] = useState('All');
   const [selectedEmpId, setSelectedEmpId] = useState('');
-  const [startDate, setStartDate] = useState(thirtyDaysAgo);
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState(getThirtyDaysAgo);
+  const [endDate, setEndDate] = useState(getToday);
   const [result, setResult] = useState(null);
   const [summary, setSummary] = useState(null);
   const [expandedRows, setExpandedRows] = useState({});
@@ -248,18 +248,27 @@ export default function AttendanceRecord() {
   const toast = useToast();
 
   useEffect(() => {
-    setEmpsLoading(true);
+    let ignore = false;
     getEmployees(farmFilter === 'All' ? null : farmFilter)
       .then(data => {
-        setEmployees(data);
-        setSelectedEmpId('');
-        setResult(null);
-        setSummary(null);
-        setExpandedRows({});
+        if (!ignore) {
+          setEmployees(data);
+          setSelectedEmpId('');
+          setResult(null);
+          setSummary(null);
+          setExpandedRows({});
+        }
       })
-      .catch(() => toast.error('Failed to load employees.'))
-      .finally(() => setEmpsLoading(false));
-  }, [farmFilter]);
+      .catch(() => {
+        if (!ignore) toast.error('Failed to load employees.');
+      })
+      .finally(() => {
+        if (!ignore) setEmpsLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [farmFilter, toast]);
 
   const handleSearch = async () => {
     if (!selectedEmpId) { toast.warn('Please select an employee.'); return; }
@@ -353,7 +362,7 @@ export default function AttendanceRecord() {
             <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Farm</label>
             <select
               value={farmFilter}
-              onChange={e => setFarmFilter(e.target.value)}
+              onChange={e => { setFarmFilter(e.target.value); setEmpsLoading(true); }}
               className="text-sm font-bold border border-gray-200 bg-white rounded-xl px-3 py-2 outline-none shadow-sm cursor-pointer min-w-[120px]"
             >
               {FARMS.map(f => <option key={f} value={f}>{f === 'All' ? 'All Farms' : `${f} Staff`}</option>)}

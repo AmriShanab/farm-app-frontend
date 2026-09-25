@@ -19,6 +19,8 @@ import {
   deleteOwnerFinancial,
   searchCheques,
   createCheque,
+  updateCheque,
+  deleteCheque,
 } from "../services/api";
 
 const fmt = (n) =>
@@ -108,6 +110,7 @@ export default function FinanceManagement() {
         {activeTab === "Cheque Tracker" && (
           <ChequeTrackerTab
             data={cheques}
+            setData={setCheques}
             isLoading={isLoading}
             search={chequeSearch}
             setSearch={setChequeSearch}
@@ -212,7 +215,7 @@ function OwnerFinancialsTab({
           chequeNo: newRow.chequeNo,
           chequeDate: newRow.chequeDate,
           amount: parseFloat(newRow.amount),
-          payee: newRow.chequePayee || newRow.description,
+          payee: newRow.chequePayee?.trim() || newRow.description,
           category: "expenses",
           status: newRow.chequeStatus || "Pending",
         });
@@ -457,7 +460,6 @@ function OwnerFinancialsTab({
                       setNewRow({
                         ...newRow,
                         description: e.target.value,
-                        chequePayee: newRow.chequePayee || e.target.value,
                       })
                     }
                     className="w-full p-2.5 text-xs border border-gray-300 rounded-lg outline-none focus:border-green-600 font-bold"
@@ -465,10 +467,10 @@ function OwnerFinancialsTab({
                   />
                 </div>
 
-                {/* Row 3: TOTAL AMOUNT | CHEQUE NO | CHEQUE DATE */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Row 3: TOTAL AMOUNT | CHEQUE NO | CHEQUE DATE | CHEQUE PAYEE */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-gray-505 uppercase tracking-wider mb-1">
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
                       Total Amount (Rs.)
                     </label>
                     <input
@@ -483,7 +485,7 @@ function OwnerFinancialsTab({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-505 uppercase tracking-wider mb-1">
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
                       Cheque No (Optional)
                     </label>
                     <input
@@ -498,7 +500,7 @@ function OwnerFinancialsTab({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-505 uppercase tracking-wider mb-1">
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
                       Cheque Date
                     </label>
                     <input
@@ -506,6 +508,21 @@ function OwnerFinancialsTab({
                       value={newRow.chequeDate}
                       onChange={(e) =>
                         setNewRow({ ...newRow, chequeDate: e.target.value })
+                      }
+                      className="w-full p-2 text-xs border border-gray-300 rounded-lg outline-none focus:border-green-600 font-bold"
+                      disabled={isSaving}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                      Cheque Payee (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Defaults to description"
+                      value={newRow.chequePayee}
+                      onChange={(e) =>
+                        setNewRow({ ...newRow, chequePayee: e.target.value })
                       }
                       className="w-full p-2 text-xs border border-gray-300 rounded-lg outline-none focus:border-green-600 font-bold"
                       disabled={isSaving}
@@ -765,6 +782,7 @@ function OwnerFinancialsTab({
 // ─── TAB 2: CHEQUE TRACKER ──────────────────────────────────────────────────
 function ChequeTrackerTab({
   data,
+  setData,
   isLoading,
   search,
   setSearch,
@@ -772,6 +790,17 @@ function ChequeTrackerTab({
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editCheque, setEditCheque] = useState({
+    id: null,
+    chequeNo: "",
+    chequeDate: "",
+    payee: "",
+    category: "manual",
+    amount: "",
+    status: "Pending",
+    sourceTable: "cheques",
+  });
   const [newCheque, setNewCheque] = useState({
     chequeNo: "",
     chequeDate: new Date().toISOString().split("T")[0],
@@ -780,6 +809,98 @@ function ChequeTrackerTab({
     category: "manual",
     status: "Pending",
   });
+
+  const startEdit = (cheque) => {
+    setIsAdding(false);
+    setEditingId(cheque.id);
+    setEditCheque({
+      id: cheque.id,
+      chequeNo: cheque.chequeNo || "",
+      chequeDate: cheque.cheque_date || "",
+      payee: cheque.payee || "",
+      category: cheque.category || "manual",
+      amount: cheque.amount ?? "",
+      status: cheque.status || "Pending",
+      sourceTable: cheque.sourceTable || "cheques",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditCheque({
+      id: null,
+      chequeNo: "",
+      chequeDate: "",
+      payee: "",
+      category: "manual",
+      amount: "",
+      status: "Pending",
+      sourceTable: "cheques",
+    });
+  };
+
+  const handleUpdate = async (cheque) => {
+    if (!editCheque.chequeNo || !editCheque.amount) {
+      return alert("Please fill in cheque number and amount.");
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        chequeNo: editCheque.chequeNo,
+        chequeDate: editCheque.chequeDate,
+        amount: parseFloat(editCheque.amount),
+        payee: editCheque.payee,
+        category: editCheque.category,
+        status: editCheque.status,
+      };
+      await updateCheque(cheque.id, payload, editCheque.sourceTable || cheque.sourceTable || "cheques");
+      if (setData) {
+        setData(
+          data.map((item) =>
+            item.id === cheque.id && (item.sourceTable || "cheques") === (cheque.sourceTable || "cheques")
+              ? {
+                  ...item,
+                  chequeNo: payload.chequeNo,
+                  cheque_date: payload.chequeDate,
+                  amount: payload.amount,
+                  payee: payload.payee,
+                  category: payload.category,
+                  status: payload.status,
+                }
+              : item,
+          ),
+        );
+      }
+      cancelEdit();
+    } catch (err) {
+      console.error(err);
+      alert("Error updating cheque.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (cheque) => {
+    if (window.confirm(`Are you sure you want to delete cheque #${cheque.chequeNo}?`)) {
+      setIsSaving(true);
+      try {
+        await deleteCheque(cheque.id, cheque.sourceTable || "cheques");
+        if (setData) {
+          setData(
+            data.filter(
+              (item) =>
+                !(item.id === cheque.id && (item.sourceTable || "cheques") === (cheque.sourceTable || "cheques")),
+            ),
+          );
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Error deleting cheque.");
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
 
   const handleSaveCheque = async () => {
     if (!newCheque.chequeNo || !newCheque.amount || !newCheque.payee) {
@@ -1015,54 +1136,199 @@ function ChequeTrackerTab({
                 <th className="p-4 text-left">Category</th>
                 <th className="p-4 text-right">Amount</th>
                 <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-right w-20"></th>
               </tr>
             </thead>
             <tbody>
               {data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="p-12 text-center text-gray-400 font-bold"
                   >
                     No cheques found.
                   </td>
                 </tr>
               ) : (
-                data.map((cheque) => (
-                  <tr
-                    key={cheque.id}
-                    className="border-t border-gray-50 hover:bg-gray-50/50"
-                  >
-                    <td className="p-4">
-                      <span className="font-black text-gray-800 bg-gray-100 px-2 py-1 rounded tracking-widest">
-                        {cheque.chequeNo}
-                      </span>
-                    </td>
-                    <td className="p-4 font-bold text-gray-600">
-                      {cheque.cheque_date}
-                    </td>
-                    <td className="p-4 font-bold text-gray-900">
-                      {cheque.payee}
-                    </td>
-                    <td className="p-4 text-gray-600 font-medium capitalize">
-                      {cheque.category}
-                    </td>
-                    <td className="p-4 text-right font-black text-green-700">
-                      Rs. {fmt(cheque.amount)}
-                    </td>
-                    <td className="p-4 text-center">
-                      <span
-                        className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                          cheque.status === "Cleared"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-orange-100 text-orange-700"
-                        }`}
-                      >
-                        {cheque.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                data.map((cheque) =>
+                  editingId === cheque.id ? (
+                    <tr
+                      key={`${cheque.sourceTable || "cheque"}-${cheque.id}`}
+                      className="bg-blue-50/30 border-b-0 border-blue-100"
+                    >
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={editCheque.chequeNo}
+                          onChange={(e) =>
+                            setEditCheque({
+                              ...editCheque,
+                              chequeNo: e.target.value,
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-gray-300 rounded font-black tracking-widest outline-none focus:border-green-600"
+                          placeholder="Cheque No"
+                          disabled={isSaving}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="date"
+                          value={editCheque.chequeDate}
+                          onChange={(e) =>
+                            setEditCheque({
+                              ...editCheque,
+                              chequeDate: e.target.value,
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-gray-300 rounded font-bold outline-none focus:border-green-600"
+                          disabled={isSaving}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={editCheque.payee}
+                          onChange={(e) =>
+                            setEditCheque({
+                              ...editCheque,
+                              payee: e.target.value,
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-gray-300 rounded font-bold outline-none focus:border-green-600"
+                          placeholder="Payee / Vendor"
+                          disabled={isSaving}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <select
+                          value={editCheque.category}
+                          onChange={(e) =>
+                            setEditCheque({
+                              ...editCheque,
+                              category: e.target.value,
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-gray-300 rounded font-medium outline-none bg-white focus:border-green-600"
+                          disabled={isSaving}
+                        >
+                          <option value="manual">Manual</option>
+                          <option value="advances">Advances</option>
+                          <option value="salary">Salary</option>
+                          <option value="expenses">Expenses</option>
+                          <option value="poultry">Poultry</option>
+                        </select>
+                      </td>
+                      <td className="p-2 text-right">
+                        <input
+                          type="number"
+                          value={editCheque.amount}
+                          onChange={(e) =>
+                            setEditCheque({
+                              ...editCheque,
+                              amount: e.target.value,
+                            })
+                          }
+                          className="w-32 p-2 text-xs border border-gray-300 rounded font-black text-right text-green-700 outline-none focus:border-green-600"
+                          placeholder="0.00"
+                          disabled={isSaving}
+                        />
+                      </td>
+                      <td className="p-2 text-center">
+                        <select
+                          value={editCheque.status}
+                          onChange={(e) =>
+                            setEditCheque({
+                              ...editCheque,
+                              status: e.target.value,
+                            })
+                          }
+                          className="w-24 p-1.5 text-[11px] font-bold border border-gray-300 rounded bg-white outline-none focus:border-green-600 text-center"
+                          disabled={isSaving}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Cleared">Cleared</option>
+                        </select>
+                      </td>
+                      <td className="p-2 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={cancelEdit}
+                            disabled={isSaving}
+                            className="p-1.5 bg-gray-200 rounded text-gray-600 hover:bg-gray-300 transition-colors"
+                            title="Cancel"
+                          >
+                            <X size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleUpdate(cheque)}
+                            disabled={isSaving}
+                            className="p-1.5 bg-green-600 rounded text-white shadow hover:bg-green-700 transition-colors"
+                            title="Save"
+                          >
+                            {isSaving ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Check size={14} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr
+                      key={`${cheque.sourceTable || "cheque"}-${cheque.id}`}
+                      className="border-t border-gray-50 hover:bg-gray-50/50"
+                    >
+                      <td className="p-4">
+                        <span className="font-black text-gray-800 bg-gray-100 px-2 py-1 rounded tracking-widest">
+                          {cheque.chequeNo}
+                        </span>
+                      </td>
+                      <td className="p-4 font-bold text-gray-600">
+                        {cheque.cheque_date}
+                      </td>
+                      <td className="p-4 font-bold text-gray-900">
+                        {cheque.payee}
+                      </td>
+                      <td className="p-4 text-gray-600 font-medium capitalize">
+                        {cheque.category}
+                      </td>
+                      <td className="p-4 text-right font-black text-green-700">
+                        Rs. {fmt(cheque.amount)}
+                      </td>
+                      <td className="p-4 text-center">
+                        <span
+                          className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                            cheque.status === "Cleared"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-orange-100 text-orange-700"
+                          }`}
+                        >
+                          {cheque.status}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => startEdit(cheque)}
+                            title="Edit"
+                            className="text-gray-400 hover:text-blue-600 p-1 transition-colors"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(cheque)}
+                            title="Delete"
+                            className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ),
+                )
               )}
             </tbody>
             {data.length > 0 && (
@@ -1083,6 +1349,7 @@ function ChequeTrackerTab({
                       ),
                     )}
                   </td>
+                  <td className="p-4"></td>
                   <td className="p-4"></td>
                 </tr>
               </tfoot>
