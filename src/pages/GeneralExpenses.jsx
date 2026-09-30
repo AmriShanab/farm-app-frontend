@@ -336,11 +336,6 @@ function ExpenseCategoryTab({ category, farm, year }) {
         setIsSaving(false);
         return;
       }
-      if (form.categoryType === "solar" && form.farm !== "MR2") {
-        alert("Solar maintenance can only be logged under farm MR2.");
-        setIsSaving(false);
-        return;
-      }
       payload = {
         date: form.date,
         farm: form.farm,
@@ -527,12 +522,7 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none bg-white focus:border-green-500 font-bold"
                   disabled={isSaving}
                 >
-                  <option
-                    value="MR1"
-                    disabled={category === "maintenance" && form.categoryType === "solar"}
-                  >
-                    MR1 Farm {category === "maintenance" && form.categoryType === "solar" ? "(Solar is MR2 only)" : ""}
-                  </option>
+                  <option value="MR1">MR1 Farm</option>
                   <option value="MR2">MR2 Farm</option>
                 </select>
               </div>
@@ -546,11 +536,9 @@ function ExpenseCategoryTab({ category, farm, year }) {
                 </label>
                 <select
                   value={form.categoryType}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const nextFarm = val === "solar" ? "MR2" : form.farm;
-                    setForm({ ...form, categoryType: val, farm: nextFarm });
-                  }}
+                  onChange={(e) =>
+                    setForm({ ...form, categoryType: e.target.value })
+                  }
                   className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 bg-white font-bold"
                 >
                   <option value="">-- Select Category --</option>
@@ -558,13 +546,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
                   <option value="plumbing">Plumbing / Irrigation</option>
                   <option value="fence-repair">Fence Repair</option>
                   <option value="new-trees">New Trees / Planting</option>
-                  <option value="solar">Solar System (MR2 only)</option>
+                  <option value="solar">Solar System</option>
                 </select>
-                {form.categoryType === "solar" && (
-                  <p className="text-[11px] font-semibold text-amber-600 mt-1">
-                    Solar maintenance can only be logged under farm MR2.
-                  </p>
-                )}
               </div>
             )}
 
