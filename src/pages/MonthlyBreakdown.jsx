@@ -214,18 +214,27 @@ function DetailTable({ columns, rows, total }) {
   );
 }
 
-// Modal listing every record that makes up one category's cycle total.
-function CycleDetailModal({ cycle, row, onClose }) {
+// Modal listing every record that makes up one breakdown line's total.
+// `source` = { endpoint, params, subtitle, compareLabel } so the harvest,
+// batch and calendar breakdowns can all share it.
+function CycleDetailModal({ source, row, onClose }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
+
+  // Stable key for the request — `source` is rebuilt on every parent render.
+  const query = new URLSearchParams();
+  Object.entries(source?.params || {}).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== "") query.set(k, v);
+  });
+  if (row) query.set("category", row.key);
+  const requestUrl = `${API_BASE_URL}/dashboard/${source?.endpoint}?${query.toString()}`;
 
   useEffect(() => {
     if (!row) return;
     let alive = true;
-    setState({ loading: true, error: null, data: null });
-    const params = new URLSearchParams({ farm: cycle.farm, category: row.key });
-    if (cycle.startDate) params.set("startDate", cycle.startDate);
-    if (cycle.endDate) params.set("endDate", cycle.endDate);
-    fetch(`${API_BASE_URL}/dashboard/cycle-detail?${params.toString()}`, {
+    Promise.resolve().then(() => {
+      if (alive) setState({ loading: true, error: null, data: null });
+    });
+    fetch(requestUrl, {
       headers: getHeaders(),
     })
       .then((r) => {
@@ -241,7 +250,7 @@ function CycleDetailModal({ cycle, row, onClose }) {
     return () => {
       alive = false;
     };
-  }, [cycle, row]);
+  }, [requestUrl, row]);
 
   if (!row) return null;
 
@@ -249,7 +258,8 @@ function CycleDetailModal({ cycle, row, onClose }) {
   const expected = Number(row.value || 0);
   const detailTotal = data ? Number(data.total || 0) : null;
   const diff = detailTotal === null ? null : Math.round((detailTotal - expected) * 100) / 100;
-  const matches = diff !== null && Math.abs(diff) < 0.01;
+  // Rows are rounded individually, so allow sub-rupee rounding noise.
+  const matches = diff !== null && Math.abs(diff) < 0.5;
 
   // Salary only: roll the per-day rows up per employee (days: full=1, half=0.5).
   let empSummary = null;
@@ -263,15 +273,29 @@ function CycleDetailModal({ cycle, row, onClose }) {
     empSummary = Object.values(map).sort((a, b) => b.total - a.total);
   }
 
+  // Generic roll-up (e.g. maintenance by category) when the server names a
+  // column to group by; salary keeps its richer per-employee summary above.
+  let groupSummary = null;
+  if (!empSummary && data?.groupBy && data.rows.length > 1) {
+    const map = {};
+    for (const r of data.rows) {
+      const k = r[data.groupBy] || "—";
+      if (!map[k]) map[k] = { key: k, count: 0, total: 0 };
+      map[k].count += 1;
+      map[k].total += Number(r.amount || 0);
+    }
+    const list = Object.values(map).sort((a, b) => b.total - a.total);
+    if (list.length > 1) groupSummary = list;
+  }
+  const groupLabel =
+    data?.columns?.find((c) => c.key === data?.groupBy)?.label || "Group";
+
   // The main table sums to its own rows (the grand total may add an extra section).
   const mainSubtotal = data
     ? data.rows.reduce((s, r) => s + Number(r.amount || 0), 0)
     : 0;
-  const mainLabel = data?.extra
-    ? "Harvest bill (external labour, tractor, food)"
-    : empSummary
-      ? "Day-by-day records"
-      : "Records";
+  const mainLabel =
+    data?.mainLabel || (empSummary ? "Day-by-day records" : "Records");
 
   return (
     <div
@@ -286,10 +310,7 @@ function CycleDetailModal({ cycle, row, onClose }) {
         <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5">
           <div>
             <h3 className="text-lg font-black text-gray-900">{row.label} — records</h3>
-            <p className="mt-1 text-xs font-medium text-gray-500">
-              {cycle.farm} · {cycle.startDate ? formatDate(cycle.startDate) : "Start"} →{" "}
-              {cycle.endDate ? formatDate(cycle.endDate) : "Present"}
-            </p>
+            <p className="mt-1 text-xs font-medium text-gray-500">{source?.subtitle}</p>
           </div>
           <button
             onClick={onClose}
@@ -310,7 +331,7 @@ function CycleDetailModal({ cycle, row, onClose }) {
               {data.count} record{data.count !== 1 ? "s" : ""} · Sum Rs. {money(detailTotal)}
             </span>
             <span>
-              Cycle shows Rs. {money(expected)}
+              {source?.compareLabel || "Breakdown"} shows Rs. {money(expected)}
               {matches
                 ? " · ✓ matches"
                 : ` · ⚠ differs by Rs. ${money(Math.abs(diff))}`}
@@ -326,9 +347,9 @@ function CycleDetailModal({ cycle, row, onClose }) {
             </div>
           ) : error ? (
             <p className="py-8 text-center text-sm font-bold text-red-600">{error}</p>
-          ) : data.rows.length === 0 ? (
+          ) : data.rows.length === 0 && !data.extra ? (
             <p className="py-8 text-center text-sm font-bold text-gray-400">
-              No records in this cycle for {row.label.toLowerCase()}.
+              No records for {row.label.toLowerCase()} in this period.
             </p>
           ) : (
             <>
@@ -368,10 +389,41 @@ function CycleDetailModal({ cycle, row, onClose }) {
                   </div>
                 </div>
               )}
-              <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-gray-400">
-                {mainLabel}
-              </p>
-              <DetailTable columns={data.columns} rows={data.rows} total={mainSubtotal} />
+              {groupSummary && (
+                <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-emerald-700">
+                    By {groupLabel.toLowerCase()} ({groupSummary.length})
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[360px] text-sm">
+                      <thead>
+                        <tr className="text-left text-[11px] uppercase tracking-wider text-gray-400">
+                          <th className="pb-2 pr-3">{groupLabel}</th>
+                          <th className="pb-2 pr-3 text-right">Records</th>
+                          <th className="pb-2 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupSummary.map((g) => (
+                          <tr key={g.key} className="border-t border-emerald-100/70">
+                            <td className="py-2 pr-3 font-bold text-gray-800">{g.key}</td>
+                            <td className="py-2 pr-3 text-right text-gray-700">{g.count}</td>
+                            <td className="py-2 text-right font-black text-gray-900">Rs. {money(g.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {data.rows.length > 0 && (
+                <>
+                  <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-gray-400">
+                    {mainLabel}
+                  </p>
+                  <DetailTable columns={data.columns} rows={data.rows} total={mainSubtotal} />
+                </>
+              )}
 
               {data.extra && (
                 <div className="mt-6">
@@ -448,7 +500,16 @@ function HarvestBreakdown({ cycle, onCardClick }) {
         </section>
       </div>
 
-      <CycleDetailModal cycle={cycle} row={detailRow} onClose={() => setDetailRow(null)} />
+      <CycleDetailModal
+        source={{
+          endpoint: "cycle-detail",
+          params: { farm: cycle.farm, startDate: cycle.startDate, endDate: cycle.endDate },
+          subtitle: `${cycle.farm} · ${cycle.startDate ? formatDate(cycle.startDate) : "Start"} → ${cycle.endDate ? formatDate(cycle.endDate) : "Present"}`,
+          compareLabel: "Cycle",
+        }}
+        row={detailRow}
+        onClose={() => setDetailRow(null)}
+      />
 
       <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="font-black text-gray-900">Coconut yield</h2>
@@ -485,17 +546,19 @@ function HarvestBreakdown({ cycle, onCardClick }) {
 }
 
 function PoultryBreakdown({ batch, onCardClick }) {
+  const [detailRow, setDetailRow] = useState(null);
   const incomeRows = batch.income.sales.map((sale) => ({
+    key: `sales:${sale.category}`,
     label: `${titleCase(sale.category)} (${sale.records} records)`,
     value: sale.amount,
   }));
   const expenseRows = [
-    { label: "Bird purchase", value: batch.expenses.batchPurchase },
-    { label: "Feed (net of returns)", value: batch.expenses.feed },
-    { label: "Medicine (net of returns)", value: batch.expenses.medicine || 0 },
-    { label: "Farm-paid expenses", value: batch.expenses.otherExpenses || 0 },
-    { label: "Supplier-paid expenses", value: batch.expenses.supplierExpenses || 0 },
-    { label: "Poultry labour", value: batch.expenses.labour || 0 },
+    { key: "batchPurchase", label: "Bird purchase", value: batch.expenses.batchPurchase },
+    { key: "feed", label: "Feed (net of returns)", value: batch.expenses.feed },
+    { key: "medicine", label: "Medicine (net of returns)", value: batch.expenses.medicine || 0 },
+    { key: "otherExpenses", label: "Farm-paid expenses", value: batch.expenses.otherExpenses || 0 },
+    { key: "supplierExpenses", label: "Supplier-paid expenses", value: batch.expenses.supplierExpenses || 0 },
+    { key: "labour", label: "Poultry labour", value: batch.expenses.labour || 0 },
   ];
 
   return (
@@ -525,19 +588,32 @@ function PoultryBreakdown({ batch, onCardClick }) {
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <h2 className="font-black text-gray-900">Sales income</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Every sale linked to batch #{batch.id}.
+            Every sale linked to batch #{batch.id}.{" "}
+            <span className="text-emerald-600 font-semibold">Click a line to see its records.</span>
           </p>
-          <AmountRows rows={incomeRows} totalLabel="Total sales" />
+          <AmountRows rows={incomeRows} totalLabel="Total sales" onRowClick={setDetailRow} />
         </section>
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <h2 className="font-black text-gray-900">Batch expenses</h2>
           <p className="mt-1 text-xs text-gray-500">
             Bird purchase, feed, medicine, payroll labour and other linked
-            costs.
+            costs.{" "}
+            <span className="text-emerald-600 font-semibold">Click a line to see its records.</span>
           </p>
-          <AmountRows rows={expenseRows} totalLabel="Total expenses" />
+          <AmountRows rows={expenseRows} totalLabel="Total expenses" onRowClick={setDetailRow} />
         </section>
       </div>
+
+      <CycleDetailModal
+        source={{
+          endpoint: "batch-detail",
+          params: { batchId: batch.id },
+          subtitle: `Poultry batch #${batch.id} · ${batch.startDate ? formatDate(batch.startDate) : "Start"} → ${batch.endDate ? formatDate(batch.endDate) : "Present"}`,
+          compareLabel: "Batch",
+        }}
+        row={detailRow}
+        onClose={() => setDetailRow(null)}
+      />
 
       <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -593,6 +669,7 @@ function CalendarBreakdown() {
   const [error, setError] = useState("");
   const [previewSection, setPreviewSection] = useState(null);
   const [printActiveSection, setPrintActiveSection] = useState(null);
+  const [detailRow, setDetailRow] = useState(null);
 
   const triggerSectionPrint = (section) => {
     setPrintActiveSection(section);
@@ -641,15 +718,24 @@ function CalendarBreakdown() {
 
   const incomeRows = data
     ? [
-        { label: "Coconut sales", value: data.income.coconut },
-        { label: "Other income", value: data.income.other },
+        { key: "coconut", label: "Coconut sales", value: data.income.coconut },
+        { key: "other", label: "Other income", value: data.income.other },
       ]
     : [];
   const expenseRows = data
     ? Object.entries(data.expenses)
         .filter(([key]) => key !== "total")
-        .map(([key, value]) => ({ label: titleCase(key), value }))
+        .map(([key, value]) => ({ key, label: titleCase(key), value }))
     : [];
+
+  // The calendar window as an explicit date range for the drill-down — the
+  // same days the breakdown's MONTH()/YEAR() filter covers.
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const calStart = view === "yearly" ? `${year}-01-01` : `${year}-${pad2(month)}-01`;
+  const calEnd =
+    view === "yearly"
+      ? `${year}-12-31`
+      : `${year}-${pad2(month)}-${pad2(new Date(year, month, 0).getDate())}`;
 
   const years = [];
   for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 4; y -= 1)
@@ -759,21 +845,34 @@ function CalendarBreakdown() {
               <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <h2 className="font-black text-gray-900">Income</h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  {periodLabel} · {farmLabel}
+                  {periodLabel} · {farmLabel}.{" "}
+                  <span className="text-emerald-600 font-semibold">Click a line to see its records.</span>
                 </p>
-                <AmountRows rows={incomeRows} totalLabel="Total income" />
+                <AmountRows rows={incomeRows} totalLabel="Total income" onRowClick={setDetailRow} />
               </section>
               <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <h2 className="font-black text-gray-900">Expenses</h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  All costs incl. salary &amp; fuel
+                  All costs incl. salary &amp; fuel.{" "}
+                  <span className="text-emerald-600 font-semibold">Click a line to see its records.</span>
                 </p>
-                <AmountRows rows={expenseRows} totalLabel="Total expenses" />
+                <AmountRows rows={expenseRows} totalLabel="Total expenses" onRowClick={setDetailRow} />
               </section>
             </div>
           </div>
         ) : null}
       </div>
+
+      <CycleDetailModal
+        source={{
+          endpoint: "cycle-detail",
+          params: { farm, startDate: calStart, endDate: calEnd },
+          subtitle: `${periodLabel} · ${farmLabel}`,
+          compareLabel: "Calendar",
+        }}
+        row={detailRow}
+        onClose={() => setDetailRow(null)}
+      />
 
       {/* ── PREVIEW MODAL ── */}
       {previewSection && data && (

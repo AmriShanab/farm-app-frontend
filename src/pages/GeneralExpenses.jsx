@@ -20,6 +20,8 @@ import {
   createMaintenanceExpense,
   updateMaintenanceExpense,
   deleteMaintenanceExpense,
+  getMaintenanceCategories,
+  createMaintenanceCategory,
   getCEBBills,
   createCEBBill,
   updateCEBBill,
@@ -37,6 +39,15 @@ import {
   deleteVehicle,
 } from "../services/api";
 import { CEB_ACCOUNTS } from "../utils/constants";
+
+// Built-in maintenance categories; custom ones come from the server.
+const DEFAULT_MAINT_CATEGORIES = [
+  { slug: "cleaning", label: "Cleaning / Weeding" },
+  { slug: "plumbing", label: "Plumbing / Irrigation" },
+  { slug: "fence-repair", label: "Fence Repair" },
+  { slug: "new-trees", label: "New Trees / Planting" },
+  { slug: "solar", label: "Solar System" },
+];
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("en-LK", {
@@ -139,6 +150,13 @@ function ExpenseCategoryTab({ category, farm, year }) {
   const [isAddingVehicle, setIsAddingVehicle] = useState(false);
   const [showVehicleManager, setShowVehicleManager] = useState(false);
 
+  // Maintenance categories — seeded with the built-in set, replaced by the
+  // server list (which includes any custom categories) once loaded.
+  const [maintCategories, setMaintCategories] = useState(DEFAULT_MAINT_CATEGORIES);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryLabel, setNewCategoryLabel] = useState("");
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
     farm: "MR1",
@@ -200,6 +218,37 @@ function ExpenseCategoryTab({ category, farm, year }) {
       .then(setVehicles)
       .catch(() => setVehicles([]));
   }, [category]);
+
+  // -------------------------------
+  // MAINTENANCE CATEGORIES (admin-extendable)
+  // -------------------------------
+  useEffect(() => {
+    if (category !== "maintenance") return;
+    getMaintenanceCategories()
+      .then((cats) => {
+        if (cats.length) setMaintCategories(cats);
+      })
+      .catch(() => {});
+  }, [category]);
+
+  const handleAddCategory = async () => {
+    const label = newCategoryLabel.trim();
+    if (!label) return;
+    setIsSavingCategory(true);
+    try {
+      const cat = await createMaintenanceCategory(label);
+      setMaintCategories((prev) =>
+        prev.some((c) => c.slug === cat.slug) ? prev : [...prev, cat],
+      );
+      setForm((f) => ({ ...f, categoryType: cat.slug }));
+      setNewCategoryLabel("");
+      setIsAddingCategory(false);
+    } catch (err) {
+      alert(err.message || "Could not add the category.");
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
 
   const handleAddVehicle = async () => {
     if (!newVehicleName.trim()) return;
@@ -270,6 +319,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
     setEditingId(null);
     setForm(emptyForm());
     setShowVehicleManager(false);
+    setIsAddingCategory(false);
+    setNewCategoryLabel("");
   };
 
   const startEdit = (row) => {
@@ -453,14 +504,8 @@ function ExpenseCategoryTab({ category, farm, year }) {
 
   const formatCategoryLabel = (rowCat, tabCat) => {
     if (tabCat === "maintenance") {
-      const map = {
-        cleaning: "Cleaning / Weeding",
-        plumbing: "Plumbing / Irrigation",
-        "fence-repair": "Fence Repair",
-        "new-trees": "New Trees / Planting",
-        solar: "Solar System",
-      };
-      return map[rowCat] || rowCat;
+      const match = maintCategories.find((c) => c.slug === rowCat);
+      return match ? match.label : rowCat;
     }
     if (tabCat === "machinery") {
       const map = {
@@ -534,20 +579,68 @@ function ExpenseCategoryTab({ category, farm, year }) {
                 <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-1">
                   Maintenance Category <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={form.categoryType}
-                  onChange={(e) =>
-                    setForm({ ...form, categoryType: e.target.value })
-                  }
-                  className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 bg-white font-bold"
-                >
-                  <option value="">-- Select Category --</option>
-                  <option value="cleaning">Cleaning / Weeding</option>
-                  <option value="plumbing">Plumbing / Irrigation</option>
-                  <option value="fence-repair">Fence Repair</option>
-                  <option value="new-trees">New Trees / Planting</option>
-                  <option value="solar">Solar System</option>
-                </select>
+                {isAddingCategory ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="New category name, e.g. Electrical"
+                      value={newCategoryLabel}
+                      maxLength={100}
+                      onChange={(e) => setNewCategoryLabel(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddCategory();
+                        }
+                        if (e.key === "Escape") setIsAddingCategory(false);
+                      }}
+                      className="flex-1 p-2.5 text-sm border border-green-400 rounded-lg outline-none focus:border-green-600 font-bold"
+                      disabled={isSavingCategory}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      disabled={isSavingCategory || !newCategoryLabel.trim()}
+                      className="px-3 rounded-lg bg-green-600 text-white text-xs font-black disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {isSavingCategory ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingCategory(false);
+                        setNewCategoryLabel("");
+                      }}
+                      disabled={isSavingCategory}
+                      className="px-2.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                      title="Cancel"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={form.categoryType}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setIsAddingCategory(true);
+                        return;
+                      }
+                      setForm({ ...form, categoryType: e.target.value });
+                    }}
+                    className="w-full p-2.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500 bg-white font-bold"
+                  >
+                    <option value="">-- Select Category --</option>
+                    {maintCategories.map((c) => (
+                      <option key={c.slug} value={c.slug}>
+                        {c.label}
+                      </option>
+                    ))}
+                    <option value="__new__">+ Add new category…</option>
+                  </select>
+                )}
               </div>
             )}
 

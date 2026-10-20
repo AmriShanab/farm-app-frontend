@@ -1943,6 +1943,28 @@ export const deleteMaintenanceExpense = async (id) => {
   return response.ok;
 };
 
+// Maintenance categories (admin-extendable): [{ slug, label, is_default }]
+export const getMaintenanceCategories = async () => {
+  const response = await fetch(`${BASE_URL}/expenses/maintenance-categories`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to load maintenance categories");
+  const payload = unwrapApiData(await response.json()) || [];
+  return Array.isArray(payload) ? payload : [];
+};
+export const createMaintenanceCategory = async (label) => {
+  const response = await fetch(`${BASE_URL}/expenses/maintenance-categories`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ label }),
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || "Failed to add category");
+  }
+  return unwrapApiData(await response.json());
+};
+
 // 3. CEB BILLS
 export const getCEBBills = async (farm, year) => {
   if (USE_MOCK_DATA)
